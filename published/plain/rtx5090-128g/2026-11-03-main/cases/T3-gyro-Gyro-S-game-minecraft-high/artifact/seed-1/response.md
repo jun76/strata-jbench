@@ -1,0 +1,670 @@
+以下で「マイクラ風3D箱庭ゲーム」を1ファイルで遊べるように作りました。  
+ブラウザで開けば、マウスロックして操作できます。
+
+```html
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>マイクラ風3D箱庭ゲーム</title>
+<style>
+  html, body {
+    margin: 0;
+    overflow: hidden;
+    background: #000;
+    font-family: system-ui, sans-serif;
+  }
+
+  canvas {
+    position: fixed;
+    inset: 0;
+  }
+
+  #ui {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    color: #fff;
+    text-shadow: 0 1px 3px #000;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  #ui h1 {
+    font-size: 16px;
+    margin: 0 0 6px;
+  }
+
+  #ui .help {
+    font-size: 12px;
+    line-height: 1.35;
+    opacity: .9;
+  }
+
+  #hint {
+    position: fixed;
+    bottom: 64px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #fff;
+    font-size: 12px;
+    text-shadow: 0 1px 3px #000;
+    pointer-events: none;
+    z-index: 10;
+    opacity: .85;
+  }
+
+  #hotbar {
+    position: fixed;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 6px;
+    z-index: 20;
+  }
+
+  .slot {
+    width: 42px;
+    height: 42px;
+    border: 2px solid rgba(255,255,255,.55);
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    color: #fff;
+    font-size: 11px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,.35);
+  }
+
+  .slot.selected {
+    border-color: #fff;
+    box-shadow: 0 0 10px rgba(255,255,255,.85);
+  }
+
+  #crosshair {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 15;
+  }
+
+  #crosshair::before,
+  #crosshair::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    background: rgba(255,255,255,.75);
+  }
+
+  #crosshair::before {
+    width: 10px;
+    height: 2px;
+    transform: translate(-50%, -50%);
+  }
+
+  #crosshair::after {
+    width: 2px;
+    height: 10px;
+    transform: translate(-50%, -50%);
+  }
+</style>
+</head>
+<body>
+  <div id="ui">
+    <h1>マイクラ風 3D 箱庭</h1>
+    <div class="help">
+      クリックでマウス操作開始<br />
+      WASD: 移動 / Space: ジャンプ / Shift: 走る<br />
+      左クリック: ブロック削除 / 右クリック: 設置<br />
+      1〜7: ブロック選択 / マウスホイール: 選択変更<br />
+      Esc: マウス操作解除
+    </div>
+  </div>
+
+  <div id="hint">クリックしてマウス操作開始</div>
+  <div id="crosshair"></div>
+  <div id="hotbar"></div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from "three";
+
+    const SIZE = 32;
+    const HEIGHT = 16;
+
+    const NAMES = {
+      1: "草",
+      2: "土",
+      3: "石",
+      4: "砂",
+      5: "木",
+      6: "葉",
+      7: "水"
+    };
+
+    const COLORS = {
+      1: 0x6ba94f,
+      2: 0x8a6a4b,
+      3: 0x7f7f7f,
+      4: 0xd7c58a,
+      5: 0x5b4633,
+      6: 0x4f7e38,
+      7: 0x2f669a
+    };
+
+    let selected = 1;
+
+    // ------------------------------
+    // Voxel world data
+    // ------------------------------
+    const blocks = new Uint8Array(SIZE * HEIGHT * SIZE);
+    const heights = new Uint8Array(SIZE * SIZE);
+
+    function index(x, y, z) {
+      return x + z * SIZE + y * SIZE * SIZE;
+    }
+
+    function inBounds(x, y, z) {
+      return x >= 0 && x < SIZE && y >= 0 && y < HEIGHT && z >= 0 && z < SIZE;
+    }
+
+    function getBlock(x, y, z) {
+      if (!inBounds(x, y, z)) return 0;
+      return blocks[index(x, y, z)];
+    }
+
+    function setBlock(x, y, z, type) {
+      if (!inBounds(x, y, z)) return;
+      blocks[index(x, y, z)] = type;
+    }
+
+    // ------------------------------
+    // Three.js setup
+    // ------------------------------
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87c8ea);
+    scene.fog = new THREE.Fog(0x87c8ea, 20, 70);
+
+    const camera = new THREE.PerspectiveCamera(
+      75,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      100
+    );
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
+
+    const hemiLight = new THREE.HemisphereLight(0x87c8ea, 0x506040, 0.7);
+    scene.add(hemiLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    dirLight.position.set(20, 35, 15);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.set(1024, 1024);
+    dirLight.shadow.camera.left = -35;
+    dirLight.shadow.camera.right = 35;
+    dirLight.shadow.camera.top = 35;
+    dirLight.shadow.camera.bottom = -35;
+    dirLight.shadow.camera.near = 1;
+    dirLight.shadow.camera.far = 100;
+    scene.add(dirLight);
+
+    // ------------------------------
+    // Instanced meshes for blocks
+    // ------------------------------
+    const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+    const capacity = SIZE * HEIGHT * SIZE;
+    const meshes = {};
+
+    for (let t = 1; t <= 7; t++) {
+      const mat = new THREE.MeshLambertMaterial({ color: COLORS[t] });
+
+      if (t === 7) {
+        mat.transparent = true;
+        mat.opacity = 0.75;
+        mat.depthWrite = false;
+      }
+
+      const mesh = new THREE.InstancedMesh(boxGeo, mat, capacity);
+      mesh.count = 0;
+      mesh.castShadow = t !== 7;
+      mesh.receiveShadow = t !== 7;
+      scene.add(mesh);
+      meshes[t] = mesh;
+    }
+
+    const dummy = new THREE.Object3D();
+
+    function updateInstances() {
+      for (let t = 1; t <= 7; t++) {
+        const mesh = meshes[t];
+        let count = 0;
+
+        for (let y = 0; y < HEIGHT; y++) {
+          for (let z = 0; z < SIZE; z++) {
+            for (let x = 0; x < SIZE; x++) {
+              if (blocks[index(x, y, z)] === t) {
+                dummy.position.set(x + 0.5, y + 0.5, z + 0.5);
+                dummy.updateMatrix();
+                mesh.setMatrixAt(count, dummy.matrix);
+                count++;
+              }
+            }
+          }
+        }
+
+        mesh.count = count;
+        mesh.instanceMatrix.needsUpdate = true;
+      }
+    }
+
+    // ------------------------------
+    // World generation
+    // ------------------------------
+    function generateWorld() {
+      const waterLevel = 3;
+
+      for (let x = 0; x < SIZE; x++) {
+        for (let z = 0; z < SIZE; z++) {
+          const v =
+            4 +
+            1.5 * Math.sin(x * 0.28) +
+            1.1 * Math.cos(z * 0.25) +
+            0.7 * Math.sin((x + z) * 0.17) +
+            0.4 * Math.cos(x - z);
+
+          const h = Math.round(Math.max(2, Math.min(HEIGHT - 6, v)));
+          heights[x + z * SIZE] = h;
+
+          for (let y = 0; y < HEIGHT; y++) {
+            let b = 0;
+
+            if (y <= 1) b = 3;
+            else if (y < h) b = 2;
+            else if (y === h) {
+              b = (h <= waterLevel - 1) ? 4 : 1;
+            }
+
+            if (h < waterLevel && y > h && y <= waterLevel) {
+              b = 7;
+            }
+
+            setBlock(x, y, z, b);
+          }
+        }
+      }
+
+      // Trees
+      for (let x = 1; x < SIZE - 1; x++) {
+        for (let z = 1; z < SIZE - 1; z++) {
+          const h = heights[x + z * SIZE];
+          if (h > waterLevel && Math.random() < 0.05) {
+            addTree(x, h, z);
+          }
+        }
+      }
+    }
+
+    function addTree(x, h, z) {
+      for (let y = h + 1; y <= h + 3; y++) {
+        if (y < HEIGHT) setBlock(x, y, z, 5);
+      }
+
+      const top = h + 3;
+
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dz = -1; dz <= 1; dz++) {
+            if (dx === 0 && dz === 0 && dy <= 0) continue;
+
+            const y = top + dy;
+            if (inBounds(x + dx, y, z + dz) && getBlock(x + dx, y, z + dz) === 0) {
+              setBlock(x + dx, y, z + dz, 6);
+            }
+          }
+        }
+      }
+    }
+
+    generateWorld();
+    updateInstances();
+
+    // ------------------------------
+    // Player
+    // ------------------------------
+    const player = {
+      pos: new THREE.Vector3(SIZE / 2, HEIGHT + 2, SIZE / 2),
+      vel: new THREE.Vector3(),
+      yaw: 0,
+      pitch: 0,
+      grounded: false
+    };
+
+    const eyeHeight = 1.6;
+    const playerWidth = 0.6;
+    const playerHeight = 1.8;
+
+    function solidForCollision(x, y, z) {
+      const b = getBlock(x, y, z);
+      return b > 0 && b !== 7;
+    }
+
+    function solidForRay(x, y, z) {
+      return getBlock(x, y, z) > 0;
+    }
+
+    function collideAxis(axis) {
+      const half = playerWidth / 2;
+      const h = playerHeight;
+
+      const minx = player.pos.x - half;
+      const maxx = player.pos.x + half;
+      const miny = player.pos.y;
+      const maxy = player.pos.y + h;
+      const minz = player.pos.z - half;
+      const maxz = player.pos.z + half;
+
+      const ix0 = Math.max(0, Math.floor(minx));
+      const ix1 = Math.min(SIZE - 1, Math.floor(maxx));
+      const iy0 = Math.max(0, Math.floor(miny));
+      const iy1 = Math.min(HEIGHT - 1, Math.floor(maxy));
+      const iz0 = Math.max(0, Math.floor(minz));
+      const iz1 = Math.min(SIZE - 1, Math.floor(maxz));
+
+      if (ix0 > ix1 || iy0 > iy1 || iz0 > iz1) return;
+
+      for (let iy = iy0; iy <= iy1; iy++) {
+        for (let iz = iz0; iz <= iz1; iz++) {
+          for (let ix = ix0; ix <= ix1; ix++) {
+            if (!solidForCollision(ix, iy, iz)) continue;
+
+            if (axis === 0) {
+              if (player.vel.x > 0) {
+                player.pos.x = Math.min(player.pos.x, ix - half);
+                player.vel.x = 0;
+              } else if (player.vel.x < 0) {
+                player.pos.x = Math.max(player.pos.x, ix + 1 + half);
+                player.vel.x = 0;
+              }
+            } else if (axis === 1) {
+              if (player.vel.y > 0) {
+                player.pos.y = Math.min(player.pos.y, iy - h);
+                player.vel.y = 0;
+              } else if (player.vel.y < 0) {
+                player.pos.y = Math.max(player.pos.y, iy + 1);
+                player.vel.y = 0;
+                player.grounded = true;
+              }
+            } else if (axis === 2) {
+              if (player.vel.z > 0) {
+                player.pos.z = Math.min(player.pos.z, iz - half);
+                player.vel.z = 0;
+              } else if (player.vel.z < 0) {
+                player.pos.z = Math.max(player.pos.z, iz + 1 + half);
+                player.vel.z = 0;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    function updatePlayer(dt) {
+      if (keys.space && player.grounded) {
+        player.vel.y = 8;
+      }
+
+      player.vel.y -= 20 * dt;
+
+      const speed = keys.shift ? 7.2 : 4.2;
+
+      const yAxis = new THREE.Vector3(0, 1, 0);
+      const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(yAxis, player.yaw);
+      const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(yAxis, player.yaw);
+
+      const move = new THREE.Vector3();
+
+      if (keys.w) move.add(forward);
+      if (keys.s) move.sub(forward);
+      if (keys.d) move.add(right);
+      if (keys.a) move.sub(right);
+
+      if (move.lengthSq() > 0) move.normalize();
+
+      player.vel.x = move.x * speed;
+      player.vel.z = move.z * speed;
+
+      player.grounded = false;
+
+      player.pos.x += player.vel.x * dt;
+      collideAxis(0);
+
+      player.pos.y += player.vel.y * dt;
+      collideAxis(1);
+
+      player.pos.z += player.vel.z * dt;
+      collideAxis(2);
+
+      if (player.pos.y < -5) {
+        player.pos.y = HEIGHT + 2;
+        player.vel.y = 0;
+      }
+
+      camera.position.copy(player.pos);
+      camera.position.y += eyeHeight;
+
+      camera.quaternion.setFromEuler(
+        new THREE.Euler(player.pitch, player.yaw, 0, "YXZ")
+      );
+    }
+
+    // ------------------------------
+    // Pointer lock / mouse / keys
+    // ------------------------------
+    const keys = {};
+
+    window.addEventListener("keydown", (e) => {
+      const k = e.key.toLowerCase();
+
+      if (e.key === " ") {
+        keys.space = true;
+        e.preventDefault();
+      } else {
+        keys[k] = true;
+      }
+
+      if (k >= "1" && k <= "7") {
+        selected = Number(k);
+        updateHotbar();
+      }
+    });
+
+    window.addEventListener("keyup", (e) => {
+      const k = e.key.toLowerCase();
+      if (e.key === " ") keys.space = false;
+      else keys[k] = false;
+    });
+
+    document.addEventListener("mousemove", (e) => {
+      if (document.pointerLockElement !== renderer.domElement) return;
+
+      player.yaw -= e.movementX * 0.0025;
+      player.pitch -= e.movementY * 0.0025;
+
+      const maxPitch = Math.PI / 2 - 0.05;
+      player.pitch = Math.max(-maxPitch, Math.min(maxPitch, player.pitch));
+    });
+
+    document.addEventListener("pointerlockchange", () => {
+      const locked = document.pointerLockElement === renderer.domElement;
+      document.getElementById("hint").textContent = locked
+        ? ""
+        : "クリックしてマウス操作開始";
+    });
+
+    renderer.domElement.addEventListener("click", () => {
+      if (document.pointerLockElement !== renderer.domElement) {
+        renderer.domElement.requestPointerLock();
+      }
+    });
+
+    document.addEventListener("contextmenu", (e) => e.preventDefault());
+
+    function raycastHit(maxDist = 10) {
+      const dir = camera.getWorldDirection(new THREE.Vector3()).normalize();
+      const p = camera.position.clone();
+
+      const step = 0.1;
+
+      for (let t = 0; t < maxDist; t += step) {
+        const x = Math.floor(p.x);
+        const y = Math.floor(p.y);
+        const z = Math.floor(p.z);
+
+        if (inBounds(x, y, z) && solidForRay(x, y, z)) {
+          return { x, y, z, type: getBlock(x, y, z) };
+        }
+
+        p.addScaledVector(dir, step);
+      }
+
+      return null;
+    }
+
+    function destroyBlock() {
+      const hit = raycastHit();
+      if (!hit) return;
+      setBlock(hit.x, hit.y, hit.z, 0);
+      updateInstances();
+    }
+
+    function placeBlock() {
+      const hit = raycastHit();
+      if (!hit) return;
+
+      const dir = camera.getWorldDirection(new THREE.Vector3()).normalize();
+      const abs = [Math.abs(dir.x), Math.abs(dir.y), Math.abs(dir.z)];
+
+      let nx = hit.x;
+      let ny = hit.y;
+      let nz = hit.z;
+
+      if (abs[0] >= abs[1] && abs[0] >= abs[2]) {
+        nx -= Math.sign(dir.x);
+      } else if (abs[1] >= abs[2]) {
+        ny -= Math.sign(dir.y);
+      } else {
+        nz -= Math.sign(dir.z);
+      }
+
+      if (inBounds(nx, ny, nz) && getBlock(nx, ny, nz) === 0) {
+        setBlock(nx, ny, nz, selected);
+        updateInstances();
+      }
+    }
+
+    renderer.domElement.addEventListener("mousedown", (e) => {
+      if (document.pointerLockElement !== renderer.domElement) {
+        renderer.domElement.requestPointerLock();
+        return;
+      }
+
+      if (e.button === 0) destroyBlock();
+      else if (e.button === 2) placeBlock();
+    });
+
+    renderer.domElement.addEventListener(
+      "wheel",
+      (e) => {
+        e.preventDefault();
+
+        if (e.deltaY > 0) selected = Math.min(7, selected + 1);
+        else selected = Math.max(1, selected - 1);
+
+        updateHotbar();
+      },
+      { passive: false }
+    );
+
+    // ------------------------------
+    // Hotbar UI
+    // ------------------------------
+    const hotbar = document.getElementById("hotbar");
+
+    function updateHotbar() {
+      hotbar.innerHTML = "";
+
+      for (let t = 1; t <= 7; t++) {
+        const btn = document.createElement("button");
+        btn.className = "slot";
+        if (t === selected) btn.classList.add("selected");
+
+        btn.style.background = "#" + COLORS[t].toString(16).padStart(6, "0");
+        btn.textContent = `${t}: ${NAMES[t]}`;
+
+        btn.addEventListener("click", () => {
+          selected = t;
+          updateHotbar();
+        });
+
+        hotbar.appendChild(btn);
+      }
+    }
+
+    updateHotbar();
+
+    // ------------------------------
+    // Main loop
+    // ------------------------------
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const dt = Math.min(clock.getDelta(), 0.05);
+      updatePlayer(dt);
+
+      renderer.render(scene, camera);
+    }
+
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    animate();
+  </script>
+</body>
+</html>
+```
+
+操作:
+
+- 画面をクリック → マウス操作開始
+- `WASD` で移動
+- `Space` でジャンプ
+- `Shift` で走る
+- `左クリック` でブロック削除
+- `右クリック` でブロック設置
+- `1〜7` またはホイールでブロック選択
+- `Esc` でマウス操作解除
+
+このHTMLファイルを `index.html` として保存してブラウザで開けば遊べます。

@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>マイクラ風3D箱庭ゲーム</title>
+  <style>
+    html, body {
+      margin: 0;
+      overflow: hidden;
+      background: #111;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      user-select: none;
+    }
+
+    #ui {
+      position: fixed;
+      inset: 12px;
+      pointer-events: none;
+      color: white;
+      text-shadow: 0 1px 2px rgba(0,0,0,.8);
+      z-index: 20;
+    }
+
+    #buttons {
+      position: absolute;
+      top: 0;
+      left: 0;
+      display: flex;
+      gap: 8px;
+      pointer-events: auto;
+    }
+
+    button {
+      border: 1px solid rgba(255,255,255,.35);
+      background: rgba(0,0,0,.35);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      backdrop-filter: blur(4px);
+    }
+
+    button:hover { background: rgba(255,255,255,.16); }
+
+    #help {
+      position: absolute;
+      top: 52px;
+      left: 0;
+      width: 330px;
+      font-size: 13px;
+      line-height: 1.5;
+      background: rgba(0,0,0,.28);
+      padding: 10px 12px;
+      border-radius: 10px;
+      backdrop-filter: blur(4px);
+    }
+
+    #toast {
+      position: absolute;
+      right: 0;
+      top: 0;
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: rgba(0,0,0,.5);
+      border: 1px solid rgba(255,255,255,.2);
+      opacity: 0;
+      transform: translateY(-8px);
+      transition: .2s ease;
+    }
+
+    #toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    #hotbar {
+      position: fixed;
+      left: 50%;
+      bottom: 16px;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 6px;
+      z-index: 20;
+      pointer-events: auto;
+    }
+
+    .slot {
+      width: 46px;
+      height: 46px;
+      border: 2px solid rgba(255,255,255,.35);
+      border-radius: 9px;
+      background: rgba(0,0,0,.32);
+      position: relative;
+      transition: transform .1s ease, box-shadow .1s ease;
+    }
+
+    .slot.active {
+      border-color: white;
+      transform: translateY(-4px);
+      box-shadow: 0 0 16px rgba(255,255,255,.45);
+    }
+
+    .sw {
+      position: absolute;
+      inset: 8px;
+      border-radius: 5px;
+      border: 1px solid rgba(0,0,0,.25);
+    }
+
+    .num {
+      position: absolute;
+      left: 4px;
+      top: 1px;
+      font-size: 10px;
+      color: white;
+    }
+
+    .name {
+      position: absolute;
+      left: 50%;
+      bottom: -18px;
+      transform: translateX(-50%);
+      font-size: 10px;
+      white-space: nowrap;
+      color: white;
+    }
+
+    #crosshair {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      width: 18px;
+      height: 18px;
+      transform: translate(-50%, -50%);
+      color: white;
+      text-shadow: 0 0 3px black;
+      font-size: 18px;
+      line-height: 18px;
+      text-align: center;
+      pointer-events: none;
+      z-index: 30;
+    }
+  </style>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="ui">
+    <div id="buttons">
+      <button id="saveBtn">保存</button>
+      <button id="loadBtn">読み込み</button>
+      <button id="resetBtn">初期化</button>
+    </div>
+    <div id="help">
+      クリックで視点ロック<br>
+      WASD: 移動<br>
+      Space: ジャンプ<br>
+      F: Fly 切替<br>
+      Shift: Fly 時に下降<br>
+      左クリック: 破壊<br>
+      右クリック: 設置<br>
+      1〜9 / ホイール: ブロック選択<br>
+      保存は localStorage に世界全部を入れます。
+    </div>
+    <div id="toast"></div>
+  </div>
+
+  <div id="hotbar"></div>
+  <div id="crosshair">+</div>
+
+  <script type="module">
+    import * as THREE from "three";
+
+    // ------------------------------
+    // 定数
+    // ------------------------------
+    const SIZE = 64;
+    const HEIGHT = 32;
+    const SIZE2 = SIZE * SIZE;
+
+    const BLOCK = {
+      GRASS: 1,
+      DIRT: 2,
+      STONE: 3,
+      SAND: 4,
+      WOOD: 5,
+      LEAVES: 6,
+      PLANK: 7,
+      GLASS: 8,
+      BRICK: 9
+    };
+
+    const TYPES = [
+      null,
+      { name: "草", color: 0x65c94d },
+      { name: "土", color: 0x8b5a2b },
+      { name: "石", color: 0x8f8f8f },
+      { name: "砂", color: 0xe1d087 },
+      { name: "木", color: 0x7b522b },
+      { name: "葉", color: 0x3e9b3e, transparent: true, opacity: 0.88 },
+      { name: "板材", color: 0xb98d5d },
+      { name: "ガラス", color: 0x9fe8ff, transparent: true, opacity: 0.45, depthWrite: false },
+      { name: "レンガ", color: 0xa85c46 }
+    ];
+
+    const MATERIALS = TYPES.map(info => {
+      if (!info) return null;
+      return new THREE.MeshLambertMaterial({
+        color: info.color,
+        transparent: !!info.transparent,
+        opacity: info.opacity ?? 1,
+        depthWrite: info.depthWrite ?? true
+      });
+    });
+
+    // ------------------------------
+    // 状態
+    // ------------------------------
+    const world = new Map(); // key:number -> typeId:number
+    let seed = Math.floor(Math.random() * 1_000_000_000);
+    let selected = BLOCK.GRASS;
+
+    const player = {
+      x: SIZE / 2 + 0.5,
+      y: 30,
+      z: SIZE / 2 + 0.5,
+      vel: new THREE.Vector3(),
+      yaw: 0,
+      pitch: 0
+    };
+
+    let fly = false;
+    let onGround = false;
+    let pointerLocked = false;
+
+    const HALF_W = 0.3;
+    const PLAYER_H = 1.8;
+    const EYE_H = 1.62;
+    const GRAVITY = -22;
+    const JUMP = 8.2;
+    const WALK_SPEED = 5.2;
+    const FLY_SPEED = 11;
+    const REACH = 8;
+
+    // ------------------------------
+    // key / decode
+    // ------------------------------
+    const key = (x, y, z) => x + z * SIZE + y * SIZE2;
+
+    const decode = k => {
+      const x = k % SIZE;
+      const z = Math.floor(k / SIZE) % SIZE;
+      const y = Math.floor(k / SIZE2);
+      return [x, y, z];
+    };
+
+    function getBlock(x, y, z) {
+      if (x < 0 || x >= SIZE || z < 0 || z >= SIZE || y < 0 || y >= HEIGHT) return undefined;
+      return world.get(key(x, y, z));
+    }
+
+    function isSolidCollision(x, y, z) {
+      if (y < 0) return true;
+      if (x < 0 || x >= SIZE || z < 0 || z >= SIZE) return true;
+      if (y >= HEIGHT) return false;
+      return world.has(key(x, y, z));
+    }
+
+    function isSolidRay(x, y, z) {
+      if (y < 0) return true;
+      if (x < 0 || x >= SIZE || z < 0 || z >= SIZE || y >= HEIGHT) return false;
+      return world.has(key(x, y, z));
+    }
+
+    // ------------------------------
+    // 地形ノイズ
+    // ------------------------------
+    function hash2(x, z, s = 1) {
+      let n = (x * 374761393 + z * 668265263 + s * 1274126177) | 0;
+      n = ((n ^ (n >> 13)) * 1274126177) | 0;
+      n = (n ^ (n >> 16)) >>> 0;
+      return n / 4294967296;
+    }
+
+    function smooth(t) {
+      return t * t * (3 - 2 * t);
+    }
+
+    function noise2(x, z) {
+      const x0 = Math.floor(x);
+      const z0 = Math.floor(z);
+      const tx = smooth(x - x0);
+      const tz = smooth(z - z0);
+
+      const v00 = hash2(x0, z0, seed);
+      const v10 = hash2(x0 + 1, z0, seed);
+      const v01 = hash2(x0, z0 + 1, seed);
+      const v11 = hash2(x0 + 1, z0 + 1, seed);
+
+      const a = v00 + (v10 - v00) * tx;
+      const b = v01 + (v11 - v01) * tx;
+      return a + (b - a) * tz;
+    }
+
+    function fbm(x, z) {
+      let v = 0;
+      let amp = 1;
+      let freq = 1;
+      let norm = 0;
+      for (let i = 0; i < 3; i++) {
+        v += noise2(x * freq, z * freq) * amp;
+        norm += amp;
+        amp *= 0.5;
+        freq *= 2;
+      }
+      return v / norm;
+    }
+
+    // ------------------------------
+    // 地形生成
+    // ------------------------------
+    const heights = new Uint8Array(SIZE * SIZE);
+    const topTypes = new Uint8Array(SIZE * SIZE);
+
+    function generateWorld(newSeed) {
+      if (newSeed != null) seed = newSeed;
+      world.clear();
+      heights.fill(0);
+      topTypes.fill(0);
+
+      for (let x = 0; x < SIZE; x++) {
+        for (let z = 0; z < SIZE; z++) {
+          const n = fbm((x + 100) / 28, (z + 100) / 28);
+          let h = Math.floor(3 + n * 13);
+          h = Math.max(1, Math.min(HEIGHT - 9, h));
+
+          heights[x * SIZE + z] = h;
+
+          for (let y = 0; y <= h; y++) {
+            let type;
+
+            if (y === 0) {
+              type = BLOCK.STONE;
+            } else if (y === h) {
+              if (h <= 3) type = BLOCK.SAND;
+              else if (h >= 14) type = BLOCK.STONE;
+              else type = BLOCK.GRASS;
+            } else if (y >= h - 2) {
+              type = h <= 3 ? BLOCK.SAND : BLOCK.DIRT;
+            } else {
+              type = BLOCK.STONE;
+            }
+
+            world.set(key(x, y, z), type);
+          }
+
+          topTypes[x * SIZE + z] = h <= 3 ? BLOCK.SAND : (h >= 14 ? BLOCK.STONE : BLOCK.GRASS);
+        }
+      }
+
+      // 木
+      for (let x = 3; x < SIZE - 3; x++) {
+        for (let z = 3; z < SIZE - 3; z++) {
+          const idx = x * SIZE + z;
+          const h = heights[idx];
+          const top = topTypes[idx];
+
+          if (top !== BLOCK.GRASS) continue;
+          if (h <= 4 || h >= 13) continue;
+
+          if (hash2(x, z, seed + 9173) > 0.986) {
+            const trunkHeight = 3 + Math.floor(hash2(x, z, seed + 4111) * 3);
+            if (h + trunkHeight + 3 >= HEIGHT - 1) continue;
+
+            // 幹
+            for (let y = h + 1; y <= h + trunkHeight; y++) {
+              world.set(key(x, y, z), BLOCK.WOOD);
+            }
+
+            // 葉
+            const cy = h + trunkHeight + 1;
+            for (let dx = -2; dx <= 2; dx++) {
+              for (let dy = -2; dy <= 2; dy++) {
+                for (let dz = -2; dz <= 2; dz++) {
+                  if (Math.abs(dx) + Math.abs(dy) + Math.abs(dz) > 2) continue;
+
+                  const nx = x + dx;
+                  const ny = cy + dy;
+                  const nz = z + dz;
+
+                  if (nx < 0 || nx >= SIZE || nz < 0 || nz >= SIZE || ny < 0 || ny >= HEIGHT) continue;
+
+                  const k = key(nx, ny, nz);
+                  if (!world.has(k)) {
+                    world.set(k, BLOCK.LEAVES);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      spawnPlayer();
+      rebuildMesh();
+    }
+
+    function spawnPlayer() {
+      const x = Math.floor(SIZE / 2);
+      const z = Math.floor(SIZE / 2);
+      let y = HEIGHT - 1;
+
+      while (y >= 0 && !world.has(key(x, y, z))) y--;
+      player.x = x + 0.5;
+      player.z = z + 0.5;
+      player.y = y + 1;
+      player.vel.set(0, 0, 0);
+    }
+
+    // ------------------------------
+    // three.js 初期化
+    // ------------------------------
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87ceeb);
+    scene.fog = new THREE.Fog(0x87ceeb, 35, 110);
+
+    const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 500);
+    camera.rotation.order = "YXZ";
+
+    const hemi = new THREE.HemisphereLight(0xbfe8ff, 0x6f7b5a, 1.0);
+    scene.add(hemi);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.1);
+    dirLight.position.set(30, 60, 20);
+    scene.add(dirLight);
+
+    const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+    const meshGroup = new THREE.Group();
+    scene.add(meshGroup);
+
+    const highlight = new THREE.LineSegments(
+      new THREE.EdgesGeometry(boxGeo),
+      new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 })
+    );
+    highlight.scale.setScalar(1.003);
+    highlight.visible = false;
+    scene.add(highlight);
+
+    // ------------------------------
+    // メッシュ再構築
+    // ------------------------------
+    function isExposed(x, y, z) {
+      // 上, 下, 東, 西, 南, 北
+      const dxs = [1, -1, 0, 0, 0, 0];
+      const dys = [0, 0, 1, -1, 0, 0];
+      const dzs = [0, 0, 0, 0, 1, -1];
+
+      for (let i = 0; i < 6; i++) {
+        const nx = x + dxs[i];
+        const ny = y + dys[i];
+        const nz = z + dzs[i];
+
+        // 地面より下は「見える」とは数えない
+        if (ny < 0) continue;
+
+        // 外側に出ている面は描く
+        if (ny >= HEIGHT || nx < 0 || nx >= SIZE || nz < 0 || nz >= SIZE) return true;
+
+        // 隣にブロックがなければ面が見える
+        if (!world.has(key(nx, ny, nz))) return true;
+      }
+
+      return false;
+    }
+
+    function rebuildMesh() {
+      for (const child of [...meshGroup.children]) {
+        meshGroup.remove(child);
+        if (child.dispose) child.dispose();
+      }
+
+      const buckets = new Map();
+
+      for (const [k, type] of world) {
+        const [x, y, z] = decode(k);
+        if (!isExposed(x, y, z)) continue;
+
+        let arr = buckets.get(type);
+        if (!arr) {
+          arr = [];
+          buckets.set(type, arr);
+        }
+
+        arr.push(x + 0.5, y + 0.5, z + 0.5);
+      }
+
+      const m4 = new THREE.Matrix4();
+
+      for (const [type, arr] of buckets) {
+        const mat = MATERIALS[type];
+        if (!mat || arr.length === 0) continue;
+
+        const count = arr.length / 3;
+        const inst = new THREE.InstancedMesh(boxGeo, mat, count);
+        inst.frustumCulled = false;
+
+        for (let i = 0; i < count; i++) {
+          m4.setPosition(arr[i * 3], arr[i * 3 + 1], arr[i * 3 + 2]);
+          inst.setMatrixAt(i, m4);
+        }
+
+        inst.instanceMatrix.needsUpdate = true;
+
+        if (mat.transparent) inst.renderOrder = 1;
+
+        meshGroup.add(inst);
+      }
+    }
+
+    // ------------------------------
+    // 衝突判定
+    // ------------------------------
+    function collides(px = player.x, py = player.y, pz = player.z) {
+      const eps = 0.00001;
+
+      const x0 = Math.floor(px - HALF_W + eps);
+      const x1 = Math.floor(px + HALF_W - eps);
+      const y0 = Math.floor(py + eps);
+      const y1 = Math.floor(py + PLAYER_H - eps);
+      const z0 = Math.floor(pz - HALF_W + eps);
+      const z1 = Math.floor(pz + HALF_W - eps);
+
+      for (let x = x0; x <= x1; x++) {
+        for (let y = y0; y <= y1; y++) {
+          for (let z = z0; z <= z1; z++) {
+            if (isSolidCollision(x, y, z)) return true;
+          }
+        }
+      }
+
+      return false;
+    }
+
+    function isOnGround() {
+      const savedY = player.y;
+      player.y -= 0.01;
+      const hit = collides();
+      player.y = savedY;
+      return hit;
+    }
+
+    function blockOverlapsPlayer(x, y, z) {
+      const eps = 0.00001;
+      return !(
+        x + 1 <= player.x - HALF_W + eps ||
+        x >= player.x + HALF_W - eps ||
+        y + 1 <= player.y + eps ||
+        y >= player.y + PLAYER_H - eps ||
+        z + 1 <= player.z - HALF_W + eps ||
+        z >= player.z + HALF_W - eps
+      );
+    }
+
+    // ------------------------------
+    // Voxel レイキャスト
+    // ------------------------------
+    function raycastVoxel(maxDist = REACH) {
+      const p = camera.position.clone();
+      const d = new THREE.Vector3();
+      camera.getWorldDirection(d);
+
+      let x = Math.floor(p.x);
+      let y = Math.floor(p.y);
+      let z = Math.floor(p.z);
+
+      let nx = 0;
+      let ny = 1;
+      let nz = 0;
+
+      if (isSolidRay(x, y, z)) {
+        return { x, y, z, nx, ny, nz };
+      }
+
+      const stepX = d.x > 0 ? 1 : -1;
+      const stepY = d.y > 0 ? 1 : -1;
+      const stepZ = d.z > 0 ? 1 : -1;
+
+      const invX = d.x === 0 ? Infinity : Math.abs(1 / d.x);
+      const invY = d.y === 0 ? Infinity : Math.abs(1 / d.y);
+      const invZ = d.z === 0 ? Infinity : Math.abs(1 / d.z);
+
+      let tMaxX = d.x === 0
+        ? Infinity
+        : (stepX > 0 ? (x + 1 - p.x) : (p.x - x)) * invX;
+
+      let tMaxY = d.y === 0
+        ? Infinity
+        : (stepY > 0 ? (y + 1 - p.y) : (p.y - y)) * invY;
+
+      let tMaxZ = d.z === 0
+        ? Infinity
+        : (stepZ > 0 ? (z + 1 - p.z) : (p.z - z)) * invZ;
+
+      for (let i = 0; i < 256; i++) {
+        const t = Math.min(tMaxX, tMaxY, tMaxZ);
+        if (t > maxDist) break;
+
+        if (tMaxX < tMaxY && tMaxX < tMaxZ) {
+          x += stepX;
+          tMaxX += invX;
+          nx = -stepX;
+          ny = 0;
+          nz = 0;
+        } else if (tMaxY < tMaxZ) {
+          y += stepY;
+          tMaxY += invY;
+          nx = 0;
+          ny = -stepY;
+          nz = 0;
+        } else {
+          z += stepZ;
+          tMaxZ += invZ;
+          nx = 0;
+          ny = 0;
+          nz = -stepZ;
+        }
+
+        if (isSolidRay(x, y, z)) {
+          return { x, y, z, nx, ny, nz };
+        }
+      }
+
+      return null;
+    }
+
+    // ------------------------------
+    // ブロック操作
+    // ------------------------------
+    function removeBlockAt(x, y, z) {
+      if (y <= 0) return; // 最下層は壊せない
+      const k = key(x, y, z);
+      if (!world.has(k)) return;
+      world.delete(k);
+      rebuildMesh();
+    }
+
+    function placeBlockAt(x, y, z, type) {
+      if (x < 0 || x >= SIZE || z < 0 || z >= SIZE || y < 0 || y >= HEIGHT) return;
+      const k = key(x, y, z);
+      if (world.has(k)) return;
+      if (blockOverlapsPlayer(x, y, z)) return;
+      world.set(k, type);
+      rebuildMesh();
+    }
+
+    // ------------------------------
+    // UI: ホットバー
+    // ------------------------------
+    const hotbar = document.getElementById("hotbar");
+
+    for (let i = 1; i <= 9; i++) {
+      const info = TYPES[i];
+      const slot = document.createElement("div");
+      slot.className = "slot";
+      slot.dataset.id = String(i);
+      slot.innerHTML = `
+        <div class="num">${i}</div>
+        <div class="sw" style="background:${'#' + info.color.toString(16).padStart(6, "0")}"></div>
+        <div class="name">${info.name}</div>
+      `;
+      slot.addEventListener("click", () => setSelected(i));
+      hotbar.appendChild(slot);
+    }
+
+    function setSelected(n) {
+      if (n < 1 || n > 9) return;
+      selected = n;
+      document.querySelectorAll(".slot").forEach(el => {
+        el.classList.toggle("active", Number(el.dataset.id) === n);
+      });
+    }
+    setSelected(selected);
+
+    // ------------------------------
+    // Toast
+    // ------------------------------
+    const toastEl = document.getElementById("toast");
+    let toastTimer = null;
+
+    function toast(msg) {
+      toastEl.textContent = msg;
+      toastEl.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toastEl.classList.remove("show"), 1400);
+    }
+
+    // ------------------------------
+    // 保存 / 読み込み
+    // ------------------------------
+    const SAVE_KEY = "voxel_minecraft_like_world_v1";
+
+    document.getElementById("saveBtn").addEventListener("click", () => {
+      const flat = [];
+      for (const [k, v] of world) {
+        flat.push(k, v);
+      }
+      localStorage.setItem(SAVE_KEY, JSON.stringify(flat));
+      toast("保存しました");
+    });
+
+    document.getElementById("loadBtn").addEventListener("click", () => {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) {
+        toast("保存データがありません");
+        return;
+      }
+
+      try {
+        const flat = JSON.parse(raw);
+        world.clear();
+        for (let i = 0; i < flat.length; i += 2) {
+          world.set(flat[i], flat[i + 1]);
+        }
+        spawnPlayer();
+        rebuildMesh();
+        toast("読み込みました");
+      } catch (e) {
+        console.error(e);
+        toast("読み込みに失敗しました");
+      }
+    });
+
+    document.getElementById("resetBtn").addEventListener("click", () => {
+      generateWorld();
+      toast("新しい世界を作成しました");
+    });
+
+    // ------------------------------
+    // ポインタロック
+    // ------------------------------
+    const canvas = renderer.domElement;
+
+    canvas.addEventListener("click", () => {
+      if (!pointerLocked) canvas.requestPointerLock();
+    });
+
+    document.addEventListener("pointerlockchange", () => {
+      pointerLocked = document.pointerLockElement === canvas;
+      if (!pointerLocked) {
+        keys.clear();
+      }
+    });
+
+    document.addEventListener("mousemove", e => {
+      if (!pointerLocked) return;
+
+      const sensitivity = 0.0022;
+      player.yaw -= e.movementX * sensitivity;
+      player.pitch -= e.movementY * sensitivity;
+
+      player.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, player.pitch));
+    });
+
+    canvas.addEventListener("contextmenu", e => e.preventDefault());
+
+    canvas.addEventListener("mousedown", e => {
+      if (!pointerLocked) return;
+      e.preventDefault();
+
+      const hit = raycastVoxel();
+      if (!hit) return;
+
+      // 左クリック: 破壊
+      if (e.button === 0) {
+        removeBlockAt(hit.x, hit.y, hit.z);
+      }
+
+      // 右クリック: 設置
+      if (e.button === 2) {
+        const x = hit.x + hit.nx;
+        const y = hit.y + hit.ny;
+        const z = hit.z + hit.nz;
+        placeBlockAt(x, y, z, selected);
+      }
+    });
+
+    // ------------------------------
+    // キーボード
+    // ------------------------------
+    const keys = new Set();
+
+    window.addEventListener("keydown", e => {
+      keys.add(e.code);
+
+      if (e.code.startsWith("Digit")) {
+        const n = Number(e.code.replace("Digit", ""));
+        if (n >= 1 && n <= 9) setSelected(n);
+      }
+
+      if (e.code === "KeyF") {
+        fly = !fly;
+        player.vel.y = 0;
+        toast(fly ? "Fly: ON" : "Fly: OFF");
+      }
+    });
+
+    window.addEventListener("keyup", e => keys.delete(e.code));
+
+    window.addEventListener("wheel", e => {
+      if (!pointerLocked) return;
+      if (e.deltaY > 0) {
+        setSelected(selected === 9 ? 1 : selected + 1);
+      } else {
+        setSelected(selected === 1 ? 9 : selected - 1);
+      }
+    }, { passive: true });
+
+    // ------------------------------
+    // 移動
+    // ------------------------------
+    function updatePlayer(dt) {
+      if (!pointerLocked) return;
+
+      const input = new THREE.Vector3();
+
+      if (keys.has("KeyW")) input.z -= 1;
+      if (keys.has("KeyS")) input.z += 1;
+      if (keys.has("KeyA")) input.x -= 1;
+      if (keys.has("KeyD")) input.x += 1;
+
+      const speed = fly ? FLY_SPEED : WALK_SPEED;
+
+      if (input.lengthSq() > 0) {
+        input.normalize().multiplyScalar(speed);
+      }
+
+      // Yaw で回転
+      const yawQuat = new THREE.Quaternion();
+      yawQuat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), player.yaw);
+      input.applyQuaternion(yawQuat);
+
+      player.vel.x = input.x;
+      player.vel.z = input.z;
+
+      if (fly) {
+        player.vel.y = 0;
+        if (keys.has("Space")) player.vel.y = FLY_SPEED;
+        if (keys.has("ShiftLeft") || keys.has("ShiftRight")) player.vel.y = -FLY_SPEED;
+      } else {
+        player.vel.y += GRAVITY * dt;
+        if (player.vel.y < -40) player.vel.y = -40;
+
+        if (keys.has("Space") && onGround && player.vel.y <= 0.1) {
+          player.vel.y = JUMP;
+        }
+      }
+
+      // X
+      const dx = player.vel.x * dt;
+      if (dx !== 0) {
+        const old = player.x;
+        player.x += dx;
+        if (collides()) {
+          player.x = old;
+          player.vel.x = 0;
+        }
+      }
+
+      // Z
+      const dz = player.vel.z * dt;
+      if (dz !== 0) {
+        const old = player.z;
+        player.z += dz;
+        if (collides()) {
+          player.z = old;
+          player.vel.z = 0;
+        }
+      }
+
+      // Y
+      const dy = player.vel.y * dt;
+      if (dy !== 0) {
+        const old = player.y;
+        player.y += dy;
+
+        if (collides()) {
+          if (dy < 0) {
+            player.y = Math.floor(player.y) + 1;
+            if (collides()) player.y = old;
+            player.vel.y = 0;
+            onGround = true;
+          } else {
+            player.y = old;
+            player.vel.y = 0;
+          }
+        }
+      }
+
+      onGround = !fly && isOnGround();
+    }
+
+    // ------------------------------
+    // ループ
+    // ------------------------------
+    function onResize() {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    }
+    window.addEventListener("resize", onResize);
+
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const dt = Math.min(clock.getDelta(), 0.05);
+
+      updatePlayer(dt);
+
+      camera.position.set(player.x, player.y + EYE_H, player.z);
+      camera.rotation.set(player.pitch, player.yaw, 0, "YXZ");
+
+      // レンガ色っぽい雲を適当に置く
+      updateHighlight();
+
+      renderer.render(scene, camera);
+    }
+
+    function updateHighlight() {
+      if (!pointerLocked) {
+        highlight.visible = false;
+        return;
+      }
+
+      const hit = raycastVoxel();
+      if (!hit) {
+        highlight.visible = false;
+        return;
+      }
+
+      highlight.visible = true;
+      highlight.position.set(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5);
+    }
+
+    // ------------------------------
+    // 開始
+    // ------------------------------
+    generateWorld();
+    animate();
+  </script>
+</body>
+</html>

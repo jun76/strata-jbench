@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>マイクラ風3D箱庭ゲーム</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #111;
+      font-family: sans-serif;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.45);
+      color: #fff;
+      text-align: center;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    #overlay.hidden {
+      display: none;
+    }
+
+    #overlay .panel {
+      background: rgba(0, 0, 0, 0.55);
+      padding: 28px 36px;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      line-height: 1.8;
+    }
+
+    #overlay h1 {
+      margin: 0 0 12px;
+      font-size: 30px;
+    }
+
+    #info {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.35);
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 13px;
+      line-height: 1.6;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    #crosshair {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      z-index: 10;
+      transform: translate(-50%, -50%);
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 24px;
+      line-height: 1;
+      pointer-events: none;
+      text-shadow: 0 0 6px #000;
+      user-select: none;
+    }
+
+    #hotbar {
+      position: fixed;
+      bottom: 18px;
+      left: 50%;
+      z-index: 10;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      pointer-events: none;
+    }
+
+    .slot {
+      width: 52px;
+      height: 52px;
+      border: 2px solid rgba(255, 255, 255, 0.25);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 12px;
+      text-shadow: 0 1px 3px #000;
+      background: rgba(0, 0, 0, 0.35);
+      user-select: none;
+    }
+
+    .slot.selected {
+      border-color: #fff;
+      box-shadow: 0 0 14px rgba(255, 255, 255, 0.85);
+      transform: translateY(-2px);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="info">
+    <b>操作</b><br>
+    W/A/S/D: 移動<br>
+    マウス: 視点<br>
+    Space: ジャンプ<br>
+    左クリック: ブロック破壊<br>
+    右クリック: ブロック設置<br>
+    1〜6: ブロック選択<br>
+    Shift: 歩く<br>
+    Esc: ポインター解除
+  </div>
+
+  <div id="crosshair">+</div>
+
+  <div id="hotbar"></div>
+
+  <div id="overlay">
+    <div class="panel">
+      <h1>マイクラ風3D箱庭</h1>
+      <div>
+        ここをクリックするとスタートします<br>
+        W/A/S/D で移動、マウスで視点<br>
+        左クリック破壊、右クリック設置
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+  <script>
+    (function () {
+      "use strict";
+
+      if (!window.THREE) {
+        document.getElementById("overlay").innerHTML =
+          "<div class='panel'><h1>読み込み失敗</h1><div>THREE.js の読み込みに失敗しました。<br>インターネット接続を確認してください。</div></div>";
+        return;
+      }
+
+      // ------------------------------------------------------------
+      // 基本設定
+      // ------------------------------------------------------------
+      const WORLD_W = 48;
+      const WORLD_D = 48;
+      const WORLD_H = 48;
+
+      const PLAYER_HALF = 0.3;
+      const PLAYER_HEIGHT = 1.8;
+      const EYE_HEIGHT = 1.62;
+
+      const GRAVITY = 28;
+      const JUMP_POWER = 9;
+      const WALK_SPEED = 6;
+      const SLOW_SPEED = 2.6;
+      const REACH = 6;
+
+      // ブロック種別
+      // 0: 空, 1: 草, 2: 土, 3: 石, 4: 木, 5: 葉, 6: 砂
+      const BLOCK_NAMES = [
+        "空気",
+        "草",
+        "土",
+        "石",
+        "木",
+        "葉",
+        "砂"
+      ];
+
+      const BLOCK_COLORS = [
+        0x000000,
+        0x5cb85c,
+        0x9b6a3f,
+        0x9a9a9a,
+        0x6f4e37,
+        0x3fa14d,
+        0xe0c88a
+      ];
+
+      // ------------------------------------------------------------
+      // 世界データ
+      // ------------------------------------------------------------
+      const world = new Uint8Array(WORLD_W * WORLD_D * WORLD_H);
+
+      function idx(x, y, z) {
+        return x + WORLD_W * z + WORLD_W * WORLD_D * y;
+      }
+
+      function inWorld(x, y, z) {
+        return (
+          x >= 0 && x < WORLD_W &&
+          y >= 0 && y < WORLD_H &&
+          z >= 0 && z < WORLD_D
+        );
+      }
+
+      function getBlock(x, y, z) {
+        if (!inWorld(x, y, z)) return 0;
+        return world[idx(x, y, z)];
+      }
+
+      function setBlock(x, y, z, type) {
+        if (!inWorld(x, y, z)) return false;
+        world[idx(x, y, z)] = type;
+        return true;
+      }
+
+      function isSolidCollision(x, y, z) {
+        // 世界外・地面の下は透明な壁にする
+        if (y < 0) return true;
+        if (x < 0 || x >= WORLD_W || z < 0 || z >= WORLD_D) return true;
+        if (y >= WORLD_H) return false;
+        return world[idx(x, y, z)] !== 0;
+      }
+
+      // ------------------------------------------------------------
+      // 簡易ノイズ
+      // ------------------------------------------------------------
+      function hash2(x, z) {
+        let n = Math.imul(x | 0, 374761393) ^ Math.imul(z | 0, 668265263);
+        n = (n ^ (n >>> 13)) >>> 0;
+        n = Math.imul(n, 1274126177) >>> 0;
+        n = (n ^ (n >>> 16)) >>> 0;
+        return n / 4294967295;
+      }
+
+      function smoothNoise(x, z) {
+        const xi = Math.floor(x);
+        const zi = Math.floor(z);
+        const xf = x - xi;
+        const zf = z - zi;
+
+        const v00 = hash2(xi, zi);
+        const v10 = hash2(xi + 1, zi);
+        const v01 = hash2(xi, zi + 1);
+        const v11 = hash2(xi + 1, zi + 1);
+
+        const u = xf * xf * (3 - 2 * xf);
+        const v = zf * zf * (3 - 2 * zf);
+
+        return (
+          v00 * (1 - u) * (1 - v) +
+          v10 * u * (1 - v) +
+          v01 * (1 - u) * v +
+          v11 * u * v
+        );
+      }
+
+      // ------------------------------------------------------------
+      // 地形生成
+      // ------------------------------------------------------------
+      function generateWorld() {
+        world.fill(0);
+
+        const centerX = Math.floor(WORLD_W / 2);
+        const centerZ = Math.floor(WORLD_D / 2);
+
+        for (let x = 0; x < WORLD_W; x++) {
+          for (let z = 0; z < WORLD_D; z++) {
+            let h = Math.floor(
+              14 +
+              smoothNoise(x * 0.06, z * 0.06) * 16 +
+              smoothNoise(x * 0.15, z * 0.15) * 4
+            );
+
+            if (h < 3) h = 3;
+            if (h > WORLD_H - 12) h = WORLD_H - 12;
+
+            for (let y = 0; y <= h; y++) {
+              let type;
+
+              if (y === h) {
+                type = h <= 7 ? 6 : 1; // 低いところは砂、それ以外は草
+              } else if (y >= h - 2) {
+                type = 2; // 土
+              } else {
+                type = 3; // 石
+              }
+
+              setBlock(x, y, z, type);
+            }
+
+            // 木を生成
+            const farFromSpawn =
+              Math.abs(x - centerX) > 4 ||
+              Math.abs(z - centerZ) > 4;
+
+            if (
+              h > 8 &&
+              x > 3 &&
+              x < WORLD_W - 4 &&
+              z > 3 &&
+              z < WORLD_D - 4 &&
+              farFromSpawn &&
+              hash2(x, z) > 0.985
+            ) {
+              const trunkHeight = 3 + Math.floor(hash2(x + 9, z + 7) * 2);
+
+              for (let y = h + 1; y <= h + trunkHeight && y < WORLD_H; y++) {
+                setBlock(x, y, z, 4);
+              }
+
+              const top = h + trunkHeight;
+
+              for (let dy = -1; dy <= 1; dy++) {
+                const y = top + dy;
+                if (y < 0 || y >= WORLD_H) continue;
+
+                const r = dy === 1 ? 1 : 2;
+
+                for (let dx = -r; dx <= r; dx++) {
+                  for (let dz = -r; dz <= r; dz++) {
+                    if (Math.abs(dx) === r && Math.abs(dz) === r && r > 1) continue;
+
+                    const nx = x + dx;
+                    const nz = z + dz;
+
+                    if (!inWorld(nx, y, nz)) continue;
+                    if (getBlock(nx, y, nz) === 0) {
+                      setBlock(nx, y, nz, 5);
+                    }
+                  }
+                }
+              }
+
+              setBlock(x, top + 1, z, 5);
+            }
+          }
+        }
+      }
+
+      // ------------------------------------------------------------
+      // Three.js 初期化
+      // ------------------------------------------------------------
+      const canvas = document.getElementById("game");
+      const renderer = new THREE.WebGLRenderer({
+        canvas,
+        antialias: true
+      });
+
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setClearColor(0x9ecfff, 1);
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x9ecfff);
+      scene.fog = new THREE.Fog(0x9ecfff, 35, 100);
+
+      const camera = new THREE.PerspectiveCamera(
+        75,
+        window.innerWidth / window.innerHeight,
+        0.08,
+        300
+      );
+      camera.rotation.order = "YXZ";
+
+      const lights = new THREE.Group();
+      scene.add(lights);
+
+      const hemi = new THREE.HemisphereLight(0xbfd1ff, 0x7a5a3a, 0.75);
+      lights.add(hemi);
+
+      const sun = new THREE.DirectionalLight(0xffffff, 0.55);
+      sun.position.set(30, 70, 20);
+      lights.add(sun);
+
+      const ambient = new THREE.AmbientLight(0xffffff, 0.18);
+      lights.add(ambient);
+
+      // ------------------------------------------------------------
+      // ブロック描画
+      // ------------------------------------------------------------
+      const blockGeometry = new THREE.BoxGeometry(1, 1, 1);
+
+      const materials = new Array(BLOCK_COLORS.length).fill(null);
+
+      for (let i = 1; i < BLOCK_COLORS.length; i++) {
+        materials[i] = new THREE.MeshLambertMaterial({
+          color: BLOCK_COLORS[i]
+        });
+      }
+
+      const worldGroup = new THREE.Group();
+      scene.add(worldGroup);
+
+      const dummy = new THREE.Object3D();
+
+      function isExposed(x, y, z) {
+        // どれか隣が空なら描く
+        return (
+          getBlock(x + 1, y, z) === 0 ||
+          getBlock(x - 1, y, z) === 0 ||
+          getBlock(x, y + 1, z) === 0 ||
+          getBlock(x, y - 1, z) === 0 ||
+          getBlock(x, y, z + 1) === 0 ||
+          getBlock(x, y, z - 1) === 0
+        );
+      }
+
+      function rebuildMeshes() {
+        // 古いメッシュ削除
+        for (let i = worldGroup.children.length - 1; i >= 0; i--) {
+          const mesh = worldGroup.children[i];
+          worldGroup.remove(mesh);
+          if (mesh && mesh.dispose) mesh.dispose();
+        }
+
+        const lists = [];
+        for (let i = 0; i < materials.length; i++) {
+          lists.push([]);
+        }
+
+        for (let y = 0; y < WORLD_H; y++) {
+          for (let z = 0; z < WORLD_D; z++) {
+            for (let x = 0; x < WORLD_W; x++) {
+              const type = world[idx(x, y, z)];
+              if (type === 0) continue;
+              if (!isExposed(x, y, z)) continue;
+
+              lists[type].push(x, y, z);
+            }
+          }
+        }
+
+        for (let type = 1; type < lists.length; type++) {
+          const coords = lists[type];
+          const count = coords.length / 3;
+          if (count === 0) continue;
+
+          const mesh = new THREE.InstancedMesh(
+            blockGeometry,
+            materials[type],
+            count
+          );
+
+          mesh.frustumCulled = false;
+
+          for (let i = 0; i < count; i++) {
+            const x = coords[i * 3 + 0];
+            const y = coords[i * 3 + 1];
+            const z = coords[i * 3 + 2];
+
+            dummy.position.set(x + 0.5, y + 0.5, z + 0.5);
+            dummy.rotation.set(0, 0, 0);
+            dummy.scale.set(1, 1, 1);
+            dummy.updateMatrix();
+
+            mesh.setMatrixAt(i, dummy.matrix);
+          }
+
+          mesh.instanceMatrix.needsUpdate = true;
+          worldGroup.add(mesh);
+        }
+      }
+
+      // ブロック選択枠
+      const highlight = new THREE.LineSegments(
+        new THREE.EdgesGeometry(new THREE.BoxGeometry(1.001, 1.001, 1.001)),
+        new THREE.LineBasicMaterial({
+          color: 0x111111,
+          transparent: true,
+          opacity: 0.55
+        })
+      );
+      highlight.visible = false;
+      scene.add(highlight);
+
+      // ------------------------------------------------------------
+      // プレイヤー
+      // ------------------------------------------------------------
+      const player = {
+        x: WORLD_W / 2 + 0.5,
+        y: 20,
+        z: WORLD_D / 2 + 0.5,
+        vy: 0,
+        grounded: false
+      };
+
+      let selectedBlock = 1;
+
+      function spawnPlayer() {
+        const cx = Math.floor(WORLD_W / 2);
+        const cz = Math.floor(WORLD_D / 2);
+
+        let ground = 0;
+        for (let y = WORLD_H - 1; y >= 0; y--) {
+          if (getBlock(cx, y, cz) !== 0) {
+            ground = y;
+            break;
+          }
+        }
+
+        player.x = cx + 0.5;
+        player.z = cz + 0.5;
+        player.y = ground + 1;
+        player.vy = 0;
+        player.grounded = false;
+
+        // 万一埋まってたら上に出す
+        let guard = 0;
+        while (collides(player.x, player.y, player.z) && guard < 50) {
+          player.y += 1;
+          guard++;
+        }
+
+        camera.position.set(player.x, player.y + EYE_HEIGHT, player.z);
+      }
+
+      function collides(x, y, z) {
+        const minX = Math.floor(x - PLAYER_HALF + 0.001);
+        const maxX = Math.floor(x + PLAYER_HALF - 0.001);
+        const minY = Math.floor(y + 0.001);
+        const maxY = Math.floor(y + PLAYER_HEIGHT - 0.001);
+        const minZ = Math.floor(z - PLAYER_HALF + 0.001);
+        const maxZ = Math.floor(z + PLAYER_HALF - 0.001);
+
+        for (let yy = minY; yy <= maxY; yy++) {
+          for (let zz = minZ; zz <= maxZ; zz++) {
+            for (let xx = minX; xx <= maxX; xx++) {
+              if (isSolidCollision(xx, yy, zz)) {
+                return true;
+              }
+            }
+          }
+        }
+
+        return false;
+      }
+
+      function cellIntersectsPlayer(x, y, z) {
+        const minX = player.x - PLAYER_HALF;
+        const maxX = player.x + PLAYER_HALF;
+        const minY = player.y;
+        const maxY = player.y + PLAYER_HEIGHT;
+        const minZ = player.z - PLAYER_HALF;
+        const maxZ = player.z + PLAYER_HALF;
+
+        return (
+          x + 1 > minX &&
+          x < maxX &&
+          y + 1 > minY &&
+          y < maxY &&
+          z + 1 > minZ &&
+          z < maxZ
+        );
+      }
+
+      // ------------------------------------------------------------
+      // 視点・入力
+      // ------------------------------------------------------------
+      let yaw = 0;
+      let pitch = -0.25;
+      let locked = false;
+
+      const overlay = document.getElementById("overlay");
+      const hotbar = document.getElementById("hotbar");
+
+      for (let i = 1; i <= 6; i++) {
+        const slot = document.createElement("div");
+        slot.className = "slot";
+        slot.dataset.type = String(i);
+        slot.style.background = "#" + BLOCK_COLORS[i].toString(16).padStart(6, "0");
+        slot.textContent = i + "\n" + BLOCK_NAMES[i];
+        slot.whiteSpace = "pre";
+        slot.pointerEvents = "auto";
+        slot.addEventListener("click", () => selectBlock(i));
+        hotbar.appendChild(slot);
+      }
+
+      function updateHotbar() {
+        const slots = hotbar.querySelectorAll(".slot");
+        slots.forEach((slot) => {
+          slot.classList.toggle("selected", Number(slot.dataset.type) === selectedBlock);
+        });
+      }
+
+      function selectBlock(type) {
+        if (type >= 1 && type < BLOCK_NAMES.length) {
+          selectedBlock = type;
+          updateHotbar();
+        }
+      }
+
+      updateHotbar();
+
+      function lockMouse() {
+        canvas.requestPointerLock();
+      }
+
+      overlay.addEventListener("click", lockMouse);
+
+      document.addEventListener("pointerlockchange", () => {
+        locked = document.pointerLockElement === canvas;
+        overlay.classList.toggle("hidden", locked);
+      });
+
+      document.addEventListener("mousemove", (e) => {
+        if (!locked) return;
+
+        const sensitivity = 0.0024;
+        yaw -= e.movementX * sensitivity;
+        pitch -= e.movementY * sensitivity;
+
+        const limit = Math.PI / 2 - 0.01;
+        pitch = Math.max(-limit, Math.min(limit, pitch));
+
+        camera.rotation.set(pitch, yaw, 0);
+      });
+
+      const keys = Object.create(null);
+
+      document.addEventListener("keydown", (e) => {
+        keys[e.code] = true;
+
+        if (e.code.startsWith("Digit")) {
+          const n = Number(e.code.slice(5));
+          selectBlock(n);
+        }
+
+        if (e.code === "Space") e.preventDefault();
+      });
+
+      document.addEventListener("keyup", (e) => {
+        keys[e.code] = false;
+      });
+
+      document.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+      });
+
+      document.addEventListener("mousedown", (e) => {
+        if (!locked) return;
+
+        if (e.button === 0) {
+          breakBlock();
+        } else if (e.button === 2) {
+          placeBlock();
+        }
+      });
+
+      // ------------------------------------------------------------
+      // 画面内のどのブロックを見ているか判定する DDA レイキャスト
+      // ------------------------------------------------------------
+      function raycast(maxDist = REACH) {
+        const dir = new THREE.Vector3();
+        camera.getWorldDirection(dir);
+
+        const ox = camera.position.x;
+        const oy = camera.position.y;
+        const oz = camera.position.z;
+
+        let x = Math.floor(ox);
+        let y = Math.floor(oy);
+        let z = Math.floor(oz);
+
+        const dx = dir.x;
+        const dy = dir.y;
+        const dz = dir.z;
+
+        const stepX = dx > 0 ? 1 : dx < 0 ? -1 : 0;
+        const stepY = dy > 0 ? 1 : dy < 0 ? -1 : 0;
+        const stepZ = dz > 0 ? 1 : dz < 0 ? -1 : 0;
+
+        const tDeltaX = dx !== 0 ? Math.abs(1 / dx) : Infinity;
+        const tDeltaY = dy !== 0 ? Math.abs(1 / dy) : Infinity;
+        const tDeltaZ = dz !== 0 ? Math.abs(1 / dz) : Infinity;
+
+        const tMaxX = dx > 0
+          ? (Math.floor(ox) + 1 - ox) / dx
+          : dx < 0
+          ? (ox - Math.floor(ox)) / -dx
+          : Infinity;
+
+        const tMaxY = dy > 0
+          ? (Math.floor(oy) + 1 - oy) / dy
+          : dy < 0
+          ? (oy - Math.floor(oy)) / -dy
+          : Infinity;
+
+        const tMaxZ = dz > 0
+          ? (Math.floor(oz) + 1 - oz) / dz
+          : dz < 0
+          ? (oz - Math.floor(oz)) / -dz
+          : Infinity;
+
+        let t = 0;
+        let nx = 0;
+        let ny = 0;
+        let nz = 0;
+
+        for (let i = 0; i < 256; i++) {
+          if (tMaxX < tMaxY && tMaxX < tMaxZ) {
+            t = tMaxX;
+            x += stepX;
+            tMaxX += tDeltaX;
+            nx = -stepX;
+            ny = 0;
+            nz = 0;
+          } else if (tMaxY < tMaxZ) {
+            t = tMaxY;
+            y += stepY;
+            tMaxY += tDeltaY;
+            nx = 0;
+            ny = -stepY;
+            nz = 0;
+          } else {
+            t = tMaxZ;
+            z += stepZ;
+            tMaxZ += tDeltaZ;
+            nx = 0;
+            ny = 0;
+            nz = -stepZ;
+          }
+
+          if (t > maxDist) break;
+
+          if (
+            x < 0 ||
+            x >= WORLD_W ||
+            y < 0 ||
+            y >= WORLD_H ||
+            z < 0 ||
+            z >= WORLD_D
+          ) {
+            return null;
+          }
+
+          if (getBlock(x, y, z) !== 0) {
+            return {
+              x,
+              y,
+              z,
+              nx,
+              ny,
+              nz
+            };
+          }
+        }
+
+        return null;
+      }
+
+      function breakBlock() {
+        const hit = raycast();
+        if (!hit) return;
+
+        setBlock(hit.x, hit.y, hit.z, 0);
+        rebuildMeshes();
+      }
+
+      function placeBlock() {
+        const hit = raycast();
+        if (!hit) return;
+
+        const x = hit.x + hit.nx;
+        const y = hit.y + hit.ny;
+        const z = hit.z + hit.nz;
+
+        if (!inWorld(x, y, z)) return;
+        if (getBlock(x, y, z) !== 0) return;
+        if (cellIntersectsPlayer(x, y, z)) return;
+
+        setBlock(x, y, z, selectedBlock);
+        rebuildMeshes();
+      }
+
+      // ------------------------------------------------------------
+      // 毎フレーム更新
+      // ------------------------------------------------------------
+      function updatePlayer(dt) {
+        const speed = keys["ShiftLeft"] || keys["ShiftRight"] ? SLOW_SPEED : WALK_SPEED;
+
+        let inputX = 0; // 右方向
+        let inputZ = 0; // 前方向
+
+        if (keys["KeyW"]) inputZ += 1;
+        if (keys["KeyS"]) inputZ -= 1;
+        if (keys["KeyD"]) inputX += 1;
+        if (keys["KeyA"]) inputX -= 1;
+
+        const forwardX = -Math.sin(yaw);
+        const forwardZ = -Math.cos(yaw);
+        const rightX = Math.cos(yaw);
+        const rightZ = -Math.sin(yaw);
+
+        let mx = inputX * rightX + inputZ * forwardX;
+        let mz = inputX * rightZ + inputZ * forwardZ;
+
+        const len = Math.hypot(mx, mz);
+        if (len > 1) {
+          mx /= len;
+          mz /= len;
+        }
+
+        const newX = player.x + mx * speed * dt;
+        const newZ = player.z + mz * speed * dt;
+
+        if (!collides(newX, player.y, player.z)) {
+          player.x = newX;
+        }
+
+        if (!collides(player.x, player.y, newZ)) {
+          player.z = newZ;
+        }
+
+        if (keys["Space"] && player.grounded) {
+          player.vy = JUMP_POWER;
+          player.grounded = false;
+        }
+
+        player.vy -= GRAVITY * dt;
+        if (player.vy < -45) player.vy = -45;
+
+        const newY = player.y + player.vy * dt;
+
+        if (!collides(player.x, newY, player.z)) {
+          player.y = newY;
+          player.grounded = false;
+        } else {
+          if (player.vy < 0) {
+            player.y = Math.floor(newY) + 1;
+            player.grounded = true;
+            player.vy = 0;
+          } else {
+            const top = newY + PLAYER_HEIGHT;
+            const ceiling = Math.floor(top);
+            player.y = ceiling - PLAYER_HEIGHT - 0.001;
+            player.vy = 0;
+          }
+        }
+
+        if (!player.grounded && collides(player.x, player.y - 0.01, player.z)) {
+          player.grounded = true;
+        }
+
+        camera.position.set(player.x, player.y + EYE_HEIGHT, player.z);
+      }
+
+      function updateHighlight() {
+        if (!locked) {
+          highlight.visible = false;
+          return;
+        }
+
+        const hit = raycast();
+        if (!hit) {
+          highlight.visible = false;
+          return;
+        }
+
+        highlight.visible = true;
+        highlight.position.set(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5);
+      }
+
+      // ------------------------------------------------------------
+      // 初期化
+      // ------------------------------------------------------------
+      generateWorld();
+      rebuildMeshes();
+      spawnPlayer();
+
+      const clock = new THREE.Clock();
+
+      function animate() {
+        requestAnimationFrame(animate);
+
+        const dt = Math.min(clock.getDelta(), 0.1);
+
+        if (locked) {
+          updatePlayer(dt);
+        } else {
+          camera.position.set(player.x, player.y + EYE_HEIGHT, player.z);
+        }
+
+        updateHighlight();
+        renderer.render(scene, camera);
+      }
+
+      window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      animate();
+    })();
+  </script>
+</body>
+</html>

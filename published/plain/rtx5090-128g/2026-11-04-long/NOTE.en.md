@@ -1,0 +1,1 @@
+Tiers 4b, 4c and 4d (long documents, 32K to 1M, and a YaRN check). 2026-11-03-main skipped them because the long fixtures did not exist yet; a long document was made from ten Japanese and English works of Aozora Bunko and Project Gutenberg and measured

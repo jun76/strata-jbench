@@ -1,0 +1,1204 @@
+<!doctype html>
+<html lang="ja" data-lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-ja="Strata ベンチ 結果" data-en="Strata bench results" data-zh="Strata 基准测试 结果">Strata ベンチ 結果</title>
+{{i18n_head}}
+{{i18n_script}}
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f9f9f7; --surface: #fcfcfb; --surface-2: #f0efec; --text: #0b0b0b; --text-2: #52514e; --muted: #898781;
+  --border: rgba(11,11,11,0.10); --grid: #e1e0d9; --axis: #c3c2b7; --accent: #2a78d6;
+  --s1: #2a78d6; --deemph: #cfcdc6; --deemph-mark: #b3b1a9;
+  /* labels that only name a group (temperature, drafter, effort): green, kept apart from the blues of magnitude and highlight */
+  --g1: #62c37a; --g2: #1b9247; --g3: #0b5d2a;
+  --q1: #cde2fb; --q2: #9ec5f4; --q3: #6da7ec; --q4: #3987e5; --q5: #256abf; --q6: #184f95; --q7: #0d366b;
+  --databar: #cde2fb;
+  /* the bars of amounts with no better direction (temperatures, power, memory): green, not the blue of the measured results */
+  --databar-n: #b2e7bc;
+  --none: #f0efec; --bad: #d03b3b; --up: #2a78d6; --down: #e34948; --mid: #c3c2b7; --warn-bg: #fdf3dc; --warn-ink: #6b4a00;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* one hue per environment, in envs/ order (the validated categorical palette) */
+  --e1: #2a78d6; --e2: #eb6834; --e3: #1baf7a; --e4: #eda100; --e5: #e87ba4; --e6: #008300; --e7: #6250d6; --e8: #e34948;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0d0d0d; --surface: #1a1a19; --surface-2: #242422; --text: #f0efec; --text-2: #c3c2b7; --muted: #898781;
+    --border: rgba(255,255,255,0.10); --grid: #2c2c2a; --axis: #383835; --accent: #3987e5;
+    --s1: #3987e5; --deemph: #44433f; --deemph-mark: #6b6a65;
+    --g1: #0b5d2a; --g2: #25984d; --g3: #7cd591;
+    --q1: #104281; --q2: #184f95; --q3: #256abf; --q4: #2a78d6; --q5: #5598e7; --q6: #86b6ef; --q7: #b7d3f6;
+    --databar: #184f95;
+    --databar-n: #154f27;
+    --none: #2a2a28; --bad: #e66767; --up: #3987e5; --down: #e66767; --mid: #4a4945; --warn-bg: #3a311c; --warn-ink: #f0d58c;
+    --e1: #3987e5; --e2: #d95926; --e3: #199e70; --e4: #c98500; --e5: #d55181; --e6: #008300; --e7: #9085e9; --e8: #e66767;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0d0d0d; --surface: #1a1a19; --surface-2: #242422; --text: #f0efec; --text-2: #c3c2b7; --muted: #898781;
+  --border: rgba(255,255,255,0.10); --grid: #2c2c2a; --axis: #383835; --accent: #3987e5;
+  --s1: #3987e5; --deemph: #44433f; --deemph-mark: #6b6a65;
+  --g1: #0b5d2a; --g2: #25984d; --g3: #7cd591;
+  --q1: #104281; --q2: #184f95; --q3: #256abf; --q4: #2a78d6; --q5: #5598e7; --q6: #86b6ef; --q7: #b7d3f6;
+  --databar: #184f95;
+  --databar-n: #154f27;
+  --none: #2a2a28; --bad: #e66767; --up: #3987e5; --down: #e66767; --mid: #4a4945; --warn-bg: #3a311c; --warn-ink: #f0d58c;
+  --e1: #3987e5; --e2: #d95926; --e3: #199e70; --e4: #c98500; --e5: #d55181; --e6: #008300; --e7: #9085e9; --e8: #e66767;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--bg); }
+body { margin: 0; color: var(--text); font: 14px/1.6 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 72px; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 17px; margin: 40px 0 4px; padding-top: 8px; }
+/* a section heading is its own link: a jump (page link, heading click, #… in the URL) puts it just below the sticky filters
+   (--stick: their height, 0 where they do not stick) */
+h2[id] { scroll-margin-top: var(--stick, 0px); cursor: pointer; }
+h2[id]:hover::after, h2[id]:focus-visible::after { content: " #"; color: var(--muted); font-weight: 400; }
+h2[id]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+h2 + .lead { margin-top: 0; }
+h3 { font-size: 14.5px; margin: 0; }
+p { margin: 6px 0; }
+.sub, .lead, .desc, .foot { color: var(--text-2); }
+.desc { font-size: 13px; margin: 2px 0 0; }
+.foot { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+a { color: var(--accent); }
+code { font-family: var(--mono); font-size: 12.5px; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+p.how { font-size: 13px; }
+p.gen { font-size: 12px; color: var(--muted); margin: 4px 0 0; }
+/* what the reader operates (page links, switches, selects): large enough to see and hit at a glance */
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; }
+nav.toc a { font-size: 14.5px; padding: 7px 14px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
+  color: var(--text); text-decoration: none; line-height: 1.3; }
+nav.toc a:hover { border-color: var(--accent); color: var(--accent); }
+nav.toc a:focus-visible, .filters select:focus-visible, .envsw button:focus-visible, .chart header button:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; }
+.filters { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 12px 0; margin-top: 16px;
+  display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: end; border-bottom: 1px solid var(--border); }
+.filters label { display: flex; flex-direction: column; font-size: 13px; font-weight: 600; color: var(--text-2); gap: 4px; }
+.filters select { font: inherit; font-size: 15px; font-weight: 400; min-height: 40px; padding: 7px 34px 7px 12px; border: 1px solid var(--axis);
+  border-radius: 8px; background: var(--surface); color: var(--text); max-width: 100%; cursor: pointer; }
+.filters select:hover { border-color: var(--accent); }
+.envsw-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 20px 0 0; font-size: 14px; font-weight: 600; color: var(--text-2); }
+.envsw { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--axis); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.envsw button { font: inherit; font-size: 15px; font-weight: 400; min-height: 40px; padding: 8px 16px; border: 0; background: transparent; color: var(--text); cursor: pointer; }
+.envsw button:hover { background: var(--surface-2); }
+.envsw button + button { border-left: 1px solid var(--border); }
+.envsw button[aria-pressed="true"] { background: var(--accent); color: var(--bg); font-weight: 600; }
+.envsw button .n { color: var(--muted); font-weight: 400; margin-left: 4px; }
+.envsw button[aria-pressed="true"] .n { color: inherit; opacity: .8; }
+.banner { background: var(--warn-bg); color: var(--warn-ink); padding: 7px 12px; border-radius: 8px; font-size: 13px; margin: 0 0 10px; }
+/* the runs behind the environment's results: a footnote to its panel above */
+.runs { margin: 6px 2px 0; font-size: 12.5px; color: var(--text-2); }
+.runs .note { color: var(--muted); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 14px; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+.tile .k { font-size: 12px; color: var(--text-2); }
+.tile .v { font-size: 26px; font-weight: 600; line-height: 1.3; }
+.tile .v small { font-size: 13px; font-weight: 500; color: var(--text-2); margin-left: 4px; }
+.tile .m { font-size: 12.5px; color: var(--text-2); }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: 14px; margin-top: 12px; }
+.chart { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px 12px; min-width: 0; margin-top: 12px; }
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 14px; margin-top: 12px; }
+.grid2 .chart, .grid3 .chart { margin-top: 0; }
+h3.opt-h { font-size: 15px; margin: 22px 0 2px; }
+.chart header { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; }
+.chart header button { font: inherit; font-size: 13.5px; padding: 6px 14px; border-radius: 7px; border: 1px solid var(--axis);
+  background: var(--surface-2); color: var(--text); cursor: pointer; white-space: nowrap; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--text-2); margin: 8px 0 0; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
+.legend i.line { height: 2px; width: 16px; border-radius: 1px; }
+.legend i.dot { width: 10px; height: 10px; border-radius: 50%; }
+.legend i.ring { width: 10px; height: 10px; border-radius: 50%; background: transparent !important; border: 2px solid var(--s1); }
+.legend .ramp { width: 120px; height: 10px; border-radius: 3px; margin: 0 2px; }
+.plot { margin-top: 10px; }
+.plot.scroll-x { overflow-x: auto; }
+.plot svg { display: block; }
+.plot svg text { font-family: inherit; }
+.empty { color: var(--muted); font-size: 13px; padding: 18px 0 8px; }
+.tbl { margin-top: 10px; overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+th, td { padding: 5px 8px; border-bottom: 1px solid var(--grid); text-align: left; white-space: nowrap; }
+th { color: var(--text-2); font-weight: 600; background: var(--surface-2); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+tr.gap td { border-top: 2px solid var(--axis); }
+td.bar.n { background-image: linear-gradient(var(--databar-n), var(--databar-n)); }
+th.sort { cursor: pointer; }
+th.sort:hover { color: var(--accent); }
+/* data bar (as in a spreadsheet's conditional format): length ∝ value, from 0 to the column's largest value */
+td.bar { background-image: linear-gradient(var(--databar), var(--databar)); background-repeat: no-repeat;
+  background-position: 3px center; background-size: calc((100% - 6px) * var(--f)) calc(100% - 8px); }
+/* the sort hint only on hover / focus, so that it is not read as the ↑ / ↓ of the better direction */
+th.sort:hover::after, th.sort:focus-visible::after { content: " ⇅"; color: var(--muted); }
+.big th { position: sticky; top: 0; }
+#tip { position: fixed; z-index: 20; pointer-events: none; background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; box-shadow: 0 4px 16px rgba(0,0,0,.18);
+  max-width: 320px; display: none; }
+#tip .t { font-weight: 600; margin-bottom: 4px; }
+#tip .r { display: flex; gap: 8px; align-items: center; white-space: nowrap; }
+#tip .r b { font-variant-numeric: tabular-nums; }
+#tip .r .l { color: var(--text-2); }
+#tip .r i { display: inline-block; width: 12px; height: 2px; }
+#tip .n { color: var(--muted); margin-top: 4px; white-space: normal; }
+.hit { fill: transparent; cursor: default; outline: none; }
+.hit:focus-visible { stroke: var(--text); stroke-width: 1; }
+@media (max-width: 640px) { h1 { font-size: 19px; } .tile .v { font-size: 22px; } .filters { position: static; } .chart { padding: 12px 12px 10px; } }
+</style>
+</head>
+<body>
+<main>
+{{lang_switch}}
+<h1><span class="L ja">Strata ベンチ 結果</span><span class="L en">Strata bench results</span><span class="L zh">Strata 基准测试 结果</span></h1>
+<div id="preview" class="banner" hidden></div>
+{{division}}
+<p class="sub"><span class="L ja">Strata で18モデルを同じ条件で測った結果。ハードウェア構成（GPU と RAM の組み合わせ）ごとに「環境」として分け、下のボタンで切り替える。2つ以上の環境に結果があると「環境の比較」が出る。ケースごとの条件と生データは <a href="CASES.html">CASES.html</a>、全ケースの数値は <a href="{{csv}}">summary.csv</a>。</span><span class="L en">18 models measured with Strata under the same conditions, kept apart per hardware set-up (a GPU and an amount of RAM: an “environment”); switch with the buttons below. With results in two or more environments, “Across environments” compares them. Each case's conditions and raw data: <a href="CASES.html">CASES.html</a>; every case's numbers: <a href="{{csv}}">summary.csv</a>. </span><span class="L zh">用 Strata 以相同条件测量 18 个模型的结果，按硬件配置（GPU 与 RAM 的组合，即“环境”）分开，用下方按钮切换。两个以上环境有结果时会显示“环境比较”。各用例的条件与原始数据见 <a href="CASES.html">CASES.html</a>，全部用例的数值见 <a href="{{csv}}">summary.csv</a>。</span></p>
+<p class="sub how">{{how}}</p>
+<p class="gen"><span class="L ja">生成: {{generated}}（<code>scripts/build_results.py</code>）</span><span class="L en">Generated {{generated}} (<code>scripts/build_results.py</code>)</span><span class="L zh">生成于 {{generated}}（<code>scripts/build_results.py</code>）</span></p>
+<div class="envsw-row"><span class="L ja">環境</span><span class="L en">Environment</span><span class="L zh">环境</span><div id="envsw" class="envsw" role="group" aria-label="environment"></div></div>
+{{env}}
+<div id="runs" class="runs"></div>
+<nav class="toc">
+  <a href="#s-cmp" id="toc-cmp"><span class="L ja">環境の比較</span><span class="L en">Across environments</span><span class="L zh">环境比较</span></a><a href="#s-speed"><span class="L ja">モデル別の速度</span><span class="L en">Speed by model</span><span class="L zh">各模型速度</span></a><a href="#s-long"><span class="L ja">入力の長さ</span><span class="L en">Input length</span><span class="L zh">输入长度</span></a><a href="#s-std">standard-v1</a><a href="#s-think">thinking</a><a href="#s-ctx"><span class="L ja">コンテキスト長</span><span class="L en">Context length</span><span class="L zh">上下文长度</span></a><a href="#s-doc"><span class="L ja">長文</span><span class="L en">Long documents</span><span class="L zh">长文</span></a><a href="#s-opts"><span class="L ja">起動オプション</span><span class="L en">Launch options</span><span class="L zh">启动选项</span></a><a href="#s-env"><span class="L ja">計測時の環境</span><span class="L en">Conditions</span><span class="L zh">测量时的环境</span></a><a href="#s-table"><span class="L ja">一覧表</span><span class="L en">Table</span><span class="L zh">一览表</span></a>
+</nav>
+
+<div class="filters" id="filters">
+  <label><span class="L ja">モデル</span><span class="L en">Models</span><span class="L zh">模型</span><select id="f-family"></select></label>
+  <label><span class="L ja">強調するモデル</span><span class="L en">Highlight</span><span class="L zh">高亮模型</span><select id="f-hl"></select></label>
+  <label><span class="L ja">decode の temperature</span><span class="L en">decode temperature</span><span class="L zh">decode 的 temperature</span><select id="f-temp">
+    <option value="all" data-ja="3水準の中央値" data-en="median of the 3" data-zh="3 档的中位数">3水準の中央値</option><option value="0">0</option><option value="0.7" selected>0.7</option><option value="1">1.0</option></select></label>
+  <label><span class="L ja">decode の文章</span><span class="L en">decode text</span><span class="L zh">decode 的文章</span><select id="f-content"></select></label>
+</div>
+
+<div class="tiles" id="tiles"></div>
+
+<section id="s-cmp-wrap" hidden>
+<h2 id="s-cmp"><span class="L ja">環境の比較（Tier 1）</span><span class="L en">Across environments (Tier 1)</span><span class="L zh">环境比较（Tier 1）</span></h2>
+<p class="lead"><span class="L ja">同じモデル・同じ条件（コンテキスト 128K、thinking off、drafter は MTP）のケースを、結果のある環境どうしで並べる。色は環境ごとに決まっていて、切り替えても変わらない。上の絞り込み（モデル・temperature・文章）に従う。</span><span class="L en">The same models under the same conditions (context 128K, thinking off, MTP drafter), side by side for every environment with results. Each environment keeps its color. Follows the filters above (models, temperature, text).</span><span class="L zh">把相同模型、相同条件（上下文 128K，thinking off，drafter 为 MTP）的用例，在有结果的各环境之间并排比较。每个环境的颜色固定不变。随上方筛选（模型、temperature、文章）变化。</span></p>
+<div id="c-cmp-decode"></div>
+<div class="grid2"><div id="c-cmp-prefill"></div><div id="c-cmp-ttft"></div></div>
+</section>
+
+<h2 id="s-speed"><span class="L ja">モデル別の速度（Tier 1）</span><span class="L en">Speed by model (Tier 1)</span><span class="L zh">各模型速度（Tier 1）</span></h2>
+<p class="lead"><span class="L ja">全モデル同じ条件: コンテキスト 128K、thinking off、drafter は MTP に固定（DFlash2 は下の drafter のグラフだけ）、各ケース3回（seed 1/2/3）。値は3回の中央値、細い線は3回の範囲。</span><span class="L en">The same conditions for every model: context 128K, thinking off, the drafter pinned to MTP (DFlash2 only in the drafter chart below), each case 3 times (seed 1/2/3). Values are the median of the 3; thin lines show their range.</span><span class="L zh">所有模型条件相同：上下文 128K，thinking off，drafter 固定为 MTP（DFlash2 只在下方的 drafter 图表中），每个用例 3 次（seed 1/2/3）。数值为 3 次的中位数，细线为 3 次的范围。</span></p>
+<div id="c-decode"></div>
+<div class="grid2"><div id="c-prefill"></div><div id="c-ttft"></div></div>
+<div class="grid2"><div id="c-temp"></div><div id="c-size"></div></div>
+<div id="c-drafter"></div>
+
+
+<h2 id="s-long"><span class="L ja">入力の長さと待ち時間（Tier 1）</span><span class="L en">Input length and waiting (Tier 1)</span><span class="L zh">输入长度与等待时间（Tier 1）</span></h2>
+<p class="lead"><span class="L ja">入力が長いほど、最初の文字が出るまで（TTFT）が伸び、その後の decode も遅くなりうる。全モデルを、コンテキスト 128K で起動して、Tier 1 の固定プロンプト（4K・32K・128K）で測った。128K より長い入力は後の「長文の読解」。</span><span class="L en">The longer the input, the longer until the first character (TTFT), and the decode after it may slow down too. Every model, launched with a 128K context, on the Tier 1 prompts (4K, 32K, 128K). Inputs beyond 128K: “Long documents” below.</span><span class="L zh">输入越长，到出现第一个字（TTFT）的时间越长，之后的 decode 也可能变慢。全部模型以 128K 上下文启动，用 Tier 1 的固定提示（4K・32K・128K）测量。超过 128K 的输入见下方“长文阅读”。</span></p>
+<div class="grid3"><div id="c-long-ttft"></div><div id="c-long-prefill"></div><div id="c-long-decode"></div></div>
+
+<h2 id="s-std"><span class="L ja">公式 standard-v1（Tier 2）</span><span class="L en">The official standard-v1 (Tier 2)</span><span class="L zh">官方 standard-v1（Tier 2）</span></h2>
+<p class="lead"><span class="L ja">Strata 同梱のベンチ（thinking xhigh、temperature 1.0）をスイートごと3回。実用に近い条件での速さと sanity の正答。</span><span class="L en">The benchmark bundled with Strata (thinking xhigh, temperature 1.0), the whole suite 3 times: speed under realistic conditions, and the sanity answers.</span><span class="L zh">Strata 自带的基准测试（thinking xhigh，temperature 1.0），整个套件 3 次。接近实际使用条件下的速度与 sanity 正确率。</span></p>
+<div id="c-std"></div>
+
+<h2 id="s-think"><span class="L ja">thinking の有無（Tier 3）</span><span class="L en">With and without thinking (Tier 3)</span><span class="L zh">有无 thinking（Tier 3）</span></h2>
+<p class="lead"><span class="L ja">同じ問題を effort none / high で解かせ、回答が終わるまでの時間と正答を比べる（全モデル）。</span><span class="L en">The same tasks at effort none / high, comparing the time until the answer ends and whether it is correct (every model).</span><span class="L zh">用 effort none / high 解答相同的题目，比较到回答结束的时间和正确率（全部模型）。</span></p>
+<div id="c-think"></div>
+
+<h2 id="s-ctx"><span class="L ja">コンテキスト長の確保コスト（Tier 4a）</span><span class="L en">The cost of reserving context (Tier 4a)</span><span class="L zh">预留上下文长度的代价（Tier 4a）</span></h2>
+<p class="lead"><span class="L ja">同じ 4K の入力で、起動時に確保するコンテキストだけを 128K / 256K / 1M に変える。</span><span class="L en">The same 4K input; only the context reserved at launch changes: 128K / 256K / 1M.</span><span class="L zh">相同的 4K 输入，只把启动时预留的上下文改为 128K / 256K / 1M。</span></p>
+<div class="grid2"><div id="c-ctx-decode"></div><div id="c-ctx-launch"></div></div>
+
+<h2 id="s-doc"><span class="L ja">長文の読解（Tier 4b・4c）</span><span class="L en">Long documents (Tiers 4b, 4c)</span><span class="L zh">长文阅读（Tier 4b・4c）</span></h2>
+<p class="lead"><span class="L ja">青空文庫と Project Gutenberg の日英10作品を交互に並べた長文（32K〜1M token）を読ませ、文書の 10 / 50 / 90% に置いた架空の事実を問う。代表モデルだけ（1M はさらに一部）。コンテキストは入力が入る大きさで起動（256K までの文書は 256K、512K と 1M はその長さ）。待ち時間と速さは、文書を最初に読む問い（10% の位置）の値。同じ文書への2問目以降は、文書の部分を prefix cache から読む。</span><span class="L en">A long document (32K–1M tokens) of ten Japanese and English works from Aozora Bunko and Project Gutenberg, in turns, with made-up facts placed at 10 / 50 / 90% of it to ask about. Representative models only (fewer at 1M). Launched with a context the input fits in (256K for documents up to 256K, 512K and 1M for those). Waiting and speed are from the question that reads the document first (the 10% one); later questions on the same document read it from the prefix cache.</span><span class="L zh">让模型阅读由青空文库与 Project Gutenberg 的日英 10 部作品交替排列而成的长文（32K〜1M token），并询问放在文档 10 / 50 / 90% 处的虚构事实。仅代表模型（1M 更少）。以能容纳输入的上下文启动（256K 以内的文档为 256K，512K 与 1M 为相应长度）。等待时间与速度取首次读取文档的问题（10% 处）的值；同一文档的后续问题从 prefix cache 读取文档部分。</span></p>
+<div class="grid3"><div id="c-doc-ttft"></div><div id="c-doc-prefill"></div><div id="c-doc-decode"></div></div>
+<div id="c-doc-correct"></div>
+
+<h2 id="s-opts"><span class="L ja">起動オプション（Tier 5）</span><span class="L en">Launch options (Tier 5)</span><span class="L zh">启动选项（Tier 5）</span></h2>
+<p class="lead"><span class="L ja">代表3モデルで起動オプションを1つずつ変え、既定（baseline）からの変化を見る。</span><span class="L en">One launch option changed at a time on 3 representative models, against the default (baseline).</span><span class="L zh">在 3 个代表模型上每次只改一个启动选项，观察相对默认（baseline）的变化。</span></p>
+<div id="c-opts"></div>
+
+<h2 id="s-env"><span class="L ja">計測時の環境</span><span class="L en">Conditions during the measurements</span><span class="L zh">测量时的环境</span></h2>
+<p class="lead"><span class="L ja">各モデルの Tier 1 を測っていた間の温度・電力・メモリ。CPU が熱で抑えられていたモデルは、その分だけ遅く出ている可能性がある。</span><span class="L en">Temperature, power and memory while each model's Tier 1 ran. A model measured while the CPU was held back by heat may show as slower by that much.</span><span class="L zh">测量各模型 Tier 1 期间的温度、功耗和内存。测量时 CPU 因过热降频的模型，结果可能相应偏慢。</span></p>
+<div id="c-env"></div>
+
+<h2 id="s-table"><span class="L ja">モデル別の一覧</span><span class="L en">All models</span><span class="L zh">各模型一览</span></h2>
+<p class="lead"><span class="L ja">上のグラフの数値をまとめた表。列の見出しで並べ替え。decode は上の絞り込み（temperature・文章）に従う。</span><span class="L en">The numbers from the charts above in one table. Sort by clicking a heading. decode follows the filters above (temperature, text).</span><span class="L zh">汇总上方图表数值的表格。点击列标题排序。decode 随上方筛选（temperature、文章）变化。</span></p>
+<div id="c-table"></div>
+</main>
+<div id="tip" role="tooltip"></div>
+<script type="application/json" id="data">{{data}}</script>
+<script>
+(() => {
+'use strict';
+const D = JSON.parse(document.getElementById('data').textContent);
+const SVGNS = 'http://www.w3.org/2000/svg';
+const $ = id => document.getElementById(id);
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+// One environment is shown at a time (useEnv); the comparison section reads them all (BY_ENV).
+const ENVS = D.envs, ENV_IDS = ENVS.map(e => e.id);
+const BY_ENV = {};
+for (const c of D.cases) ((BY_ENV[c.env] ||= {})[c.family + ' ' + c.model] ||= []).push(c);
+let E, MODELS, CASES, byModel, FAMILIES, REF;
+function useEnv(id) {
+  E = ENVS.find(e => e.id === id) || ENVS[0];
+  // every chart and the table list the models by series (in the plan's order), then size ascending
+  const series = [...new Set(E.models.map(m => m.family))];
+  MODELS = [...E.models].sort((a, b) => series.indexOf(a.family) - series.indexOf(b.family) || a.gb - b.gb || a.key.localeCompare(b.key));
+  CASES = D.cases.filter(c => c.env === E.id); byModel = BY_ENV[E.id] || {};
+  FAMILIES = [...new Set(MODELS.map(m => m.family))];
+  REF = (MODELS.find(m => m.ref) || MODELS[0] || {}).key;
+}
+const DECODE = [['all', ['5種の中央値', 'median of the 5', '5 种的中位数']], ['decode-prose-ja', ['日本語の説明文', 'Japanese prose', '日语说明文']],
+                ['decode-prose-en', ['英語の説明文', 'English prose', '英语说明文']], ['decode-json', ['JSON', 'JSON', 'JSON']],
+                ['decode-code', ['コード', 'code', '代码']], ['decode-copy', ['入力の書き写し', 'copying the input', '照抄输入']]];
+const decodeLabel = v => L(...DECODE.find(d => d[0] === v)[1]);
+const tr = s => { const x = D.tr[s]; return !x || LANG() === 'ja' ? s : x[LANG() === 'en' ? 0 : 1]; };   // data strings (build_cases)
+// words used in several charts
+// axis titles: what is measured, with its unit
+const TPS = what => L(`${what} 速度（tok/s）`, `${what} speed (tok/s)`, `${what} 速度（tok/s）`);
+const INPUT_LEN = () => L('入力の長さ（token、対数）', 'input length (tokens, log scale)', '输入长度（token，对数）');
+// the model axis, with the reason for its order
+const MODEL_AXIS = () => L('モデル（シリーズ順・容量の小さい順）', 'model (by series, then smaller first)', '模型（按系列、容量从小到大）');
+const MODEL = () => L('モデル', 'model', '模型');
+const SLOW = () => L('遅い', 'slow', '慢'), FAST = () => L('速い', 'fast', '快'), LOW = () => L('小', 'low', '小'), HIGH = () => L('大', 'high', '大');
+const FAILED = () => L('失敗', 'failed', '失败');
+const NOT_ZERO = () => L('横軸は 0 から始まらないことがある（差を見やすくするため）。', 'The axis may not start at 0 (to show the differences).', '横轴可能不从 0 开始（便于看清差异）。');
+const NO_RESULT = tier => tier ? L(`Tier ${tier} の結果がまだありません。`, `No Tier ${tier} results yet.`, `还没有 Tier ${tier} 的结果。`)
+  : L('まだ結果がありません。', 'No results yet.', '还没有结果。');
+const T1_PLANNED = key => (E.planned_per_model['1'] || {})[key] || 0;
+const DRAFTER_CFG = { MTP: 'baseline', DFlash2: 'drafter=DFlash2' };   // Tier 1 decode runs with MTP, and with DFlash2 where the model has it
+
+// ------------------------------------------------------------------ state
+const state = { env: null, family: 'all', hl: null, temp: '0.7', content: 'all' };
+try { Object.assign(state, JSON.parse(localStorage.getItem('strata-results') || '{}')); } catch (e) {}
+const save = () => { try { localStorage.setItem('strata-results', JSON.stringify(state)); } catch (e) {} };
+{ // the environment: ?env=, then the last one shown, then this PC's, then the first with results
+  const want = new URLSearchParams(location.search).get('env');
+  const withData = ENV_IDS.find(id => D.cases.some(c => c.env === id));
+  state.env = [want, state.env, D.here, withData, ENV_IDS[0]].find(id => ENV_IDS.includes(id));
+  useEnv(state.env);
+  if (!state.hl || (state.hl !== 'none' && !MODELS.some(m => m.key === state.hl))) state.hl = REF;
+  if (state.family !== 'all' && !FAMILIES.includes(state.family)) state.family = 'all';
+}
+
+// ------------------------------------------------------------------ numbers
+const median = a => { const v = a.filter(x => x != null && !Number.isNaN(x)).sort((p, q) => p - q);
+  if (!v.length) return null; const h = v.length >> 1; return v.length % 2 ? v[h] : (v[h - 1] + v[h]) / 2; };
+const fmtTick = v => v >= 1000 ? Math.round(v).toLocaleString('en-US') : String(+v.toFixed(2));
+const fmtTps = v => v == null ? '–' : v >= 1000 ? Math.round(v).toLocaleString('en-US') : v.toFixed(1);
+const fmtMs = v => v == null ? '–' : v >= 10000 ? (v / 1000).toFixed(1) + ' s' : v >= 1000 ? (v / 1000).toFixed(2) + ' s' : Math.round(v) + ' ms';
+const fmtS = v => v == null ? '–' : v >= 100 ? Math.round(v) + ' s' : v.toFixed(1) + ' s';
+const fmtTok = v => v >= 1048576 ? (v / 1048576) + 'M' : v >= 1024 ? Math.round(v / 1024) + 'K' : String(v);
+const fmtPct = v => v == null ? '–' : (v * 100).toFixed(0) + '%';
+const done = c => c && (c.status === 'done' || c.status === 'partial');
+
+function modelsShown() { return MODELS.filter(m => state.family === 'all' || m.family === state.family); }
+function casesOf(key, step, pred, env) {
+  return ((env ? BY_ENV[env] || {} : byModel)[key] || []).filter(c => c.step === step && (!pred || pred(c)));
+}
+
+// Tier 1 decode under the current temperature / content filters (MTP unless asked for DFlash2), in env or the shown one
+function decodeOf(key, drafter, env) {
+  const cfg = DRAFTER_CFG[drafter || 'MTP'];
+  const cs = casesOf(key, '1', c => c.fixture.startsWith('decode-') && done(c) && c.config === cfg
+    && (state.temp === 'all' || Number(c.temperature) === Number(state.temp))
+    && (state.content === 'all' || c.fixture === state.content), env);
+  if (!cs.length) return null;
+  const one = cs.length === 1, vals = cs.map(c => c.decode_tps).filter(v => v != null);
+  const lo = one ? (cs[0].decode_range || [cs[0].decode_tps])[0] : Math.min(...vals);
+  const hi = one ? (cs[0].decode_range || [, cs[0].decode_tps])[1] ?? cs[0].decode_tps : Math.max(...vals);
+  return { v: median(cs.map(c => c.decode_tps)), lo, hi, acc: median(cs.map(c => c.accept_rate)), n: cs.length, cases: cs };
+}
+function caseOf(key, step, fixture, pred, env) { return casesOf(key, step, c => c.fixture === fixture && done(c) && (!pred || pred(c)), env)[0]; }
+
+// ------------------------------------------------------------------ svg + tooltip
+function el(tag, attrs, parent, text) {
+  const n = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) if (attrs[k] != null) n.setAttribute(k, attrs[k]);
+  if (text != null) n.textContent = text;
+  if (parent) parent.appendChild(n);
+  return n;
+}
+function h(tag, attrs, parent, text) {
+  const n = document.createElement(tag);
+  for (const k in attrs || {}) n.setAttribute(k, attrs[k]);
+  if (text != null) n.textContent = text;
+  if (parent) parent.appendChild(n);
+  return n;
+}
+const tip = $('tip');
+function showTip(evt, title, rows, note) {
+  tip.replaceChildren();
+  h('div', { class: 't' }, tip, title);
+  for (const [val, label, color, shape] of rows) {
+    const r = h('div', { class: 'r' }, tip);
+    if (shape) { const m = el('svg', { width: 12, height: 12, 'aria-hidden': 'true' }, r); el('path', { d: markerPath(shape, 6, 6), fill: color, transform: 'translate(0.6,0.6) scale(0.9)' }, m); }
+    else if (color) { const i = h('i', {}, r); i.style.background = color; }
+    h('b', {}, r, val); h('span', { class: 'l' }, r, label);
+  }
+  if (note) h('div', { class: 'n' }, tip, note);
+  tip.style.display = 'block';
+  let x, y;
+  if (evt && evt.clientX != null && evt.type !== 'focus') { x = evt.clientX + 14; y = evt.clientY + 14; }
+  else { const b = evt.target.getBoundingClientRect(); x = b.right + 8; y = b.top; }
+  const w = tip.offsetWidth, ht = tip.offsetHeight;
+  if (x + w > innerWidth - 8) x = Math.max(8, (evt.clientX ?? x) - w - 14);
+  if (y + ht > innerHeight - 8) y = Math.max(8, innerHeight - ht - 8);
+  tip.style.left = x + 'px'; tip.style.top = y + 'px';
+}
+const hideTip = () => { tip.style.display = 'none'; };
+function hover(node, fn) {
+  node.setAttribute('tabindex', '0');
+  node.addEventListener('pointermove', e => fn(e));
+  node.addEventListener('focus', e => fn(e));
+  node.addEventListener('pointerleave', hideTip);
+  node.addEventListener('blur', hideTip);
+}
+function textW(s, size) { return [...String(s)].reduce((a, ch) => a + (ch.charCodeAt(0) > 255 ? size : size * 0.56), 0); }
+function labelWidth(labels, W, cap) {   // as wide as the longest label, up to a share of the chart
+  return Math.min(Math.max(...labels.map(l => textW(l, 12)), 40) + 12, W * (cap || 0.42));
+}
+function fit(label, w, size) {          // a label that would not fit ends in an ellipsis (the tooltip has it whole)
+  if (textW(label, size) <= w) return label;
+  let s = [...label]; while (s.length > 1 && textW(s.join('') + '…', size) > w) s.pop();
+  return s.join('') + '…';
+}
+function lum(hex) {
+  const m = hex.replace('#', ''); if (m.length !== 6) return 0.5;
+  const ch = [0, 2, 4].map(i => parseInt(m.slice(i, i + 2), 16) / 255).map(c => c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+}
+function rangeTicks(min, max, n) {   // ticks around [min, max] that need not start at 0 (dots, not bars)
+  if (!(max > min)) return [Math.max(0, min * 0.9), max * 1.1 || 1];
+  const raw = (max - min) / n, p = 10 ** Math.floor(Math.log10(raw)), s = [1, 2, 2.5, 5, 10].find(x => x * p >= raw) * p;
+  const out = []; for (let v = Math.floor(min / s) * s; v <= max + s * 0.999; v += s) out.push(+v.toFixed(6));
+  return out;
+}
+function niceTicks(max, n) {
+  if (!(max > 0)) return [0, 1];
+  const raw = max / n, p = 10 ** Math.floor(Math.log10(raw)), s = [1, 2, 2.5, 5, 10].find(x => x * p >= raw) * p;
+  const out = []; for (let v = 0; v <= max + s * 0.001; v += s) out.push(+v.toFixed(6));
+  if (out[out.length - 1] < max) out.push(out[out.length - 1] + s);
+  return out;
+}
+
+// ------------------------------------------------------------------ chart cards
+function card(slot, title, desc, foot) {
+  const box = $(slot); box.replaceChildren();
+  const c = h('section', { class: 'chart' }, box);
+  const hd = h('header', {}, c);
+  const t = h('div', {}, hd); h('h3', {}, t, title); if (desc) h('p', { class: 'desc' }, t, desc);
+  const btn = h('button', { type: 'button', 'aria-pressed': 'false' }, hd, L('表で見る', 'Table', '看表格'));
+  const legend = h('div', { class: 'legend' }, c);
+  const plot = h('div', { class: 'plot' }, c);
+  const tbl = h('div', { class: 'tbl' }, c); tbl.hidden = true;
+  if (foot) h('p', { class: 'foot' }, c, foot);
+  btn.addEventListener('click', () => {
+    const on = tbl.hidden; tbl.hidden = !on; plot.hidden = on; legend.hidden = on;
+    btn.textContent = on ? L('グラフで見る', 'Chart', '看图表') : L('表で見る', 'Table', '看表格'); btn.setAttribute('aria-pressed', String(on));
+  });
+  return { c, legend, plot, tbl, btn, width: () => Math.max(260, plot.clientWidth || c.clientWidth - 32) };
+}
+function empty(k, msg) { k.legend.hidden = true; k.btn.hidden = true; h('div', { class: 'empty' }, k.plot, msg); }
+function table(k, head, rows, numeric) {
+  const t = h('table', {}, k.tbl), tr = h('tr', {}, h('thead', {}, t));
+  head.forEach((x, i) => h('th', { class: numeric(i) ? 'num' : '' }, tr, x));
+  const tb = h('tbody', {}, t);
+  for (const r of rows) { const row = h('tr', {}, tb); r.forEach((x, i) => h('td', { class: numeric(i) ? 'num' : '' }, row, x)); }
+}
+function legendItem(k, kind, color, label) {
+  const s = h('span', {}, k.legend); const i = h('i', { class: kind }, s); if (color) i.style.background = color;
+  s.appendChild(document.createTextNode(label));
+}
+function emphasisLegend(k, kind) {
+  const hl = state.hl !== 'none' && modelsShown().some(m => m.key === state.hl);
+  if (!hl) return;
+  legendItem(k, kind, css('--s1'), state.hl + L('（強調）', ' (highlighted)', '（高亮）'));
+  legendItem(k, kind, css(kind ? '--deemph-mark' : '--deemph'), L('その他のモデル', 'other models', '其他模型'));
+}
+const lead = key => state.hl === 'none' || !modelsShown().some(m => m.key === state.hl) || key === state.hl;
+const markColor = key => lead(key) ? css('--s1') : css('--deemph');          // bars
+const lineColor = key => lead(key) ? css('--s1') : css('--deemph-mark');     // lines and dots
+
+// horizontal bars, sorted, with a min-max whisker
+// axis titles (with the unit): x centered under the plot area; y turned 90° at the left edge, centered on the plot's height
+const AXT = 11.5, YGUT = 20;     // YGUT: the left gutter a y title takes
+function axisX(svg, text, x0, x1, y) { if (text) el('text', { x: (x0 + x1) / 2, y, 'text-anchor': 'middle', 'font-size': AXT, fill: css('--text-2') }, svg, text); }
+function axisY(svg, text, y0, y1) {
+  if (text) el('text', { x: 0, y: 0, transform: `translate(13,${(y0 + y1) / 2}) rotate(-90)`, 'text-anchor': 'middle', 'font-size': AXT, fill: css('--text-2') }, svg, text);
+}
+
+function hbar(k, items, o) {
+  const W = k.width(), labelW = labelWidth(items.map(i => i.label), W) + (o.y ? YGUT : 0), right = 56, rowH = 26, bar = 12, top = 6, axisH = o.x ? 40 : 22;
+  const have = items.filter(i => i.v != null).sort((a, b) => b.v - a.v), miss = items.filter(i => i.v == null);
+  const list = [...have, ...miss], H = top + list.length * rowH + axisH;
+  const max = Math.max(...have.map(i => Math.max(i.v, i.hi ?? 0)), 1), ticks = niceTicks(max, W < 500 ? 3 : 5);
+  const x = v => labelW + (W - labelW - right) * v / ticks[ticks.length - 1];
+  const svg = el('svg', { width: W, height: H, role: 'img', 'aria-label': o.aria }, k.plot);
+  for (const t of ticks) {
+    el('line', { x1: x(t), x2: x(t), y1: top, y2: H - axisH, stroke: t === 0 ? css('--axis') : css('--grid'), 'stroke-width': 1 }, svg);
+    el('text', { x: x(t), y: H - axisH + 16, 'text-anchor': 'middle', 'font-size': 11, fill: css('--muted') }, svg, o.tick(t));
+  }
+  axisX(svg, o.x, labelW, W - right, H - 4); axisY(svg, o.y, top, H - axisH);
+  list.forEach((it, i) => {
+    const y = top + i * rowH, cy = y + rowH / 2;
+    el('text', { x: labelW - 8, y: cy + 4, 'text-anchor': 'end', 'font-size': 12, fill: it.key === state.hl ? css('--text') : css('--text-2'),
+      'font-weight': it.key === state.hl ? 600 : 400 }, svg, fit(it.label, labelW - 10, 12));
+    if (it.v == null) { el('text', { x: labelW + 4, y: cy + 4, 'font-size': 11.5, fill: css('--muted') }, svg, it.missing || L('未計測', 'not measured', '未测量')); return; }
+    const x0 = x(0), x1 = Math.max(x(it.v), x0 + 2), r = Math.min(4, (x1 - x0) / 2);
+    el('path', { d: `M${x0},${cy - bar / 2}H${x1 - r}a${r},${r} 0 0 1 ${r},${r}V${cy + bar / 2 - r}a${r},${r} 0 0 1 -${r},${r}H${x0}Z`,
+      fill: markColor(it.key) }, svg);
+    let tipX = x1;
+    if (it.lo != null && it.hi != null && it.hi > it.lo) {
+      const a = x(it.lo), b = x(it.hi), ink = css('--text-2');
+      el('line', { x1: a, x2: b, y1: cy, y2: cy, stroke: ink, 'stroke-width': 1 }, svg);
+      el('line', { x1: a, x2: a, y1: cy - 4, y2: cy + 4, stroke: ink, 'stroke-width': 1 }, svg);
+      el('line', { x1: b, x2: b, y1: cy - 4, y2: cy + 4, stroke: ink, 'stroke-width': 1 }, svg);
+      tipX = Math.max(tipX, b);
+    }
+    el('text', { x: tipX + 6, y: cy + 4, 'font-size': 12, fill: css('--text'), 'font-variant-numeric': 'tabular-nums' }, svg, o.fmt(it.v));
+    const hit = el('rect', { class: 'hit', x: 0, y, width: W, height: rowH }, svg);
+    hover(hit, e => showTip(e, it.label, it.tip, it.note));
+  });
+}
+
+// model x column grid, one-hue sequential: the step farthest from the surface = better (darker on light, brighter on dark). A column's `better` (else o.better, default 'high') says which way
+// is better ('high' or 'low', marked ↑ / ↓ in its header).
+function heat(k, rows, cols, get, o) {
+  const W = k.width(), labelW = labelWidth(rows.map(r => r.label), W, 0.4) + YGUT, cellW = Math.max(o.minCell || 60, Math.floor((W - labelW) / cols.length)),
+        rowH = 28, headH = 34, gap = 2, Wn = labelW + cellW * cols.length, H = headH + rows.length * rowH;
+  const steps = [1, 2, 3, 4, 5, 6, 7].map(i => css('--q' + i));
+  const dir = ci => cols[ci].better || o.better || 'high';
+  const vals = (ci) => rows.map(r => get(r, cols[ci])).filter(x => x && x.v != null).map(x => x.v);
+  const scale = cols.map((_, ci) => { const v = o.perColumn ? vals(ci) : cols.flatMap((__, j) => vals(j));
+    return [Math.min(...v), Math.max(...v)]; });
+  const svg = el('svg', { width: Wn, height: H, role: 'img', 'aria-label': o.aria }, k.plot);
+  k.plot.classList.toggle('scroll-x', Wn > W);   // a grid wider than a phone scrolls inside its card
+  axisY(svg, rows.length < 9 ? MODEL() : MODEL_AXIS(), headH, H);   // a few rows: too short for the ordering note
+  if (o.unit) el('text', { x: YGUT, y: headH - 8, 'font-size': AXT, fill: css('--text-2') }, svg, L(`値: ${o.unit}`, `values: ${o.unit}`, `数值：${o.unit}`));
+  cols.forEach((c, ci) => {
+    const lines = String(c.label).split('\n');
+    lines[0] += dir(ci) === 'low' ? ' ↓' : ' ↑';
+    lines.forEach((ln, li) => el('text', { x: labelW + ci * cellW + cellW / 2, y: headH - 8 - (lines.length - 1 - li) * 13,
+      'text-anchor': 'middle', 'font-size': 11.5, fill: css('--text-2') }, svg, ln));
+  });
+  rows.forEach((r, ri) => {
+    const y = headH + ri * rowH;
+    el('text', { x: labelW - 8, y: y + rowH / 2 + 4, 'text-anchor': 'end', 'font-size': 12,
+      fill: r.key === state.hl ? css('--text') : css('--text-2'), 'font-weight': r.key === state.hl ? 600 : 400 }, svg, fit(r.label, labelW - 10, 12));
+    cols.forEach((c, ci) => {
+      const x = labelW + ci * cellW, cell = get(r, c), [lo, hi] = scale[ci];
+      let fill = css('--none'), ink = css('--muted'), txt = cell && cell.text != null ? cell.text : '–';
+      if (cell && cell.v != null) {
+        let t = hi > lo ? (cell.v - lo) / (hi - lo) : 0.5;
+        if (o.log && lo > 0) t = hi > lo ? Math.log(cell.v / lo) / Math.log(hi / lo) : 0.5;
+        if (dir(ci) === 'low') t = 1 - t;
+        fill = steps[Math.min(6, Math.max(0, Math.round(t * 6)))];
+        ink = lum(fill) < 0.28 ? '#ffffff' : '#0b0b0b';
+      }
+      el('rect', { x: x + gap / 2, y: y + gap / 2, width: cellW - gap, height: rowH - gap, rx: 3, fill }, svg);
+      el('text', { x: x + cellW / 2, y: y + rowH / 2 + 4, 'text-anchor': 'middle', 'font-size': 11.5, fill: ink,
+        'font-variant-numeric': 'tabular-nums' }, svg, txt);
+      const hit = el('rect', { class: 'hit', x, y, width: cellW, height: rowH }, svg);
+      hover(hit, e => showTip(e, r.label + ' · ' + String(c.label).replace('\n', ' '), cell && cell.tip ? cell.tip : [[txt, '']], cell && cell.note));
+    });
+  });
+  const s = h('span', {}, k.legend);
+  s.appendChild(document.createTextNode(o.low));
+  const ramp = h('i', { class: 'ramp' }, s); ramp.style.background = `linear-gradient(90deg, ${steps.join(',')})`;
+  s.appendChild(document.createTextNode(o.high));
+  const marks = cols.map((_, ci) => dir(ci));
+  // the ramp runs away from the surface: darker on a light page, brighter on a dark one (the words follow the theme)
+  const dark = lum(css('--bg')) < 0.5;
+  const how = [dark ? L('明るいほど良い', 'brighter is better', '越亮越好') : L('濃いほど良い', 'darker is better', '越深越好'), marks.includes('high') && L('↑ 大きいほど良い', '↑ higher is better', '↑ 越大越好'),
+       marks.includes('low') && L('↓ 小さいほど良い', '↓ lower is better', '↓ 越小越好')].filter(Boolean).join(' · ');
+  h('span', {}, k.legend, how);
+  if (o.legend) h('span', {}, k.legend, o.legend);
+}
+
+// lines over a log-2 x axis, emphasis on one model
+function lines(k, series, o) {
+  const W = k.width(), PL = 54 + (o.y ? YGUT : 0), R = 20, T = 12, B = o.x ? 46 : 30, H = (W < 500 ? 260 : 300) + (B - 30);
+  const pts = series.flatMap(s => s.points);
+  if (!pts.length) return empty(k, o.emptyMsg);
+  const xs = [...new Set(pts.map(p => p.x))].sort((a, b) => a - b);
+  const lx0 = Math.log2(Math.min(...xs)), lx1 = Math.log2(Math.max(...xs));
+  const ys = pts.map(p => p.y), y0 = o.yLog ? Math.min(...ys) : 0, y1 = Math.max(...ys);
+  const ly0 = o.yLog ? Math.floor(Math.log10(y0)) : 0, ly1 = o.yLog ? Math.ceil(Math.log10(y1)) : 0;
+  const X = v => lx1 > lx0 ? PL + (W - PL - R) * (Math.log2(v) - lx0) / (lx1 - lx0) : (PL + W - R) / 2;
+  const yt = o.yLog ? Array.from({ length: ly1 - ly0 + 1 }, (_, i) => 10 ** (ly0 + i)) : niceTicks(y1, 4);
+  const Y = o.yLog ? v => T + (H - T - B) * (1 - (Math.log10(v) - ly0) / ((ly1 - ly0) || 1)) : v => T + (H - T - B) * (1 - v / yt[yt.length - 1]);
+  const svg = el('svg', { width: W, height: H, role: 'img', 'aria-label': o.aria }, k.plot);
+  for (const t of yt) {
+    el('line', { x1: PL, x2: W - R, y1: Y(t), y2: Y(t), stroke: css('--grid'), 'stroke-width': 1 }, svg);
+    el('text', { x: PL - 6, y: Y(t) + 4, 'text-anchor': 'end', 'font-size': 11, fill: css('--muted') }, svg, o.yTick(t));
+  }
+  el('line', { x1: PL, x2: W - R, y1: H - B, y2: H - B, stroke: css('--axis'), 'stroke-width': 1 }, svg);
+  for (const v of xs) el('text', { x: X(v), y: H - B + 16, 'text-anchor': 'middle', 'font-size': 11, fill: css('--muted') }, svg, fmtTok(v));
+  axisX(svg, o.x, PL, W - R, H - 6); axisY(svg, o.y, T, H - B);
+  const order = [...series].sort((a, b) => (a.key === state.hl) - (b.key === state.hl));
+  for (const s of order) {
+    const p = [...s.points].sort((a, b) => a.x - b.x); if (!p.length) continue;
+    const color = lineColor(s.key), isLead = color === css('--s1');
+    el('path', { d: p.map((q, i) => (i ? 'L' : 'M') + X(q.x) + ',' + Y(q.y)).join(''), fill: 'none', stroke: color,
+      'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, svg);
+    if (isLead) for (const q of p) el('circle', { cx: X(q.x), cy: Y(q.y), r: 4, fill: q.wide ? css('--surface') : color,
+      stroke: q.wide ? color : css('--surface'), 'stroke-width': 2 }, svg);
+  }
+  const hl = series.find(s => s.key === state.hl);
+  if (hl && hl.points.length) {
+    const q = [...hl.points].sort((a, b) => b.x - a.x)[0];
+    el('text', { x: Math.min(X(q.x), W - R) - 6, y: Y(q.y) - 9, 'text-anchor': 'end', 'font-size': 11.5, fill: css('--text') }, svg, o.fmt(q.y));
+  }
+  const cross = el('line', { y1: T, y2: H - B, stroke: css('--axis'), 'stroke-width': 1, visibility: 'hidden' }, svg);
+  const hit = el('rect', { class: 'hit', x: PL, y: T, width: W - PL - R, height: H - T - B }, svg);
+  const at = (e) => {
+    const b = svg.getBoundingClientRect(), px = e.clientX != null && e.type !== 'focus' ? e.clientX - b.left : X(xs[0]);
+    const v = xs.reduce((a, c) => Math.abs(X(c) - px) < Math.abs(X(a) - px) ? c : a, xs[0]);
+    cross.setAttribute('x1', X(v)); cross.setAttribute('x2', X(v)); cross.setAttribute('visibility', 'visible');
+    const rows = series.map(s => [s, s.points.find(p => p.x === v)]).filter(r => r[1]).sort((a, b) => o.better(a[1].y, b[1].y));
+    const lead = rows.filter(r => r[0].key === state.hl), rest = rows.filter(r => r[0].key !== state.hl).slice(0, 9);
+    const more = rows.length - lead.length - rest.length;
+    showTip(e, L('入力 ', 'input ', '输入 ') + fmtTok(v) + ' token', [...lead, ...rest].map(([s, p]) => [o.fmt(p.y), s.label + (p.wide ? ' (' + p.wide + ')' : ''), lineColor(s.key)]),
+      more > 0 ? L(`ほか ${more} モデルは表で`, `${more} more models in the table`, `另有 ${more} 个模型见表格`) : null);
+  };
+  hover(hit, at);
+  hit.addEventListener('pointerleave', () => cross.setAttribute('visibility', 'hidden'));
+  emphasisLegend(k, 'line');
+  if (pts.some(p => p.wide)) legendItem(k, 'ring', null, L('中抜き: コンテキストを広げて起動した計測', 'hollow: launched with a larger context', '空心：扩大上下文启动的测量'));
+}
+
+// a marker shape per series, so that a series is told apart by its shape as well as its color (in key order)
+const SHAPES = ['circle', 'square', 'triangle', 'diamond', 'triangle-down', 'cross'];
+function markerPath(shape, x, y) {
+  const P = pts => 'M' + pts.map(([a, b]) => `${(x + a).toFixed(1)},${(y + b).toFixed(1)}`).join('L') + 'Z';
+  switch (shape) {
+    case 'square': return P([[-4.5, -4.5], [4.5, -4.5], [4.5, 4.5], [-4.5, 4.5]]);
+    case 'triangle': return P([[0, -6], [5.6, 4], [-5.6, 4]]);
+    case 'triangle-down': return P([[0, 6], [5.6, -4], [-5.6, -4]]);
+    case 'diamond': return P([[0, -6.2], [6.2, 0], [0, 6.2], [-6.2, 0]]);
+    case 'cross': return P([[-2, -6], [2, -6], [2, -2], [6, -2], [6, 2], [2, 2], [2, 6], [-2, 6], [-2, 2], [-6, 2], [-6, -2], [-2, -2]]);
+    default: return `M${x - 5},${y}a5,5 0 1,0 10,0a5,5 0 1,0 -10,0Z`;
+  }
+}
+function marker(svg, shape, x, y, fill) {
+  return el('path', { d: markerPath(shape, x, y), fill, stroke: css('--surface'), 'stroke-width': 2, 'stroke-linejoin': 'round' }, svg);
+}
+function legendMarker(k, shape, color, label) {
+  const s = h('span', {}, k.legend);
+  const svg = el('svg', { width: 14, height: 14, 'aria-hidden': 'true' }, s);
+  el('path', { d: markerPath(shape, 7, 7), fill: color }, svg);
+  s.appendChild(document.createTextNode(label));
+}
+
+// one row per model, a dot per key on a shared x axis (each key its own shape and color)
+function dots(k, rows, keys, o) {
+  const W = k.width(), labelW = labelWidth(rows.map(r => r.label), W) + (o.y ? YGUT : 0), right = 18, rowH = 24, top = 6, axisH = o.x ? 40 : 22;
+  const all = rows.flatMap(r => keys.map(kk => r.vals[kk.k]).filter(v => v != null));
+  if (!all.length) return empty(k, o.emptyMsg);
+  const ticks = rangeTicks(Math.min(...all), Math.max(...all), W < 500 ? 3 : 5), H = top + rows.length * rowH + axisH;
+  const t0 = ticks[0], t1 = ticks[ticks.length - 1];
+  const x = v => labelW + (W - labelW - right) * (v - t0) / ((t1 - t0) || 1);
+  const svg = el('svg', { width: W, height: H, role: 'img', 'aria-label': o.aria }, k.plot);
+  for (const t of ticks) {
+    el('line', { x1: x(t), x2: x(t), y1: top, y2: H - axisH, stroke: css('--grid'), 'stroke-width': 1 }, svg);
+    el('text', { x: x(t), y: H - axisH + 16, 'text-anchor': 'middle', 'font-size': 11, fill: css('--muted') }, svg, o.tick(t));
+  }
+  axisX(svg, o.x, labelW, W - right, H - 4); axisY(svg, o.y, top, H - axisH);
+  rows.forEach((r, i) => {
+    const cy = top + i * rowH + rowH / 2;
+    el('text', { x: labelW - 8, y: cy + 4, 'text-anchor': 'end', 'font-size': 12, fill: r.key === state.hl ? css('--text') : css('--text-2'),
+      'font-weight': r.key === state.hl ? 600 : 400 }, svg, fit(r.label, labelW - 10, 12));
+    const v = keys.map(kk => r.vals[kk.k]).filter(z => z != null);
+    if (!v.length) { el('text', { x: labelW + 4, y: cy + 4, 'font-size': 11.5, fill: css('--muted') }, svg, r.missing || L('未計測', 'not measured', '未测量')); return; }
+    el('line', { x1: x(Math.min(...v)), x2: x(Math.max(...v)), y1: cy, y2: cy, stroke: css('--axis'), 'stroke-width': 2 }, svg);
+    keys.forEach((kk, j) => { if (r.vals[kk.k] != null) marker(svg, SHAPES[j % SHAPES.length], x(r.vals[kk.k]), cy, css(kk.color)); });
+    const hit = el('rect', { class: 'hit', x: 0, y: cy - rowH / 2, width: W, height: rowH }, svg);
+    hover(hit, e => showTip(e, r.label, keys.map((kk, j) => [kk, SHAPES[j % SHAPES.length]]).filter(([kk]) => r.vals[kk.k] != null).map(([kk, sh]) => [o.fmt(r.vals[kk.k]), kk.label, css(kk.color), sh]), r.note));
+  });
+  keys.forEach((kk, j) => legendMarker(k, SHAPES[j % SHAPES.length], css(kk.color), kk.label));
+}
+
+// size (GB) against decode
+function scatter(k, pts, o) {
+  if (!pts.length) return empty(k, o.emptyMsg);
+  const W = k.width(), PL = 50 + YGUT, R = 16, T = 14, B = 46, H = (W < 500 ? 260 : 300) + 12;
+  const xt = niceTicks(Math.max(...pts.map(p => p.x)), 4), yt = niceTicks(Math.max(...pts.map(p => p.y)), 4);
+  const X = v => PL + (W - PL - R) * v / xt[xt.length - 1], Y = v => T + (H - T - B) * (1 - v / yt[yt.length - 1]);
+  const svg = el('svg', { width: W, height: H, role: 'img', 'aria-label': o.aria }, k.plot);
+  for (const t of yt) { el('line', { x1: PL, x2: W - R, y1: Y(t), y2: Y(t), stroke: t ? css('--grid') : css('--axis'), 'stroke-width': 1 }, svg);
+    el('text', { x: PL - 6, y: Y(t) + 4, 'text-anchor': 'end', 'font-size': 11, fill: css('--muted') }, svg, fmtTick(t)); }
+  for (const t of xt) el('text', { x: X(t), y: H - B + 16, 'text-anchor': 'middle', 'font-size': 11, fill: css('--muted') }, svg, String(t));
+  axisX(svg, L('モデルの容量（GB）', 'model size (GB)', '模型容量（GB）'), PL, W - R, H - 6); axisY(svg, TPS('decode'), T, H - B);
+  const order = [...pts].sort((a, b) => (a.key === state.hl) - (b.key === state.hl));
+  for (const p of order) {
+    const c = lineColor(p.key);
+    el('circle', { cx: X(p.x), cy: Y(p.y), r: 5, fill: c, stroke: css('--surface'), 'stroke-width': 2 }, svg);
+  }
+  const top = pts.find(p => p.key === state.hl);
+  if (top) { const right = X(top.x) > W * 0.7;
+    el('text', { x: X(top.x) + (right ? -9 : 9), y: Y(top.y) + 4, 'text-anchor': right ? 'end' : 'start', 'font-size': 11.5, fill: css('--text') }, svg, top.label); }
+  for (const p of pts) {
+    const hit = el('circle', { class: 'hit', cx: X(p.x), cy: Y(p.y), r: 12 }, svg);
+    hover(hit, e => showTip(e, p.label, [[fmtTps(p.y) + ' tok/s', 'decode'], [p.x + ' GB', L('容量', 'size', '容量')]], p.note));
+  }
+  emphasisLegend(k, 'dot');
+}
+
+// ------------------------------------------------------------------ sections
+function rowsFor(list) { return list.map(m => ({ key: m.key, label: m.key, m })); }
+const planned = (step, key) => (E.planned_models[step] || []).includes(key);
+
+function tiles() {
+  const box = $('tiles'); box.replaceChildren();
+  const shown = modelsShown();
+  const best = (fn, better) => shown.map(m => [m, fn(m.key)]).filter(x => x[1] != null).sort((a, b) => better(a[1], b[1]))[0];
+  const dec = best(k => (decodeOf(k) || {}).v ?? null, (a, b) => b - a);
+  const pf = best(k => (caseOf(k, '1', 'prefill-32k') || {}).prefill_tps ?? null, (a, b) => b - a);
+  const tt = best(k => (caseOf(k, '1', 'prefill-4k') || {}).ttft_ms ?? null, (a, b) => a - b);
+  const measured = shown.filter(m => casesOf(m.key, '1', done).length).length;
+  const items = [
+    [L('最速の decode', 'fastest decode', '最快 decode'), dec && fmtTps(dec[1]), 'tok/s', dec && dec[0].key, L('絞り込みの temperature・文章で', 'at the filtered temperature and text', '按筛选的 temperature 和文章')],
+    [L('最速の prefill（32K 入力）', 'fastest prefill (32K input)', '最快 prefill（32K 输入）'), pf && fmtTps(pf[1]), 'tok/s', pf && pf[0].key, ''],
+    [L('最短の TTFT（4K 入力）', 'shortest TTFT (4K input)', '最短 TTFT（4K 输入）'), tt && fmtMs(tt[1]), '', tt && tt[0].key, L('最初の文字が出るまで', 'until the first character', '到出现第一个字')],
+    [L('Tier 1 を測ったモデル', 'models with Tier 1 measured', '已测 Tier 1 的模型'), String(measured), '/ ' + shown.length, '', ''],
+    [L('結果のあるケース', 'cases with results', '有结果的用例'), D.cases.filter(c => c.env === E.id).length.toLocaleString(),
+     '/ ' + Object.values(E.planned_cases).reduce((a, b) => a + b, 0).toLocaleString(), '',
+     L('この環境の全 Tier（絞り込みによらない）', 'every Tier of this environment (not filtered)', '该环境的全部 Tier（不受筛选影响）')],
+  ];
+  for (const [k, v, unit, who, note] of items) {
+    const t = h('div', { class: 'tile' }, box); h('div', { class: 'k' }, t, k);
+    const vv = h('div', { class: 'v' }, t, v || '–'); if (v && unit) h('small', {}, vv, unit);
+    if (who || note) h('div', { class: 'm' }, t, [who, note].filter(Boolean).join(' · '));
+  }
+}
+
+function runs() {
+  const box = $('runs'); box.replaceChildren();
+  const pv = $('preview'); pv.hidden = D.published; pv.replaceChildren();
+  if (!D.published) h('span', {}, pv, L('プレビュー: 計測中・公開前（results/）の結果も含む。公開するページは scripts/publish.py で published/ に移した結果だけから作る。',
+    'Preview: includes results still in results/ (measuring, not published). The published pages are built only from runs moved to published/ by scripts/publish.py.',
+    '预览：包含 results/ 中尚在测量、未发布的结果。发布的页面只由 scripts/publish.py 移到 published/ 的结果生成。'));
+  if (!E.runs.length) { box.textContent = L('まだ結果がありません。計測が済んだら scripts/build_results.py を実行し直すと、ここに結果が入ります。',
+    'No results yet. Once measured, re-running scripts/build_results.py puts them here.', '还没有结果。测量完成后重新运行 scripts/build_results.py，结果会显示在这里。'); return; }
+  for (const r of E.runs) {
+    const n = CASES.filter(c => c.run_id === r.run_id).length;
+    h('div', {}, box, `RUN_ID ${r.run_id}: ${n} ${L('ケース', 'cases', '个用例')} · ${L('GPU 電力上限', 'GPU power limit', 'GPU 功耗上限')} ${r.power_limit_w ?? '?'} W · ${r.strata || ''}`);
+  }
+  const limits = new Set(E.runs.map(r => r.power_limit_w));
+  if (E.runs.length > 1) h('div', { class: 'note' }, box, L(`複数の RUN_ID の結果が混ざっています${limits.size > 1 ? '（GPU の電力上限が違う）' : ''}。比べるときは条件の違いに注意。`,
+    `Results from several RUN_IDs are mixed${limits.size > 1 ? ' (with different GPU power limits)' : ''}. Mind the different conditions when comparing.`,
+    `混有多个 RUN_ID 的结果${limits.size > 1 ? '（GPU 功耗上限不同）' : ''}。比较时请注意条件差异。`));
+}
+
+function sDecode() {
+  const tLabel = state.temp === 'all' ? L('temperature 3水準', 'all 3 temperatures', 'temperature 3 档') : 'temperature ' + state.temp;
+  const cLabel = decodeLabel(state.content);
+  const single = state.content !== 'all' && state.temp !== 'all';
+  const k = card('c-decode', L('decode 速度', 'decode speed', 'decode 速度'),
+    L(`文字を出す速さ。${cLabel}、${tLabel}。tok/s、大きいほど速い。`, `How fast text comes out. ${cLabel}, ${tLabel}. tok/s, higher is faster.`, `输出文字的速度。${cLabel}，${tLabel}。tok/s，越大越快。`),
+    (single ? L('細い線は3回（seed 1/2/3）の最小〜最大。', 'Thin lines: min to max of the 3 runs (seed 1/2/3). ', '细线为 3 次（seed 1/2/3）的最小〜最大。')
+      : L('細い線は、まとめたケース（文章の種類・temperature）ごとの中央値の最小〜最大。文章と temperature を1つに絞ると3回の範囲になる。',
+          'Thin lines: min to max of the medians of the combined cases (text kinds, temperatures); pick one text and one temperature for the range of the 3 runs. ',
+          '细线为合并的各用例（文章种类、temperature）中位数的最小〜最大。文章和 temperature 各选一个时为 3 次的范围。'))
+    + L('文章の種類で速さが変わるのは、MTP（先読み）の当たりやすさが違うため。', 'The speed differs by text because MTP (speculative drafting) hits more often on some.', '速度随文章种类变化，是因为 MTP（预测）的命中率不同。'));
+  const items = rowsFor(modelsShown()).map(r => { const d = decodeOf(r.key);
+    return { ...r, v: d && d.v, lo: d && d.lo, hi: d && d.hi,
+      tip: d ? [[fmtTps(d.v) + ' tok/s', L('中央値', 'median', '中位数')], [fmtTps(d.lo) + '–' + fmtTps(d.hi), single ? L('3回の範囲', 'range of 3', '3 次的范围') : L('ケースごとの範囲', 'range across cases', '各用例的范围')],
+        [fmtPct(d.acc), L('MTP 採用率', 'MTP acceptance', 'MTP 接受率')]] : [],
+      note: `${r.m.gb} GB · ${tr(r.m.role)}` }; });
+  if (!items.some(i => i.v != null)) return empty(k, NO_RESULT('1'));
+  emphasisLegend(k, '');
+  hbar(k, items, { fmt: fmtTps, tick: fmtTick, x: TPS('decode'), y: L('モデル（decode の速い順）', 'model (faster decode first)', '模型（decode 从快到慢）'), aria: L('モデル別 decode 速度', 'decode speed by model', '各模型 decode 速度') });
+  table(k, [MODEL(), 'decode tok/s', L('最小', 'min', '最小'), L('最大', 'max', '最大'), L('MTP 採用率', 'MTP acceptance', 'MTP 接受率'), L('容量 GB', 'size GB', '容量 GB')],
+    items.filter(i => i.v != null).sort((a, b) => b.v - a.v).map(i => [i.label, fmtTps(i.v), fmtTps(i.lo), fmtTps(i.hi), fmtPct(decodeOf(i.key).acc), i.m.gb]), i => i > 0);
+}
+
+const PREFILL = [{ fx: 'prefill-4k', label: '4K', x: 4096 }, { fx: 'prefill-32k', label: '32K', x: 32768 }, { fx: 'prefill-128k', label: '128K', x: 131072 }];
+function sPrefillTtft() {
+  const rows = rowsFor(modelsShown());
+  const any = rows.some(r => PREFILL.some(p => caseOf(r.key, '1', p.fx)));
+  const k1 = card('c-prefill', L('prefill 速度 × 入力の長さ', 'prefill speed × input length', 'prefill 速度 × 输入长度'),
+    L('入力を読む速さ。tok/s、大きいほど速い。モデルの一部が GPU の外（RAM など）にあると、入力の区切り（chunk）ごとにそれを GPU へ送るため、区切りを埋めきらない短い入力では tok/s が低く出ることがある。',
+      'How fast the input is read. tok/s, higher is faster. When part of the model is outside the GPU (in RAM, for example), it is sent to the GPU once per input chunk, so a short input that does not fill a chunk can show a lower tok/s.',
+      '读取输入的速度。tok/s，越大越快。模型有一部分在 GPU 之外（如 RAM）时，会按输入分块（chunk）逐块传到 GPU，填不满一块的短输入 tok/s 可能偏低。'));
+  const k2 = card('c-ttft', L('TTFT × 入力の長さ', 'TTFT × input length', 'TTFT × 输入长度'),
+    L('送ってから最初の文字が出るまで。小さいほど速い。', 'From sending to the first character. Lower is faster.', '从发送到出现第一个字。越小越快。'));
+  if (!any) { empty(k1, NO_RESULT('1')); empty(k2, NO_RESULT('1')); return; }
+  const cell = (key, p, f) => { const c = caseOf(key, '1', p.fx); if (!c) return null;
+    const v = f === 'p' ? c.prefill_tps : c.ttft_ms, rg = f === 'p' ? c.prefill_range : c.ttft_range, fm = f === 'p' ? fmtTps : fmtMs;
+    return { v, text: fm(v), tip: [[fm(v), L('中央値', 'median', '中位数')], ...(rg ? [[fm(rg[0]) + '–' + fm(rg[1]), L('3回の範囲', 'range of 3', '3 次的范围')]] : []),
+      [fmtTps(f === 'p' ? c.ttft_ms / 1000 : c.prefill_tps) + (f === 'p' ? ' s' : ' tok/s'), f === 'p' ? 'TTFT' : 'prefill']] }; };
+  const cols = PREFILL.map(p => ({ ...p, label: L('入力 ', 'input ', '输入 ') + p.label }));
+  const per = L('色の幅は入力長ごと', 'color scale per input length', '色阶按输入长度分别设定');
+  heat(k1, rows, cols, (r, c) => cell(r.key, c, 'p'), { low: SLOW(), high: FAST(), legend: per, perColumn: true, unit: 'tok/s', aria: L('prefill 速度のヒートマップ', 'prefill speed heatmap', 'prefill 速度热力图') });
+  heat(k2, rows, cols, (r, c) => cell(r.key, c, 't'), { better: 'low', low: L('長く待つ', 'long wait', '等待久'), high: L('すぐ', 'quick', '很快'), legend: per, perColumn: true, aria: L('TTFT のヒートマップ', 'TTFT heatmap', 'TTFT 热力图') });
+  const t = (f, fm) => rows.map(r => [r.label, ...PREFILL.map(p => { const c = caseOf(r.key, '1', p.fx); return c ? fm(f === 'p' ? c.prefill_tps : c.ttft_ms) : '–'; })]);
+  table(k1, [MODEL(), 'prefill 4K', '32K', '128K'], t('p', fmtTps), i => i > 0);
+  table(k2, [MODEL(), 'TTFT 4K', '32K', '128K'], t('t', fmtMs), i => i > 0);
+}
+
+function sTemp() {
+  const k = card('c-temp', 'decode × temperature', L(`${decodeLabel(state.content)}。temperature が高いほど MTP の先読みが外れやすく、遅くなりやすい。`,
+      `${decodeLabel(state.content)}. The higher the temperature, the more MTP's drafts miss, and the slower it tends to be.`,
+      `${decodeLabel(state.content)}。temperature 越高，MTP 的预测越容易落空，速度越容易变慢。`), NOT_ZERO());
+  const T = [{ k: '0', label: 't 0', color: '--g1' }, { k: '0.7', label: 't 0.7', color: '--g2' }, { k: '1', label: 't 1.0', color: '--g3' }];
+  const rows = rowsFor(modelsShown()).map(r => {
+    const vals = {}, acc = [];
+    for (const t of T) {
+      const cs = casesOf(r.key, '1', c => c.fixture.startsWith('decode-') && done(c) && c.config === 'baseline' && Number(c.temperature) === Number(t.k)
+        && (state.content === 'all' || c.fixture === state.content));
+      vals[t.k] = median(cs.map(c => c.decode_tps)); acc.push(`t ${t.k}: ${L('採用率', 'acceptance', '接受率')} ${fmtPct(median(cs.map(c => c.accept_rate)))}`);
+    }
+    return { ...r, vals, note: acc.join(' / ') };
+  });
+  dots(k, rows, T, { fmt: v => fmtTps(v) + ' tok/s', tick: fmtTick, x: TPS('decode'), y: MODEL_AXIS(), emptyMsg: NO_RESULT('1'), aria: L('temperature 別の decode', 'decode by temperature', '各 temperature 的 decode') });
+  table(k, [MODEL(), 't 0', 't 0.7', 't 1.0'], rows.map(r => [r.label, ...T.map(t => fmtTps(r.vals[t.k]))]), i => i > 0);
+}
+
+function sDrafter() {
+  const tLabel = state.temp === 'all' ? L('temperature 3水準', 'all 3 temperatures', 'temperature 3 档') : 'temperature ' + state.temp;
+  const cLabel = decodeLabel(state.content);
+  const k = card('c-drafter', L('decode × drafter（MTP と DFlash2）', 'decode × drafter (MTP and DFlash2)', 'decode × drafter（MTP 与 DFlash2）'),
+    L(`${cLabel}、${tLabel}。DFlash2 は 0.2.10 から Auto の既定になった drafter で、対応する ${E.dflash2_models.length} モデルだけ測る（ほかのグラフはすべて MTP）。`,
+      `${cLabel}, ${tLabel}. DFlash2 is the drafter Auto picks since 0.2.10; only the ${E.dflash2_models.length} models it supports are measured (every other chart uses MTP).`,
+      `${cLabel}，${tLabel}。DFlash2 是自 0.2.10 起 Auto 默认选择的 drafter，只测支持它的 ${E.dflash2_models.length} 个模型（其他图表均为 MTP）。`), NOT_ZERO());
+  const KEYS = [{ k: 'MTP', label: 'MTP', color: '--g1' }, { k: 'DFlash2', label: 'DFlash2', color: '--g3' }];
+  const acc = L('採用率', 'acceptance', '接受率');
+  const rows = rowsFor(modelsShown().filter(m => E.dflash2_models.includes(m.key))).map(r => {
+    const a = decodeOf(r.key, 'MTP'), b = decodeOf(r.key, 'DFlash2');
+    const gain = a && b && a.v && b.v != null ? Math.round(100 * (b.v / a.v - 1)) : null;
+    return { ...r, vals: { MTP: a && a.v, DFlash2: b && b.v }, acc: [a && a.acc, b && b.acc], gain,
+      note: [gain != null ? `DFlash2 ${gain >= 0 ? '+' : ''}${gain}%` : null,
+             `MTP ${acc} ${fmtPct(a && a.acc)} / DFlash2 ${acc} ${fmtPct(b && b.acc)}`].filter(Boolean).join(' · ') };
+  });
+  if (!rows.length) return empty(k, L('絞り込みの中に DFlash2 対応のモデルがありません。', 'No model in the filter supports DFlash2.', '筛选范围内没有支持 DFlash2 的模型。'));
+  dots(k, rows, KEYS, { fmt: v => fmtTps(v) + ' tok/s', tick: fmtTick, x: TPS('decode'), y: MODEL_AXIS(), emptyMsg: NO_RESULT('1'), aria: L('drafter 別の decode', 'decode by drafter', '各 drafter 的 decode') });
+  table(k, [MODEL(), 'MTP tok/s', 'DFlash2 tok/s', L('差', 'difference', '差'), 'MTP ' + acc, 'DFlash2 ' + acc],
+    rows.map(r => [r.label, fmtTps(r.vals.MTP), fmtTps(r.vals.DFlash2), r.gain == null ? '–' : (r.gain >= 0 ? '+' : '') + r.gain + '%',
+                   fmtPct(r.acc[0]), fmtPct(r.acc[1])]), i => i > 0);
+}
+
+function sSize() {
+  const k = card('c-size', L('容量と decode 速度', 'size and decode speed', '容量与 decode 速度'),
+    L('右下ほど「大きいのに遅い」、左上ほど「小さくて速い」。decode は上の絞り込みに従う。', 'Lower right: big and slow; upper left: small and fast. decode follows the filters above.', '越靠右下越“大而慢”，越靠左上越“小而快”。decode 随上方筛选变化。'));
+  const pts = modelsShown().map(m => ({ m, d: decodeOf(m.key) })).filter(x => x.d && x.d.v != null)
+    .map(({ m, d }) => ({ key: m.key, label: m.key, x: m.gb, y: d.v, note: tr(m.role) }));
+  scatter(k, pts, { emptyMsg: NO_RESULT('1'), aria: L('容量と decode の散布図', 'size vs decode scatter plot', '容量与 decode 散点图') });
+  table(k, [MODEL(), L('容量 GB', 'size GB', '容量 GB'), 'decode tok/s'], pts.sort((a, b) => a.x - b.x).map(p => [p.label, p.x, fmtTps(p.y)]), i => i === 1 || i === 2);
+}
+
+function longSeries(field) {
+  return modelsShown().map(m => {
+    const pts = [];
+    for (const p of PREFILL) { const c = caseOf(m.key, '1', p.fx); if (c && c[field] != null) pts.push({ x: p.x, y: c[field] }); }
+    return { key: m.key, label: m.key, points: pts };
+  }).filter(s => s.points.length);
+}
+function sLong() {
+  const k1 = card('c-long-ttft', L('TTFT × 入力の長さ', 'TTFT × input length', 'TTFT × 输入长度'),
+    L('縦軸は対数。上ほど長く待つ。', 'Log scale. Higher means a longer wait.', '纵轴为对数。越高等待越久。'));
+  const s1 = longSeries('ttft_ms').map(s => ({ ...s, points: s.points.map(p => ({ ...p, y: p.y / 1000 })) }));
+  lines(k1, s1, { yLog: true, yTick: v => v >= 1 ? v + ' s' : v * 1000 + ' ms', fmt: fmtS, better: (a, b) => a - b,
+    x: INPUT_LEN(), y: L('TTFT（対数）', 'TTFT (log scale)', 'TTFT（对数）'),
+    emptyMsg: NO_RESULT(), aria: L('入力の長さと TTFT', 'input length and TTFT', '输入长度与 TTFT') });
+  const k2 = card('c-long-prefill', L('prefill 速度 × 入力の長さ', 'prefill speed × input length', 'prefill 速度 × 输入长度'),
+    L('短い入力では、入力の区切り（chunk）を埋めきらないと、重みを GPU へ送る時間などの区切りごとの手間の割に読む量が少なく、tok/s が低く出ることがある。区切りが埋まる長さからは、長いほど注意（attention）の計算が増えて落ちていく。',
+      'A short input that does not fill an input chunk reads little for the per-chunk cost (such as sending weights to the GPU), so it can show a lower tok/s. Once the chunks are full, longer inputs slow down as attention compute grows.',
+      '短输入若填不满一个输入分块（chunk），相对每块的固定开销（如把权重传到 GPU）读到的量少，tok/s 可能偏低。分块填满之后，越长 attention 计算越多，速度随之下降。'));
+  const s2 = longSeries('prefill_tps');
+  lines(k2, s2, { yLog: false, yTick: fmtTick, fmt: v => fmtTps(v) + ' tok/s', better: (a, b) => b - a, x: INPUT_LEN(), y: TPS('prefill'), emptyMsg: NO_RESULT(), aria: L('入力の長さと prefill 速度', 'input length and prefill speed', '输入长度与 prefill 速度') });
+  const k3 = card('c-long-decode', L('decode 速度 × 入力の長さ', 'decode speed × input length', 'decode 速度 × 输入长度'),
+    L('長い入力を読んだ後の書く速さ。会話や資料が長くなるほど生成が遅くなるかを見る。出力 128 トークンで測った値。',
+      'How fast it writes after reading a long input: does generation slow down as the conversation or document grows? Measured over 128 output tokens.',
+      '读完长输入后的输出速度：对话或资料越长，生成是否越慢。以输出 128 token 测量。'));
+  const s3 = longSeries('decode_tps');
+  lines(k3, s3, { yLog: false, yTick: fmtTick, fmt: v => fmtTps(v) + ' tok/s', better: (a, b) => b - a, x: INPUT_LEN(), y: TPS('decode'), emptyMsg: NO_RESULT(), aria: L('入力の長さと decode 速度', 'input length and decode speed', '输入长度与 decode 速度') });
+  const xs = [...new Set([...s1, ...s3].flatMap(s => s.points.map(p => p.x)))].sort((a, b) => a - b);
+  table(k1, [MODEL(), ...xs.map(fmtTok)], s1.map(s => [s.label, ...xs.map(x => { const p = s.points.find(q => q.x === x); return p ? fmtS(p.y) : '–'; })]), i => i > 0);
+  table(k2, [MODEL(), ...xs.map(fmtTok)], s2.map(s => [s.label, ...xs.map(x => { const p = s.points.find(q => q.x === x); return p ? fmtTps(p.y) : '–'; })]), i => i > 0);
+  table(k3, [MODEL(), ...xs.map(fmtTok)], s3.map(s => [s.label, ...xs.map(x => { const p = s.points.find(q => q.x === x); return p ? fmtTps(p.y) : '–'; })]), i => i > 0);
+}
+
+// Tiers 4b / 4c: the long documents. The first question of each seed reads the whole document (q-d10); the others
+// reuse it from the prefix cache, so waiting and speed come from q-d10, and the answers from every question.
+const DOC_Q = [['q-d10', '10%'], ['q-d50', '50%'], ['q-d90', '90%'], ['q-multi', L('3つとも', 'all three', '三个都')]];
+const docCases = key => (byModel[key] || []).filter(c => (c.step === '4b' || c.step === '4c') && c.fixture.startsWith('long-') && done(c));
+const docLens = () => [...new Set(modelsShown().flatMap(m => docCases(m.key).map(c => Number(c.input_tokens))))].sort((a, b) => a - b);
+function docSeries(field) {
+  return modelsShown().map(m => {
+    const byX = {}; for (const c of docCases(m.key)) if (c.id.endsWith('-q-d10') && c[field] != null) (byX[c.input_tokens] ||= []).push(c[field]);
+    return { key: m.key, label: m.key, points: Object.entries(byX).map(([x, v]) => ({ x: Number(x), y: median(v) })) };
+  }).filter(s => s.points.length);
+}
+function sDoc() {
+  const k1 = card('c-doc-ttft', L('TTFT × 文書の長さ', 'TTFT × document length', 'TTFT × 文档长度'),
+    L('縦軸は対数。上ほど長く待つ。文書を丸ごと読む最初の問い。', 'Log scale. Higher means a longer wait. The first question, which reads the whole document.', '纵轴为对数。越高等待越久。首次读取整篇文档的问题。'));
+  const k2 = card('c-doc-prefill', L('prefill 速度 × 文書の長さ', 'prefill speed × document length', 'prefill 速度 × 文档长度'),
+    L('長いほど注意（attention）の計算が増えて落ちていく。', 'Longer documents slow down as attention compute grows.', '越长 attention 计算越多，速度随之下降。'));
+  const k3 = card('c-doc-decode', L('decode 速度 × 文書の長さ', 'decode speed × document length', 'decode 速度 × 文档长度'),
+    L('文書を読んだ後の書く速さ。答えは数〜十数トークンと短いので、値は目安。', 'How fast it writes after reading the document. The answers are only a few tokens, so the values are rough.', '读完文档后的输出速度。回答只有几个到十几个 token，数值仅供参考。'));
+  const k4 = card('c-doc-correct', L('正答 × 文書の長さ', 'correct answers × document length', '正确率 × 文档长度'),
+    L('問い4つ（10 / 50 / 90% の位置の事実と、3つまとめて）× 3回のうち正しく答えた数。', 'Correct answers out of 4 questions (the fact at 10 / 50 / 90%, and all three together) × 3 runs.', '4 个问题（10 / 50 / 90% 处的事实，以及三个一起）× 3 次中答对的数量。'));
+  const s1 = docSeries('ttft_ms').map(s => ({ ...s, points: s.points.map(p => ({ ...p, y: p.y / 1000 })) }));
+  if (!s1.length) { for (const k of [k1, k2, k3, k4]) empty(k, NO_RESULT('4b')); return; }
+  const DOC_X = L('文書の長さ（token、対数）', 'document length (tokens, log scale)', '文档长度（token，对数）');
+  lines(k1, s1, { yLog: true, yTick: v => v >= 1 ? v + ' s' : v * 1000 + ' ms', fmt: fmtS, better: (a, b) => a - b,
+    x: DOC_X, y: L('TTFT（対数）', 'TTFT (log scale)', 'TTFT（对数）'), emptyMsg: NO_RESULT('4b'), aria: L('文書の長さと TTFT', 'document length and TTFT', '文档长度与 TTFT') });
+  const s2 = docSeries('prefill_tps');
+  lines(k2, s2, { yLog: false, yTick: fmtTick, fmt: v => fmtTps(v) + ' tok/s', better: (a, b) => b - a, x: DOC_X, y: TPS('prefill'), emptyMsg: NO_RESULT('4b'), aria: L('文書の長さと prefill 速度', 'document length and prefill speed', '文档长度与 prefill 速度') });
+  const s3 = docSeries('decode_tps');
+  lines(k3, s3, { yLog: false, yTick: fmtTick, fmt: v => fmtTps(v) + ' tok/s', better: (a, b) => b - a, x: DOC_X, y: TPS('decode'), emptyMsg: NO_RESULT('4b'), aria: L('文書の長さと decode 速度', 'document length and decode speed', '文档长度与 decode 速度') });
+  const xs = docLens();
+  const col = (s, x, f) => { const p = s.points.find(q => q.x === x); return p ? f(p.y) : '–'; };
+  table(k1, [MODEL(), ...xs.map(fmtTok)], s1.map(s => [s.label, ...xs.map(x => col(s, x, fmtS))]), i => i > 0);
+  table(k2, [MODEL(), ...xs.map(fmtTok)], s2.map(s => [s.label, ...xs.map(x => col(s, x, fmtTps))]), i => i > 0);
+  table(k3, [MODEL(), ...xs.map(fmtTok)], s3.map(s => [s.label, ...xs.map(x => col(s, x, fmtTps))]), i => i > 0);
+  // answers: every question of the document, summed over the runs
+  const rows = rowsFor(modelsShown().filter(m => docCases(m.key).length));
+  const tally = (key, x) => { const cs = docCases(key).filter(c => Number(c.input_tokens) === x && c.correct);
+    if (!cs.length) return null; const per = DOC_Q.map(([q, label]) => { const c = cs.find(c => c.id.endsWith('-' + q)); return [c ? c.correct : '–', label]; });
+    let ok = 0, all = 0; for (const c of cs) { const [a, b] = c.correct.split('/').map(Number); ok += a; all += b; } return { ok, all, per }; };
+  const cols = xs.map(x => ({ x, label: fmtTok(x) }));
+  heat(k4, rows, cols, (r, c) => { const t = tally(r.key, c.x); if (!t) return null;
+    return { v: t.ok / t.all, text: `${t.ok}/${t.all}`, tip: t.per }; },
+    { low: L('少ない', 'fewer', '较少'), high: L('多い', 'more', '较多'), aria: L('文書の長さ別の正答', 'correct answers by document length', '各文档长度的正确数') });
+  table(k4, [MODEL(), ...xs.map(fmtTok)], rows.map(r => [r.label, ...xs.map(x => { const t = tally(r.key, x); return t ? `${t.ok}/${t.all}` : '–'; })]), i => i > 0);
+}
+
+const CTX = ['128K', '256K', '1M'];
+function sCtx() {
+  const rows = rowsFor(modelsShown());
+  const get = (key, ctx) => (byModel[key] || []).find(c => c.step === '4a' && c.context_label === ctx);
+  const k1 = card('c-ctx-decode', L('decode 速度 × 確保したコンテキスト', 'decode speed × reserved context', 'decode 速度 × 预留的上下文'),
+    L('同じ 4K 入力。KV キャッシュが大きくなると expert を置ける VRAM が減り、遅くなりうる。', 'The same 4K input. A larger KV cache leaves less VRAM for experts, which may slow it down.', '相同的 4K 输入。KV 缓存变大后可放 expert 的 VRAM 减少，可能变慢。'));
+  const k2 = card('c-ctx-launch', L('起動時間 × 確保したコンテキスト', 'launch time × reserved context', '启动时间 × 预留的上下文'),
+    L('strata launch がリクエストを受けられるまで。小さいほど早い。', 'Until strata launch accepts requests. Lower is quicker.', '到 strata launch 可以接受请求为止。越小越快。'));
+  if (!rows.some(r => CTX.some(x => get(r.key, x)))) { empty(k1, NO_RESULT('4a')); empty(k2, NO_RESULT('4a')); return; }
+  const cols = CTX.map(x => ({ x, label: x }));
+  const cell = (key, c, f) => { const v = get(key, c.x); if (!v) return null;
+    if (v.launch_failed || v.status === 'failed') return { v: null, text: FAILED(), tip: [[L('起動できず', 'did not launch', '无法启动'), '']], note: v.status };
+    const val = f === 'd' ? v.decode_tps : v.launch_s;
+    return { v: val, text: f === 'd' ? fmtTps(val) : fmtS(val), tip: [[fmtTps(v.decode_tps) + ' tok/s', 'decode'], [fmtS(v.launch_s), L('起動', 'launch', '启动')],
+      [v.gpu_mem_peak_mib != null ? (v.gpu_mem_peak_mib / 1024).toFixed(1) + ' GB' : '–', 'VRAM peak'], [v.rss_peak_mib != null ? (v.rss_peak_mib / 1024).toFixed(1) + ' GB' : '–', 'RAM (RSS) peak']] }; };
+  heat(k1, rows, cols, (r, c) => cell(r.key, c, 'd'), { low: SLOW(), high: FAST(), unit: 'tok/s', aria: L('コンテキスト別 decode', 'decode by context', '各上下文的 decode') });
+  heat(k2, rows, cols, (r, c) => cell(r.key, c, 'l'), { better: 'low', low: SLOW(), high: L('早い', 'quick', '快'), aria: L('コンテキスト別 起動時間', 'launch time by context', '各上下文的启动时间') });
+  table(k1, [MODEL(), ...CTX], rows.map(r => [r.label, ...CTX.map(x => { const v = get(r.key, x); return v ? fmtTps(v.decode_tps) : '–'; })]), i => i > 0);
+  table(k2, [MODEL(), ...CTX], rows.map(r => [r.label, ...CTX.map(x => { const v = get(r.key, x); return v ? (v.launch_failed ? FAILED() : fmtS(v.launch_s)) : '–'; })]), i => i > 0);
+}
+
+function sStd() {
+  // † on the derivatives (pruned, fine-tuned, retrained): outside standard-v1's official comparison (the plan's Tier 2)
+  const rows = rowsFor(modelsShown()).map(r => ({ ...r, label: r.m.derivative ? r.label + ' †' : r.label }));
+  const k = card('c-std', L('standard-v1 の速さと sanity 正答', 'standard-v1 speed and sanity answers', 'standard-v1 的速度与 sanity 正确率'),
+    L('列ごとに色の幅を合わせる。回答までは thinking を含めて最初の回答の文字が出るまで。', 'Color scale per column. “To answer” is until the first answer character, thinking included.', '色阶按列分别设定。“到回答”指包含 thinking 在内到出现第一个回答字符为止。'));
+  const get = (key, fx) => (byModel[key] || []).find(c => c.step === '2' && c.fixture === fx && done(c));
+  const sanity = key => { const cs = (byModel[key] || []).filter(c => c.step === '2' && c.fixture.startsWith('sanity-') && c.correct);
+    if (!cs.length) return null; let ok = 0, all = 0; for (const c of cs) { const [a, b] = c.correct.split('/').map(Number); ok += a; all += b; } return [ok, all]; };
+  const SHORT = L('短文', 'short', '短文'), TO_ANSWER = L('回答まで', 'to answer', '到回答');
+  const cols = [{ f: 'd', fx: 'performance-short', label: 'decode ' + SHORT + '\n(tok/s)' }, { f: 'p', fx: 'performance-prompt-4k', label: 'prefill 4K\n(tok/s)' },
+                { f: 'p', fx: 'performance-prompt-16k', label: 'prefill 16K\n(tok/s)' }, { f: 'a', fx: 'performance-short', label: TO_ANSWER + '\n' + SHORT, better: 'low' },
+                { f: 's', label: 'sanity\n' + L('正答', 'correct', '正确') }];
+  if (!rows.some(r => get(r.key, 'performance-short') || sanity(r.key))) return empty(k, NO_RESULT('2'));
+  const cell = (key, c) => {
+    if (c.f === 's') { const s = sanity(key); return s ? { v: s[0] / s[1], text: `${s[0]}/${s[1]}` } : null; }
+    const v = get(key, c.fx); if (!v) return null;
+    const val = c.f === 'd' ? v.decode_tps : c.f === 'p' ? v.prefill_tps : v.first_answer_ms;
+    return { v: val, text: c.f === 'a' ? fmtMs(val) : fmtTps(val) };
+  };
+  heat(k, rows, cols, (r, c) => cell(r.key, c), { low: L('悪い', 'worse', '差'), high: L('良い', 'better', '好'), legend: L('色の幅と向きは列ごと', 'color scale and direction per column', '色阶与方向按列'), perColumn: true, minCell: 64, aria: 'standard-v1' });
+  if (rows.some(r => r.m.derivative))
+    h('p', { class: 'foot' }, k.c, L('† 派生モデル（剪定・fine-tune・再学習）。standard-v1 の公式比較（conforming）の対象外で、同じ fixture で回した参考値（derivative）。',
+      '† A derivative (pruned, fine-tuned or retrained): outside standard-v1\'s official comparison (conforming); run on the same fixture for reference (derivative).',
+      '† 派生模型（剪枝、fine-tune、再训练）：不在 standard-v1 官方比较（conforming）范围内，是用相同 fixture 运行的参考值（derivative）。'));
+  table(k, [MODEL(), 'decode ' + SHORT, 'prefill 4K', 'prefill 16K', TO_ANSWER, 'sanity'], rows.map(r => [r.label, ...cols.map(c => { const x = cell(r.key, c); return x ? x.text : '–'; })]), i => i > 0);
+}
+
+function sThink() {
+  const rows = rowsFor(modelsShown());
+  const k = card('c-think', L('回答が終わるまでの時間（effort none / high）', 'time until the answer ends (effort none / high)', '到回答结束的时间（effort none / high）'),
+    L('数学・コード・推論（日・英）の4問の中央値。high の方が右に伸びた分が、考えた時間。', 'Median of the 4 tasks: math, code, reasoning (Japanese, English). How far high reaches to the right is the time spent thinking.', '数学、代码、推理（日、英）4 题的中位数。high 向右多出的部分就是思考的时间。'),
+    NOT_ZERO());
+  const KEYS = [{ k: 'none', label: 'effort none', color: '--g1' }, { k: 'high', label: 'effort high', color: '--g3' }];
+  const data = rows.map(r => {
+    const vals = {}, toks = {}, notes = [];
+    for (const e of KEYS) {
+      const cs = (byModel[r.key] || []).filter(c => c.step === '3' && c.effort === e.k && done(c) && !c.fixture.startsWith('game'));
+      vals[e.k] = cs.length ? median(cs.map(c => c.total_ms)) / 1000 : null;
+      toks[e.k] = cs.length ? median(cs.map(c => c.completion_tokens)) : null;
+      let ok = 0, all = 0; for (const c of cs) if (c.correct) { const [a, b] = c.correct.split('/').map(Number); ok += a; all += b; }
+      if (cs.length) notes.push(`${e.k}: ${L('正答', 'correct', '正确')} ${all ? ok + '/' + all : '–'}`);
+    }
+    const game = (byModel[r.key] || []).find(c => c.step === '3' && c.effort === 'high' && c.fixture.startsWith('game') && done(c));
+    return { ...r, vals, toks, game: game ? game.total_ms / 1000 : null, note: notes.join(' / '), missing: planned('3', r.key) ? null : L('対象外（計画で除外）', 'not in the plan', '不在计划内') };
+  });
+  dots(k, data, KEYS, { fmt: fmtS, tick: fmtTick, x: L('回答が終わるまでの時間（s）', 'time until the answer is complete (s)', '回答完成所需时间（s）'), y: MODEL_AXIS(), emptyMsg: NO_RESULT('3'), aria: L('thinking の有無と回答時間', 'thinking and answer time', '有无 thinking 与回答时间') });
+  const tok = v => v == null ? '–' : Math.round(v).toLocaleString();
+  table(k, [MODEL(), 'none', 'high', L('出力 token none', 'output tokens, none', '输出 token none'), L('出力 token high', 'output tokens, high', '输出 token high'),
+            L('ゲーム作成（high）', 'game (high)', '游戏制作（high）'), L('正答', 'correct', '正确')],
+    data.map(r => [r.label, fmtS(r.vals.none), fmtS(r.vals.high), tok(r.toks.none), tok(r.toks.high), fmtS(r.game), r.note || '–']), i => i >= 1 && i <= 5);
+}
+
+function divbar(k, groups, o) {
+  const W = k.width(), labelW = labelWidth(groups.flatMap(g => g.rows.map(r => r.label)), W, 0.4), rowH = 22, bar = 10, pad = 46;
+  const headH = g => g.label ? 24 : 6;     // a group with no label (one model per chart) takes no heading row
+  const all = groups.flatMap(g => g.rows.map(r => r.pct)).filter(v => v != null);
+  const span = o.span || Math.max(5, ...all.map(v => Math.abs(v - 100))), H = groups.reduce((a, g) => a + headH(g) + g.rows.length * rowH, 0) + 40;
+  const mid = labelW + (W - labelW) / 2, X = v => mid + (W - labelW - 2 * pad) / 2 * (v - 100) / span;
+  const svg = el('svg', { width: W, height: H, role: 'img', 'aria-label': o.aria }, k.plot);
+  let y = 0;
+  for (const g of groups) {
+    if (g.label) el('text', { x: 0, y: y + 16, 'font-size': 12.5, 'font-weight': 600, fill: css('--text') }, svg, g.label);
+    y += headH(g);
+    for (const r of g.rows) {
+      const cy = y + rowH / 2;
+      el('text', { x: labelW - 8, y: cy + 4, 'text-anchor': 'end', 'font-size': 11.5, fill: css('--text-2') }, svg, fit(r.label, labelW - 10, 11.5));
+      if (r.pct != null) {
+        const a = X(Math.min(100, r.pct)), b = X(Math.max(100, r.pct)), up = r.pct >= 100;
+        el('rect', { x: a, y: cy - bar / 2, width: Math.max(1, b - a), height: bar, rx: 2, fill: css(Math.abs(r.pct - 100) < (o.noise ? 2 * o.noise : 1) ? '--mid' : up ? '--up' : '--down') }, svg);
+        el('text', { x: up ? b + 5 : a - 5, y: cy + 4, 'text-anchor': up ? 'start' : 'end', 'font-size': 11, fill: css('--text'),
+          'font-variant-numeric': 'tabular-nums' }, svg, (r.pct >= 100 ? '+' : '') + Math.round(r.pct - 100) + '%');
+      } else el('text', { x: mid + 6, y: cy + 4, 'font-size': 11, fill: css('--muted') }, svg, '–');
+      const hit = el('rect', { class: 'hit', x: 0, y, width: W, height: rowH }, svg);
+      hover(hit, e => showTip(e, g.label + ' · ' + r.label, r.tip));
+      y += rowH;
+    }
+  }
+  el('line', { x1: mid, x2: mid, y1: headH(groups[0]) - 4, y2: y, stroke: css('--axis'), 'stroke-width': 1 }, svg);
+  el('text', { x: mid, y: y + 15, 'text-anchor': 'middle', 'font-size': 11, fill: css('--muted') }, svg, '0%');
+  axisX(svg, o.x || L('既定からの差（%）', 'difference from the default (%)', '相对默认的差（%）'), labelW, W, y + 33);
+  legendItem(k, '', css('--up'), L('既定より速い', 'faster than default', '比默认快')); legendItem(k, '', css('--down'), L('既定より遅い', 'slower than default', '比默认慢'));
+  // a change within twice the start-to-start spread of Tier 0 (o.noise, %) is no effect (the plan's Tier 5)
+  if (o.noise) legendItem(k, '', css('--mid'), L(`影響なし（±${(2 * o.noise).toFixed(1)}% 未満）`, `no effect (under ±${(2 * o.noise).toFixed(1)}%)`, `无影响（不足 ±${(2 * o.noise).toFixed(1)}%）`));
+}
+function sOpts() {
+  const cs = CASES.filter(c => c.step === '5' && done(c));
+  const box = $('c-opts'); box.replaceChildren();
+  const METRICS = [{ f: 'd', fx: 'decode-prose-ja', key: 'decode_tps', title: L('decode の変化（日本語の説明文）', 'change in decode (Japanese prose)', 'decode 的变化（日语说明文）'),
+                     foot: L('並列（concurrency）は1リクエストあたりの速さ。', 'For concurrency, the speed per request.', '并发（concurrency）为每个请求的速度。') },
+                   { f: 'p', fx: 'prefill-32k', key: 'prefill_tps', title: L('prefill の変化（32K 入力）', 'change in prefill (32K input)', 'prefill 的变化（32K 输入）') }];
+  if (!cs.length) {
+    for (const m of METRICS) { h('h3', { class: 'opt-h' }, box, m.title); h('div', { id: 'c-opts-' + m.f }, box); empty(card('c-opts-' + m.f, '', ''), NO_RESULT('5')); }
+    return;
+  }
+  // models in the page's order; settings in the plan's order, the same rows in every model's chart
+  const models = MODELS.map(m => m.key).filter(key => cs.some(c => c.family + ' ' + c.model === key));
+  const configs = [...new Set(cs.map(c => c.config))], base = configs.find(c => c.startsWith('baseline'));
+  const val = (m, cfg, fx, f) => median(cs.filter(c => c.family + ' ' + c.model === m && c.config === cfg && c.fixture === fx).map(c => c[f]));
+  const vsBase = L('既定（baseline）からの差。1つだけ変えた設定ごとに、3モデルを同じ行で横に並べる。', 'Difference from the default (baseline), one changed setting per row, the models side by side on the same rows.',
+                   '相对默认（baseline）的差。每行只改一个设置，各模型在同一行并排。');
+  const CFG = L('設定', 'setting', '设置'), RATIO = L('既定比', 'vs. default', '相对默认');
+  for (const m of METRICS) {
+    const nz = (E.noise_pct || {})[m.f === 'd' ? 'decode' : 'prefill'];
+    const noNote = nz ? L(`灰色は影響なし: 同じ起動を3回やり直したとき（Tier 0）のばらつき ${nz}% の2倍未満。`,
+      `Gray is no effect: under twice the ${nz}% spread between three starts of the same launch (Tier 0).`,
+      `灰色为无影响：小于同一启动重做 3 次时（Tier 0）波动 ${nz}% 的 2 倍。`) : '';
+    h('h3', { class: 'opt-h' }, box, m.title); h('p', { class: 'desc' }, box, vsBase + (m.foot ? ' ' + m.foot : '') + (noNote ? ' ' + noNote : ''));
+    const g3 = h('div', { class: 'grid3' }, box);
+    const per = models.map(model => { const b = val(model, base, m.fx, m.key);
+      return { model, b, rows: configs.filter(c => c !== base).map(cfg => { const v = val(model, cfg, m.fx, m.key);
+        return { label: tr(cfg), v, pct: v != null && b ? 100 * v / b : null, tip: [[fmtTps(v) + ' tok/s', tr(cfg)], [fmtTps(b) + ' tok/s', L('既定', 'default', '默认')]] }; }) }; });
+    // one scale for the three, so that a bar's length compares across the models
+    const span = Math.max(5, ...per.flatMap(x => x.rows.map(r => r.pct)).filter(v => v != null).map(v => Math.abs(v - 100)));
+    // every slot first: an auto-fit grid lays out only the cells that exist, and a chart takes its width from its cell
+    per.forEach((x, i) => h('div', { id: `c-opts-${m.f}-${i}` }, g3));
+    per.forEach((x, i) => {
+      const id = `c-opts-${m.f}-${i}`;
+      const k = card(id, x.model, L(`既定 ${fmtTps(x.b)} tok/s`, `default ${fmtTps(x.b)} tok/s`, `默认 ${fmtTps(x.b)} tok/s`));
+      divbar(k, [{ label: '', rows: x.rows }], { span, noise: (E.noise_pct || {})[m.f === 'd' ? 'decode' : 'prefill'], aria: x.model + ' · ' + m.title });
+      table(k, [CFG, m.f === 'd' ? 'decode' : 'prefill 32K', RATIO],
+        [[tr(base), fmtTps(x.b), '100%'], ...x.rows.map(r => [r.label, fmtTps(r.v), r.pct == null ? '–' : Math.round(r.pct) + '%'])], i => i >= 1);
+    });
+  }
+}
+
+function sEnv() {
+  const rows = rowsFor(modelsShown());
+  const k = card('c-env', L('Tier 1 を測っていた間の熱・電力・メモリ', 'heat, power and memory during Tier 1', '测量 Tier 1 期间的温度、功耗和内存'),
+    L('列の見出しで並べ替え。セルの棒は、その列の最大値に対する値の大きさ（良し悪しではない）。CPU のスロットリングは、熱でクロックを下げていた時間の割合。',
+      'Sort by a column header. The bar in a cell is its value against the largest in the column (neither good nor bad). CPU throttling is the share of time the clock was lowered because of heat.',
+      '点击列标题排序。单元格中的条表示该值相对于该列最大值的大小（不表示好坏）。CPU 降频指因过热降低频率的时间占比。'));
+  const agg = key => { const cs = casesOf(key, '1', done); if (!cs.length) return null;
+    return { thr: median(cs.map(c => c.cpu_core_throttle_pct)), pkg: Math.max(...cs.map(c => c.cpu_pkg_c_max ?? -1)),
+      gpu: median(cs.map(c => c.gpu_power_w)), peak: Math.max(...cs.map(c => c.power_peak_w ?? -1)),
+      rss: Math.max(...cs.map(c => c.rss_peak_mib ?? -1)), vram: Math.max(...cs.map(c => c.gpu_mem_peak_mib ?? -1)) }; };
+  const MAX = L('最大', 'max', '最大'), GPUW = L('GPU 電力', 'GPU power', 'GPU 功耗');
+  const cols = [{ f: 'thr', label: 'CPU\n' + L('スロットリング', 'throttling', '降频'), fm: v => v.toFixed(0) + '%' },
+    { f: 'pkg', label: L('CPU 温度', 'CPU temp.', 'CPU 温度') + '\n' + MAX, fm: v => v.toFixed(0) + '°C' },
+    { f: 'gpu', label: GPUW + '\n' + L('中央値', 'median', '中位数'), fm: v => v.toFixed(0) + ' W' }, { f: 'peak', label: GPUW + '\n' + MAX, fm: v => v.toFixed(0) + ' W' },
+    { f: 'rss', label: 'RAM\n' + MAX, fm: v => (v / 1024).toFixed(0) + ' GB' }, { f: 'vram', label: 'VRAM\n' + MAX, fm: v => (v / 1024).toFixed(1) + ' GB' }];
+  if (!rows.some(r => agg(r.key))) return empty(k, NO_RESULT('1'));
+  const cell = (key, c) => { const a = agg(key); const v = a && a[c.f]; return v == null || v < 0 ? null : { v, text: c.fm(v) }; };
+  // amounts, neither good nor bad: a table with a bar per cell (length against the column's largest), as in the model table
+  k.btn.hidden = true; k.legend.hidden = true;
+  const max = cols.map(c => Math.max(0, ...rows.map(r => (cell(r.key, c) || {}).v || 0)));
+  // sortable as the model table: a header click sorts by it (values largest first), again reverses; ties keep the model order
+  const wrap = h('div', { class: 'tbl' }, k.plot);
+  const draw = () => {
+    wrap.replaceChildren();
+    const t = h('table', {}, wrap), tr = h('tr', {}, h('thead', {}, t));
+    [MODEL(), ...cols.map(c => c.label.replace('\n', ' '))].forEach((x, i) => {
+      const th = h('th', { class: 'sort' + (i ? ' num' : ''), tabindex: '0' }, tr, x);
+      const go = () => { envSortDir = envSortCol === i ? -envSortDir : i === 0 ? 1 : -1; envSortCol = i; draw(); };
+      th.addEventListener('click', go); th.addEventListener('keydown', e => { if (e.key === 'Enter') go(); }); });
+    const list = rows.map((r, n) => ({ r, n, v: cols.map(c => (cell(r.key, c) || {}).v ?? null) }));
+    list.sort((a, b) => { if (envSortCol === 0) return (a.n - b.n) * envSortDir;
+      const x = a.v[envSortCol - 1], y = b.v[envSortCol - 1]; if (x == null) return 1; if (y == null) return -1;
+      return (x - y) * envSortDir || a.n - b.n; });
+    const tb = h('tbody', {}, t);
+    for (const { r } of list) { const row = h('tr', {}, tb);
+      h('td', { style: r.key === state.hl ? 'font-weight:600' : '' }, row, r.label);
+      cols.forEach((c, ci) => { const x = cell(r.key, c), bar = x && max[ci] > 0;
+        const td = h('td', { class: 'num' + (bar ? ' bar n' : '') }, row, x ? x.text : '–');
+        if (bar) td.style.setProperty('--f', (x.v / max[ci]).toFixed(4)); }); }
+  };
+  draw();
+  if (rows.some(r => { const a = agg(r.key); return a && a.thr == null; }))
+    h('p', { class: 'foot' }, k.c, L('温度・スロットリングが空のモデルは、stats/thermal.csv を取り始める前に測ったもの。',
+      'Models with no temperature or throttling were measured before stats/thermal.csv was being recorded.', '温度、降频为空的模型，是在开始记录 stats/thermal.csv 之前测量的。'));
+}
+
+// the plan's comparison axes: models that differ in one point, side by side (fixed sets, in the order given)
+// Tier 1 decode per kind of text, at the filtered temperature (the model table's columns)
+const t1text = (key, fx) => median(casesOf(key, '1', c => c.fixture === fx && done(c) && c.config === 'baseline'
+  && (state.temp === 'all' || Number(c.temperature) === Number(state.temp))).map(c => c.decode_tps));
+
+let sortCol = 0, sortDir = 1;    // by model: series (in the plan's order), then size ascending
+let envSortCol = 0, envSortDir = 1;   // the conditions table, the same way
+function sTable() {
+  const box = $('c-table'); box.replaceChildren();
+  const c = h('section', { class: 'chart' }, box);
+  const wrap = h('div', { class: 'tbl big' }, c);
+  // [heading, value, format, suffix, better ('↑' / '↓' / ''), bar]: decode follows the filters; decode per text, the temperature
+  const short = { 'decode-prose-ja': L('和文', 'Japanese', '日文'), 'decode-prose-en': L('英文', 'English', '英文'), 'decode-json': 'JSON', 'decode-code': 'code', 'decode-copy': 'copy' };
+  const cols = [[MODEL(), m => m.key, String, null, '', false], [L('容量 GB', 'size GB', '容量 GB'), m => m.gb, Number, null, '', true],
+    ['decode', m => (decodeOf(m.key) || {}).v, fmtTps, null, '↑', true],
+    ...DECODE.slice(1).map(([fx]) => ['decode ' + short[fx], m => t1text(m.key, fx), fmtTps, null, '↑', true]),
+    ['prefill 4K', m => (caseOf(m.key, '1', 'prefill-4k') || {}).prefill_tps, fmtTps, null, '↑', true], ['prefill 32K', m => (caseOf(m.key, '1', 'prefill-32k') || {}).prefill_tps, fmtTps, null, '↑', true],
+    ['prefill 128K', m => (caseOf(m.key, '1', 'prefill-128k') || {}).prefill_tps, fmtTps, null, '↑', true],
+    ['TTFT 4K', m => (caseOf(m.key, '1', 'prefill-4k') || {}).ttft_ms, fmtMs, null, '↓', true], ['TTFT 32K', m => (caseOf(m.key, '1', 'prefill-32k') || {}).ttft_ms, fmtMs, null, '↓', true],
+    ['TTFT 128K', m => (caseOf(m.key, '1', 'prefill-128k') || {}).ttft_ms, fmtMs, null, '↓', true], [L('MTP 採用率', 'MTP acceptance', 'MTP 接受率'), m => (decodeOf(m.key) || {}).acc, fmtPct, null, '↑', true],
+    [L('Tier 1 済', 'Tier 1 done', 'Tier 1 已测'), m => casesOf(m.key, '1', done).length, v => v, m => ` / ${T1_PLANNED(m.key)}`, '', false]];
+  const NUM = i => i > 0;
+  const draw = () => {
+    wrap.replaceChildren();
+    const t = h('table', {}, wrap), tr = h('tr', {}, h('thead', {}, t));
+    cols.forEach(([name, , , , better], i) => { const th = h('th', { class: 'sort' + (NUM(i) ? ' num' : ''), tabindex: '0' }, tr, name + (better ? ' ' + better : ''));
+      // a first click puts the better end first (↑ descending, ↓ ascending); the model name and size ascending
+      const go = () => { sortDir = sortCol === i ? -sortDir : (better === '↑' ? -1 : 1); sortCol = i; draw(); };
+      th.addEventListener('click', go); th.addEventListener('keydown', e => { if (e.key === 'Enter') go(); }); });
+    const list = modelsShown().map(m => ({ m, v: cols.map(cl => cl[1](m)) }));
+    const series = [...new Set(MODELS.map(m => m.family))];
+    const byModel = (a, b) => series.indexOf(a.m.family) - series.indexOf(b.m.family) || a.m.gb - b.m.gb || a.m.key.localeCompare(b.m.key);
+    list.sort((a, b) => { if (sortCol === 0) return byModel(a, b) * sortDir;
+      const x = a.v[sortCol], y = b.v[sortCol]; if (x == null) return 1; if (y == null) return -1;
+      return (typeof x === 'string' ? x.localeCompare(y) : x - y) * sortDir || byModel(a, b); });
+  const tb = h('tbody', {}, t);
+    const max = cols.map((cl, i) => cl[5] ? Math.max(0, ...list.map(r => r.v[i] || 0)) : 0);
+    for (const r of list) { const row = h('tr', {}, tb);
+      cols.forEach(([, , fm, suffix], i) => {
+        const bar = max[i] > 0 && r.v[i] != null;
+        const td = h('td', { class: (NUM(i) ? 'num' : '') + (bar ? ' bar' : '') }, row,
+          (r.v[i] == null ? '–' : fm === String || fm === Number ? String(r.v[i]) : fm(r.v[i])) + (suffix ? suffix(r.m) : ''));
+        if (bar) td.style.setProperty('--f', (r.v[i] / max[i]).toFixed(4)); }); }
+  };
+  draw();
+  h('p', { class: 'foot' }, c, L('↑ は大きいほど良い列、↓ は小さいほど良い列（容量は良し悪しではない）。decode は上の絞り込み（temperature・文章）に従い、文章別の decode は temperature だけに従う。セルの棒は、その列の最大値に対する値の大きさで、良し悪しの向きにかかわらず値が大きいほど長い（TTFT は長いほど棒が長い）。',
+    '↑ marks a column where higher is better, ↓ one where lower is better (size is neither). Decode follows the filters above (temperature, text); decode per text follows the temperature only. The bar in a cell is its value against the largest in the column, longer for a larger value whichever way is better (for TTFT, a longer bar is a longer wait).',
+    '↑ 表示越大越好的列，↓ 表示越小越好的列（容量无好坏之分）。decode 随上方筛选（temperature、文章），各文章的 decode 只随 temperature。单元格中的条表示该值相对于该列最大值的大小，无论好坏方向，值越大条越长（TTFT 条越长等待越久）。'));
+  h('p', { class: 'foot' }, c, L(`全ケースの数値（seed ごとの範囲、cap 到達、電力・メモリを含む）は ${D.csv} と CASES.html に。`,
+    `Every case's numbers (per-seed ranges, cap reached, power and memory) are in ${D.csv} and CASES.html.`, `全部用例的数值（含各 seed 的范围、是否触及 cap、功耗和内存）见 ${D.csv} 和 CASES.html。`));
+}
+
+function sCompare() {
+  const have = ENV_IDS.filter(id => D.cases.some(c => c.env === id && c.step === '1' && done(c)));
+  $('s-cmp-wrap').hidden = have.length < 2; $('toc-cmp').hidden = have.length < 2;
+  if (have.length < 2) return;
+  const keys = have.map(id => ({ k: id, label: ENVS.find(e => e.id === id).label, color: '--e' + (ENV_IDS.indexOf(id) % 8 + 1) }));
+  const fams = [...new Set(ENVS.flatMap(e => e.models.map(m => m.family)))];
+  const order = [...new Map(ENVS.flatMap(e => e.models.map(m => [m.key, m]))).values()]
+    .sort((a, b) => fams.indexOf(a.family) - fams.indexOf(b.family) || a.gb - b.gb || a.key.localeCompare(b.key)).map(m => m.key)
+    .filter(key => state.family === 'all' || key.split(' ')[0] === state.family);
+  const rows = get => order.map(key => { const vals = {};
+    for (const id of have) vals[id] = get(key, id);
+    return { key, label: key, vals, note: null, missing: null }; }).filter(r => have.some(id => r.vals[id] != null));
+  const kd = card('c-cmp-decode', L('decode 速度 × 環境', 'decode speed × environment', 'decode 速度 × 环境'),
+    L(`${decodeLabel(state.content)}、${state.temp === 'all' ? 'temperature 3水準' : 'temperature ' + state.temp}。tok/s、右ほど速い。`,
+      `${decodeLabel(state.content)}, ${state.temp === 'all' ? 'all 3 temperatures' : 'temperature ' + state.temp}. tok/s, further right is faster.`,
+      `${decodeLabel(state.content)}，${state.temp === 'all' ? 'temperature 3 档' : 'temperature ' + state.temp}。tok/s，越靠右越快。`), NOT_ZERO());
+  const kp = card('c-cmp-prefill', L('prefill 速度（32K 入力）× 環境', 'prefill speed (32K input) × environment', 'prefill 速度（32K 输入）× 环境'),
+    L('tok/s、右ほど速い。', 'tok/s, further right is faster.', 'tok/s，越靠右越快。'));
+  const kt = card('c-cmp-ttft', L('TTFT（4K 入力）× 環境', 'TTFT (4K input) × environment', 'TTFT（4K 输入）× 环境'),
+    L('左ほど早く最初の文字が出る。', 'Further left: the first character comes sooner.', '越靠左越早出现第一个字。'));
+  const rd = rows((key, id) => (decodeOf(key, 'MTP', id) || {}).v ?? null);
+  const rp = rows((key, id) => (caseOf(key, '1', 'prefill-32k', null, id) || {}).prefill_tps ?? null);
+  const rt = rows((key, id) => { const c = caseOf(key, '1', 'prefill-4k', null, id); return c && c.ttft_ms != null ? c.ttft_ms / 1000 : null; });
+  dots(kd, rd, keys, { fmt: v => fmtTps(v) + ' tok/s', tick: fmtTick, x: TPS('decode'), y: MODEL_AXIS(), emptyMsg: NO_RESULT('1'), aria: L('環境別 decode', 'decode by environment', '各环境 decode') });
+  dots(kp, rp, keys, { fmt: v => fmtTps(v) + ' tok/s', tick: fmtTick, x: TPS('prefill'), y: MODEL_AXIS(), emptyMsg: NO_RESULT('1'), aria: L('環境別 prefill', 'prefill by environment', '各环境 prefill') });
+  dots(kt, rt, keys, { fmt: fmtS, tick: fmtTick, x: L('TTFT（s）', 'TTFT (s)', 'TTFT（s）'), y: MODEL_AXIS(), emptyMsg: NO_RESULT('1'), aria: L('環境別 TTFT', 'TTFT by environment', '各环境 TTFT') });
+  for (const [k, rs, fm] of [[kd, rd, fmtTps], [kp, rp, fmtTps], [kt, rt, fmtS]])
+    table(k, [MODEL(), ...keys.map(x => x.label)], rs.map(r => [r.label, ...keys.map(x => fm(r.vals[x.k]))]), i => i > 0);
+}
+
+let refillFilters = () => {};
+function envSwitch() {
+  const box = $('envsw'); box.replaceChildren();
+  for (const e of ENVS) {
+    const n = D.cases.filter(c => c.env === e.id).length;
+    const b = h('button', { type: 'button', 'aria-pressed': String(e.id === E.id), title: e.id }, box, e.label);
+    if (!n) h('span', { class: 'n' }, b, L('未計測', 'no results', '未测量'));
+    b.addEventListener('click', () => {
+      if (e.id === E.id) return;
+      state.env = e.id; useEnv(e.id);
+      if (state.hl !== 'none' && !MODELS.some(m => m.key === state.hl)) state.hl = REF;
+      if (state.family !== 'all' && !FAMILIES.includes(state.family)) state.family = 'all';
+      const u = new URL(location.href); if (u.searchParams.has('env')) { u.searchParams.set('env', e.id); history.replaceState(null, '', u); }
+      save(); refillFilters(); envSwitch(); runs(); draw();
+    });
+  }
+  document.querySelectorAll('.envwrap').forEach(w => { w.hidden = w.dataset.env !== E.id; });
+}
+
+// ------------------------------------------------------------------ filters and drawing
+function filters() {
+  const fam = $('f-family'), hl = $('f-hl'), temp = $('f-temp'), content = $('f-content');
+  const fillHl = () => { hl.replaceChildren(); h('option', { value: 'none' }, hl, L('強調しない', 'none', '不高亮'));
+    for (const m of modelsShown()) h('option', { value: m.key }, hl, m.key + (m.ref ? L('（基準）', ' (reference)', '（基准）') : ''));
+    hl.value = modelsShown().some(m => m.key === state.hl) ? state.hl : 'none'; };
+  const fill = () => {   // the option texts, again when the language changes
+    fam.replaceChildren(); h('option', { value: 'all' }, fam, L(`全 ${MODELS.length} モデル`, `all ${MODELS.length} models`, `全部 ${MODELS.length} 个模型`));
+    for (const f of FAMILIES) h('option', { value: f }, fam, `${f} (${MODELS.filter(m => m.family === f).length})`);
+    content.replaceChildren(); for (const [v, l] of DECODE) h('option', { value: v }, content, L(...l));
+    fam.value = state.family; temp.value = state.temp; content.value = state.content; fillHl();
+  };
+  fill();
+  refillFilters = fill;
+  fam.addEventListener('change', () => { state.family = fam.value; fillHl(); save(); draw(); });
+  hl.addEventListener('change', () => { state.hl = hl.value; save(); draw(); });
+  temp.addEventListener('change', () => { state.temp = temp.value; save(); draw(); });
+  content.addEventListener('change', () => { state.content = content.value; save(); draw(); });
+  addEventListener('langchange', () => { fill(); envSwitch(); runs(); draw(); });
+}
+function draw() {
+  hideTip();
+  tiles(); sCompare(); sDecode(); sPrefillTtft(); sTemp(); sSize(); sDrafter(); sLong(); sDoc(); sCtx(); sStd(); sThink(); sOpts(); sEnv(); sTable();
+}
+envSwitch(); runs(); filters(); draw();
+// the sticky filters' height, for the headings' scroll margin
+const stick = () => { const f = $('filters');
+  document.documentElement.style.setProperty('--stick', (getComputedStyle(f).position === 'sticky' ? f.offsetHeight : 0) + 'px'); };
+stick(); new ResizeObserver(stick).observe($('filters')); addEventListener('resize', stick);
+// a heading click (or Enter on it) goes there as a page link does: #id in the URL, the heading just below the filters
+document.querySelectorAll('main h2[id]').forEach(h2 => {
+  h2.tabIndex = 0;
+  const go = () => { history.pushState(null, '', '#' + h2.id); h2.scrollIntoView(); };
+  h2.addEventListener('click', go); h2.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+});
+// opened with #id: go there again now that the charts have their height
+if (location.hash) document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView();
+let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(draw, 150); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
+new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+})();
+</script>
+</body>
+</html>

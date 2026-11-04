@@ -1,0 +1,585 @@
+以下、単一HTMLファイルで動く「**Minecraft風 3D 箱庭**」を作りました。ブラウザで開くだけで、**ブロックを置く／壊す／種類を変える**ことができます。
+
+```html
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>BOXCRAFT — 3D 箱庭</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --sky:#86C5E8; --grass:#79B84A; --dirt:#8a5a34;
+    --ink:#f2f6ef; --ink-dim:#b7c4b0;
+    --panel:rgba(24,26,30,.74); --panel-line:rgba(255,255,255,.13);
+    --accent:#ffd23f; --accent2:#7fe07a;
+    --shadow:0 10px 30px rgba(0,0,0,.42);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;overflow:hidden;background:#12161d}
+  body{font-family:'VT323',monospace;color:var(--ink);-webkit-font-smoothing:none;cursor:default}
+  #app{position:fixed;inset:0}
+  canvas{display:block}
+  #app.pointer{cursor:none}
+
+  /* ---------- HUD ---------- */
+  #hud{position:fixed;inset:0;z-index:10;pointer-events:none;
+       padding:16px;display:flex;flex-direction:column;justify-content:space-between;
+       transition:opacity .35s ease}
+  #hud.hidden{opacity:0}
+  .mono{font-family:'Press Start 2P',monospace;letter-spacing:.5px}
+
+  .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+  .brand{display:flex;align-items:center;gap:10px;background:var(--panel);
+         border:2px solid var(--panel-line);padding:9px 12px;box-shadow:var(--shadow);
+         border-radius:2px}
+  .logo{width:34px;height:34px;position:relative;flex:0 0 auto;
+        background:linear-gradient(135deg,#8fbf5a,#5c8f3a);
+        border:2px solid #3f5d29;box-shadow:inset 0 3px 0 rgba(255,255,255,.25)}
+  .logo::after{content:"";position:absolute;left:0;right:0;bottom:0;height:42%;
+        background:linear-gradient(#9a6a3c,#6e4a26)}
+  .brand .name{font-family:'Press Start 2P';font-size:15px;color:var(--accent);
+        text-shadow:2px 2px 0 rgba(0,0,0,.45);line-height:1}
+  .brand .sub{font-size:19px;color:var(--ink-dim);margin-top:4px;line-height:1}
+
+  .stats{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+  .chip{display:flex;align-items:center;gap:7px;background:var(--panel);
+        border:2px solid var(--panel-line);padding:6px 10px;border-radius:2px;box-shadow:var(--shadow)}
+  .chip .k{font-size:17px;color:var(--ink-dim)}
+  .chip .v{font-family:'Press Start 2P';font-size:10px;color:var(--ink)}
+  .heart{width:15px;height:15px;position:relative}
+  .heart .fill{position:absolute;inset:0;background:#e64b3a;
+        clip-path:polygon(20% 0,0 25%,0 50%,50% 100%,100% 50%,100% 25%,80% 0,50% 15%)}
+  .heart .empty{position:absolute;inset:0;background:rgba(255,255,255,.12);
+        clip-path:polygon(20% 0,0 25%,0 50%,50% 100%,100% 50%,100% 25%,80% 0,50% 15%)}
+  .dayicon{width:16px;height:16px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ffe38a,#f0a63a)}
+  .dayicon.night{background:radial-gradient(circle at 60% 40%,#dfe6ff,#8b96c9);box-shadow:0 0 8px rgba(180,200,255,.6)}
+
+  /* crosshair */
+  .cross{position:fixed;left:50%;top:50%;width:26px;height:26px;transform:translate(-50%,-50%);
+         z-index:11;transition:transform .12s ease}
+  .cross i{position:absolute;background:rgba(255,255,255,.9);box-shadow:0 0 2px rgba(0,0,0,.7)}
+  .cross .h{left:0;right:0;top:11px;height:4px}
+  .cross .v{top:0;bottom:0;left:11px;width:4px}
+  .cross.hit{transform:translate(-50%,-50%) scale(1.55) rotate(45deg)}
+  .cross.hit i{background:var(--accent)}
+
+  /* hotbar */
+  .hotbar{align-self:center;display:flex;gap:6px;background:rgba(10,12,15,.55);
+          padding:7px;border:2px solid rgba(0,0,0,.5);border-radius:3px;box-shadow:var(--shadow)}
+  .slot{width:58px;height:58px;position:relative;background:rgba(255,255,255,.08);
+        border:2px solid rgba(255,255,255,.14);border-radius:2px;cursor:pointer;
+        transition:transform .12s ease,border-color .12s ease,background .12s ease;pointer-events:auto}
+  .slot .ic{position:absolute;inset:0;background:linear-gradient(135deg,#8fbf5a,#5c8f3a)}
+  .slot .ic::after{content:"";position:absolute;left:0;right:0;bottom:0;height:40%;
+        background:linear-gradient(#9a6a3c,#6e4a26)}
+  .slot .num{position:absolute;top:2px;left:4px;font-family:'Press Start 2P';font-size:8px;color:#fff;opacity:.75}
+  .slot .nm{position:absolute;bottom:-20px;left:50%;transform:translateX(-50%);
+        font-size:15px;color:var(--ink);white-space:nowrap;opacity:0;transition:opacity .15s}
+  .slot:hover .nm{opacity:1}
+  .slot:hover{border-color:rgba(255,255,255,.35)}
+  .slot.sel{transform:scale(1.14) translateY(-3px);border-color:var(--accent);
+        background:rgba(255,210,63,.16);box-shadow:0 6px 16px rgba(0,0,0,.4)}
+  .slot.sel::before{content:"";position:absolute;inset:-6px;border:2px solid var(--accent);border-radius:3px;
+        animation:selPulse 1.4s ease-in-out infinite}
+  @keyframes selPulse{0%,100%{opacity:.9}50%{opacity:.35}}
+
+  .toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%) translateY(10px);
+         background:var(--panel);border:2px solid var(--panel-line);padding:6px 14px;
+         font-size:20px;color:var(--accent);border-radius:2px;opacity:0;transition:.25s;z-index:12;box-shadow:var(--shadow)}
+  .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* controls hint */
+  .hint{position:fixed;left:16px;bottom:16px;z-index:12;background:var(--panel);
+        border:2px solid var(--panel-line);padding:10px 12px;border-radius:2px;box-shadow:var(--shadow);
+        transition:opacity .4s}
+  .hint.hidden{opacity:0;pointer-events:none}
+  .hint h4{font-family:'Press Start 2P';font-size:9px;color:var(--accent);margin-bottom:8px}
+  .hint .row{display:flex;gap:8px;align-items:center;margin:3px 0;font-size:17px;color:var(--ink-dim)}
+  kbd{font-family:'Press Start 2P';font-size:8px;background:rgba(255,255,255,.1);
+      border:1px solid rgba(255,255,255,.2);border-bottom-width:2px;padding:4px 6px;border-radius:3px;color:var(--ink)}
+
+  .menubtn{position:fixed;right:16px;bottom:16px;z-index:12;pointer-events:auto;
+        font-family:'Press Start 2P';font-size:9px;background:var(--panel);color:var(--ink);
+        border:2px solid var(--panel-line);padding:10px 12px;border-radius:2px;cursor:pointer;box-shadow:var(--shadow)}
+  .menubtn:hover{border-color:var(--accent);color:var(--accent)}
+
+  /* ---------- overlays ---------- */
+  .overlay{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;
+        padding:24px;transition:opacity .4s ease}
+  .overlay.hidden{opacity:0;pointer-events:none}
+  .start-bg{position:absolute;inset:0;background:rgba(10,14,20,.55);backdrop-filter:blur(2px)}
+  .scrim{position:absolute;inset:0;background:radial-gradient(120% 120% at 50% 0%,rgba(10,14,20,.25),rgba(6,9,14,.85))}
+
+  .start-card{position:relative;max-width:440px;width:100%;padding:26px 28px;
+        background:var(--panel);border:2px solid var(--panel-line);border-radius:4px;box-shadow:0 24px 60px rgba(0,0,0,.55);
+        animation:rise .5s cubic-bezier(.2,.8,.2,1) both}
+  @keyframes rise{from{transform:translateY(22px);opacity:0}to{transform:translateY(0);opacity:1}}
+  .start-card .eyebrow{font-family:'Press Start 2P';font-size:9px;color:var(--accent2);letter-spacing:2px;margin-bottom:14px}
+  .start-card h1{font-family:'Press Start 2P';font-size:34px;line-height:1;color:var(--accent);
+        text-shadow:3px 3px 0 rgba(0,0,0,.5),0 0 22px rgba(255,210,63,.35);margin-bottom:6px}
+  .start-card .tag{font-size:22px;color:var(--ink-dim);margin-bottom:20px}
+  .ctrl{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;margin-bottom:22px}
+  .ctrl .row{display:flex;gap:8px;align-items:center;font-size:18px;color:var(--ink-dim)}
+  .startbtn{width:100%;font-family:'Press Start 2P';font-size:12px;color:#20260f;
+        background:var(--accent);border:none;border-bottom:4px solid #b8901f;padding:16px;border-radius:3px;
+        cursor:pointer;transition:transform .1s,background .15s;box-shadow:0 8px 20px rgba(255,210,63,.25)}
+  .startbtn:hover{background:#ffe071;transform:translateY(-2px)}
+  .startbtn:active{transform:translateY(2px);border-bottom-width:2px}
+  .tip{margin-top:14px;font-size:16px;color:var(--ink-dim);text-align:center}
+
+  .pause-card{position:relative;background:var(--panel);border:2px solid var(--panel-line);border-radius:4px;
+        padding:28px 34px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.55)}
+  .pause-card h2{font-family:'Press Start 2P';font-size:22px;color:var(--accent);margin-bottom:20px}
+  .pause-card .btns{display:flex;flex-direction:column;gap:10px}
+  .pbtn{font-family:'VT323';font-size:22px;background:rgba(255,255,255,.08);color:var(--ink);
+        border:2px solid var(--panel-line);padding:10px;border-radius:3px;cursor:pointer;transition:.12s}
+  .pbtn:hover{border-color:var(--accent);color:var(--accent);transform:translateX(2px)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div class="top">
+    <div class="brand">
+      <div class="logo"></div>
+      <div>
+        <div class="name mono">BOXCRAFT</div>
+        <div class="sub">3D sandbox · infinite blocks</div>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="chip"><span class="k">置いた</span><span class="v" id="stPlaced">0</span></div>
+      <div class="chip"><span class="k">壊した</span><span class="v" id="stBroken">0</span></div>
+      <div class="chip"><span class="k">高度</span><span class="v" id="stY">0</span></div>
+      <div class="chip"><span class="dayicon" id="dayIcon"></span><span class="v" id="stTime">Day</span></div>
+      <div class="chip"><div class="heart"><div class="fill" id="hFill"></div><div class="empty" id="hEmpty"></div></div></div>
+    </div>
+  </div>
+  <div class="hotbar" id="hotbar"></div>
+</div>
+
+<div class="cross" id="cross"><i class="h"></i><i class="v"></i></div>
+<div class="toast" id="toast"></div>
+
+<div class="hint" id="hint">
+  <h4>CONTROLS</h4>
+  <div class="row"><kbd>W A S D</kbd> 移動</div>
+  <div class="row"><kbd>SPACE</kbd> ジャンプ / <kbd>SHIFT</kbd> 走る</div>
+  <div class="row"><kbd>左クリック</kbd> 壊す · <kbd>右クリック</kbd> 置く</div>
+  <div class="row"><kbd>1-9</kbd> / ホイール 素材選択</div>
+  <div class="row"><kbd>ESC</kbd> メニュー</div>
+</div>
+<button class="menubtn" id="menuBtn">MENU</button>
+
+<!-- Start -->
+<div class="overlay" id="start">
+  <div class="start-bg"></div>
+  <div class="start-card">
+    <div class="eyebrow">Voxel Sandbox</div>
+    <h1>BOXCRAFT</h1>
+    <div class="tag">ブロックを置いて、壊して、自由に組み立てる3D箱庭。</div>
+    <div class="ctrl">
+      <div class="row"><kbd>WASD</kbd> 移動</div>
+      <div class="row"><kbd>SPACE</kbd> ジャンプ</div>
+      <div class="row"><kbd>SHIFT</kbd> 走る</div>
+      <div class="row"><kbd>1-9</kbd> 素材</div>
+      <div class="row"><kbd>左クリック</kbd> 破壊</div>
+      <div class="row"><kbd>右クリック</kbd> 設置</div>
+    </div>
+    <button class="startbtn" id="playBtn">▶ CLICK TO PLAY</button>
+    <div class="tip">※ マウスで視点操作 · ESCで解放</div>
+  </div>
+</div>
+
+<!-- Pause -->
+<div class="overlay hidden" id="pause">
+  <div class="scrim"></div>
+  <div class="pause-card">
+    <h2>PAUSED</h2>
+    <div class="btns">
+      <button class="pbtn" id="resumeBtn">▶ 続ける</button>
+      <button class="pbtn" id="regenBtn">⟳ 世界を再生成</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* =================== 素材定義 =================== */
+const BLOCKS = {
+  grass:{name:'草', color:'#79b84a', top:'#8fbf5a', side:'#9a6a3c', bottom:'#6e4a26'},
+  dirt :{name:'土', color:'#8a5a34', top:'#9a6a3c', side:'#8a5a34', bottom:'#7a5230'},
+  stone:{name:'石', color:'#8a8f98', top:'#9a9fa8', side:'#8a8f98', bottom:'#767b84'},
+  cobble:{name:'石畳', color:'#6f747c', top:'#7c818a', side:'#6a6f77', bottom:'#5c616a'},
+  wood :{name:'木', color:'#6b4a2b', top:'#c39a5c', side:'#7d5a34', bottom:'#c39a5c'},
+  planks:{name:'板', color:'#c19a5f', top:'#c8a066', side:'#b88f52', bottom:'#b88f52'},
+  sand :{name:'砂', color:'#e2d6a2', top:'#e8dcaf', side:'#dccf9a', bottom:'#d0c38e'},
+  glass:{name:'ガラス', color:'#bfe4ff', top:'#cfeeff', side:'#bfe4ff', bottom:'#cfeeff', transparent:true, opacity:0.4},
+  leaves:{name:'葉', color:'#3f7d33', top:'#4c9140', side:'#3f7d33', bottom:'#356a2c'},
+  brick:{name:'レンガ', color:'#a8443a', top:'#b04a3e', side:'#a03f36', bottom:'#8f372f'},
+  gold :{name:'金', color:'#f4c430', top:'#ffd85a', side:'#e6b425', bottom:'#d4a41a'},
+  obsidian:{name:'黒曜石', color:'#241f30', top:'#2c2740', side:'#1f1b2b', bottom:'#181422'},
+};
+const HOTBAR = ['grass','dirt','stone','cobble','wood','planks','sand','glass','brick'];
+const WORLD = 20, R = 40;
+
+/* =================== テクスチャ生成 =================== */
+function makeTex(base, opts={}){
+  const c=document.createElement('canvas'); c.width=c.height=16; const x=c.getContext('2d');
+  x.fillStyle=base; x.fillRect(0,0,16,16);
+  const sh=(hx,hy)=>{for(let i=0;i<12;i++)x.fillRect((hx+((Math.random()*16)|0))&15,(hy+((Math.random()*16)|0))&15,1,1);};
+  const type=opts.type;
+  if(type==='grass_top'){x.fillStyle='#5f8f36';for(let i=0;i<26;i++)x.fillRect((Math.random()*16)|0,(Math.random()*16)|0,1,1);}
+  else if(type==='grass_side'){x.fillStyle='#7a5230';x.fillRect(0,4,16,12);x.fillStyle='#6b4a2b';sh(4,4);x.fillStyle='#8fbf5a';x.fillRect(0,0,16,4);for(let i=0;i<16;i++){x.fillRect(i,0,1,1+((Math.random()*2)|0));}}
+  else if(type==='dirt'){x.fillStyle='#6b4a2b';sh(0,0);x.fillStyle='#9a6a3c';sh(0,0);}
+  else if(type==='stone'){x.fillStyle='#9a9fa8';sh(0,0);x.fillStyle='#72777f';sh(0,0);}
+  else if(type==='cobble'){x.fillStyle='#5c616a';for(let i=0;i<20;i++)x.fillRect((Math.random()*14)|0,(Math.random()*14)|0,2,2);x.fillStyle='#82878f';for(let i=0;i<10;i++)x.fillRect((Math.random()*14)|0,(Math.random()*14)|0,1,1);}
+  else if(type==='wood_side'){x.fillStyle='#5b3f24';for(let y=0;y<16;y+=4){x.fillRect(0,y,16,1);for(let i=0;i<4;i++)x.fillRect((Math.random()*16)|0,y+1+((Math.random()*2)|0),1,1);}}
+  else if(type==='wood_top'){x.strokeStyle='#5b3f24';x.lineWidth=1;[[14],[10],[6],[2]].forEach(([r])=>x.strokeRect(8-r/2,8-r/2,r,r));}
+  else if(type==='planks'){x.fillStyle='#a87f45';for(let y=0;y<16;y+=4)x.fillRect(0,y,16,1);x.fillStyle='#a87f45';for(let i=0;i<6;i++)x.fillRect((Math.random()*16)|0,(Math.random()*16)|0,1,1);}
+  else if(type==='sand'){x.fillStyle='#cfc292';sh(0,0);x.fillStyle='#efe4b8';sh(0,0);}
+  else if(type==='glass'){x.fillStyle='#cfeeff';x.fillRect(0,0,16,16);x.fillStyle='rgba(255,255,255,.55)';x.fillRect(0,0,16,1);x.fillRect(0,15,16,1);x.fillRect(0,0,1,16);x.fillRect(15,0,1,16);}
+  else if(type==='leaves'){x.fillStyle='#2f5e26';for(let i=0;i<40;i++)x.fillRect((Math.random()*16)|0,(Math.random()*16)|0,1,1);x.fillStyle='#57a147';for(let i=0;i<20;i++)x.fillRect((Math.random()*16)|0,(Math.random()*16)|0,1,1);}
+  else if(type==='brick'){x.fillStyle='#8f372f';x.fillRect(0,0,16,16);x.fillStyle='#c8c0b0';for(let y=0;y<16;y+=4)x.fillRect(0,y,16,1);for(let y=0;y<16;y+=4)for(let xx=((y/4)%2?4:0);xx<16;xx+=8)x.fillRect(xx,y,1,4);}
+  else if(type==='gold'){x.fillStyle='#c99b18';sh(0,0);x.fillStyle='#ffe07a';for(let i=0;i<8;i++)x.fillRect((Math.random()*16)|0,(Math.random()*16)|0,2,1);}
+  else if(type==='obsidian'){x.fillStyle='#2c2740';sh(0,0);x.fillStyle='#5b4f7a';for(let i=0;i<6;i++)x.fillRect((Math.random()*16)|0,(Math.random()*16)|0,1,1);}
+  else {x.fillStyle='rgba(0,0,0,.12)';sh(0,0);}
+  const t=new THREE.CanvasTexture(c); t.magFilter=THREE.NearestFilter; t.minFilter=THREE.NearestFilter; return t;
+}
+function blockMats(b){
+  const cfg=BLOCKS[b];
+  const mk=(c,t)=>new THREE.MeshLambertMaterial({map:makeTex(c,{type:t}),transparent:!!cfg.transparent,opacity:cfg.transparent?cfg.opacity:1});
+  return [mk(cfg.side,'side'),mk(cfg.side,'side'),mk(cfg.top,'top'),mk(cfg.bottom,'bottom'),mk(cfg.side,'side'),mk(cfg.side,'side')];
+}
+const MATS={}; for(const b in BLOCKS) MATS[b]=blockMats(b);
+const BOX=new THREE.BoxGeometry(1,1,1);
+const EDGE=new THREE.EdgesGeometry(BOX);
+const OUTLINE=new THREE.LineSegments(EDGE,new THREE.LineBasicMaterial({color:0x000000,transparent:true,opacity:.45,depthTest:false}));
+const SELECT=new THREE.LineSegments(EDGE,new THREE.LineBasicMaterial({color:0xffd23f,linewidth:2,transparent:true,opacity:.95,depthTest:false}));
+SELECT.renderOrder=999;
+
+/* =================== シーン =================== */
+let scene, camera, renderer, sun, hemi, skyMat, sunMesh, moonMesh, stars;
+let fog, world=new Map();
+
+const KEY=(x,y,z)=>x+','+y+','+z;
+const getBlock=(x,y,z)=>world.get(KEY(x,y,z));
+function place(x,y,z,type){const k=KEY(x,y,z);if(world.has(k))return;const m=new THREE.Mesh(BOX,MATS[type]);m.position.set(x,y,z);m.userData={x,y,z,type};scene.add(m);world.set(k,m);}
+function removeBlock(x,y,z){const k=KEY(x,y,z);const m=world.get(k);if(!m)return;scene.remove(m);world.delete(k);return m;}
+
+function makeSky(){
+  const c=document.createElement('canvas');c.width=c.height=512;const g=c.getContext('2d');
+  const grd=g.createLinearGradient(0,0,0,512);
+  grd.addColorStop(0,'#5fa6ea');grd.addColorStop(.55,'#86c5e8');grd.addColorStop(1,'#d3ecff');
+  g.fillStyle=grd;g.fillRect(0,0,512,512);
+  const t=new THREE.CanvasTexture(c); return t;
+}
+function initThree(){
+  scene=new THREE.Scene();
+  const tex=makeSky();
+  skyMat=new THREE.MeshBasicMaterial({map:tex,side:THREE.BackSide,depthWrite:false});
+  const sky=new THREE.Mesh(new THREE.SphereGeometry(280,24,16),skyMat); sky.renderOrder=-1; scene.add(sky);
+
+  sunMesh=new THREE.Mesh(new THREE.SphereGeometry(9,16,16),new THREE.MeshBasicMaterial({color:0xffe9a8}));
+  moonMesh=new THREE.Mesh(new THREE.SphereGeometry(6,16,16),new THREE.MeshBasicMaterial({color:0xdfe6ff}));
+  scene.add(sunMesh,moonMesh);
+  const starGeo=new THREE.BufferGeometry();const sp=[];
+  for(let i=0;i<220;i++){const v=new THREE.Vector3().randomDirection().multiplyScalar(260);sp.push(v.x,v.y,v.z);}
+  starGeo.setAttribute('position',new THREE.Float32BufferAttribute(sp,3));
+  stars=new THREE.Points(starGeo,new THREE.PointsMaterial({color:0xffffff,size:1.3,sizeAttenuation:false,transparent:true,opacity:0}));
+  scene.add(stars);
+
+  fog=new THREE.Fog(0x86c5e8,20,92); scene.fog=fog;
+
+  sun=new THREE.DirectionalLight(0xffffff,1); sun.position.set(60,80,30); scene.add(sun);
+  hemi=new THREE.HemisphereLight(0xbfe6ff,0x6b5a3a,.85); scene.add(hemi);
+  scene.add(new THREE.AmbientLight(0xffffff,.28));
+
+  camera=new THREE.PerspectiveCamera(72,innerWidth/innerHeight,.1,600);
+  camera.rotation.order='YXZ';
+  scene.add(camera);
+
+  renderer=new THREE.WebGLRenderer({antialias:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setSize(innerWidth,innerHeight);
+  document.getElementById('app').appendChild(renderer.domElement);
+
+  scene.add(OUTLINE); scene.add(SELECT);
+  OUTLINE.visible=false; SELECT.visible=false;
+
+  window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+}
+
+/* =================== 地形生成 =================== */
+function hash(x,z){let h=(x*374761393+z*668265263)>>>0;h=(h^(h>>13))>>>0;h=(h*1274126177)>>>0;h=(h^(h>>16))>>>0;return h/4294967295;}
+function terrainH(x,z){const a=Math.sin(x*0.25)*1.4+Math.cos(z*0.25)*1.4;const b=Math.sin((x+z)*0.12)*1.0;return Math.max(0,Math.round(1.5+a+b));}
+function buildTerrain(){
+  for(let x=-WORLD;x<=WORLD;x++)for(let z=-WORLD;z<=WORLD;z++){
+    const h=terrainH(x,z);
+    for(let y=0;y<=h;y++){
+      let t='stone'; if(y===h)t='grass'; else if(y>=h-2)t='dirt';
+      place(x,y,z,t);
+    }
+  }
+  // 木
+  [[-4,-2],[3,4],[6,-5],[-7,3]].forEach(([tx,tz])=>{
+    const g=terrainH(tx,tz);
+    for(let y=g+1;y<=g+4;y++)place(tx,y,tz,'wood');
+    for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)for(let dy=0;dy<=2;dy++){
+      if(Math.abs(dx)+Math.abs(dz)+dy<=3 && !(dx===0&&dz===0&&dy===0)){
+        const yy=g+4+dy; if(dx===0&&dz===0&&dy<2)continue;
+        if(!getBlock(tx+dx,yy,tz+dz))place(tx+dx,yy,tz+dz,'leaves');
+      }
+    }
+    for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++){const yy=g+3;if(!getBlock(tx+dx,yy,tz+dz))place(tx+dx,yy,tz+dz,'leaves');}
+  });
+  // 小屋
+  for(let x=-1;x<=1;x++)for(let z=-1;z<=1;z++){
+    place(x,2,z,'wood'); place(x,3,z,'wood'); place(x,4,z,'planks');
+  }
+  for(let x=-1;x<=1;x++)for(let z=-1;z<=1;z++) if(x===-1||z===-1||x===1||z===1) place(x,4,z,'planks');
+  place(-1,2,0,'glass'); // 窓
+  removeBlock(0,2,1); place(0,2,1,'planks'); // 入口は開ける
+  removeBlock(0,2,1);
+}
+
+/* =================== 物理 / 操作 =================== */
+let player;
+function initPlayer(){
+  player={pos:new THREE.Vector3(0,terrainH(0,0)+3,4),vel:new THREE.Vector3(),onGround:false,
+          height:1.75,width:0.6,eye:1.62,yaw:0,pitch:0};
+}
+const keys={};
+let locked=false, started=false, paused=false;
+let selected=0, placed=0, broken=0;
+const ray=new THREE.Raycaster(); ray.far=7;
+let target=null;
+
+function occupied(x,y,z){
+  const p=player;
+  if(Math.abs(p.pos.x-x)>0.8||Math.abs(p.pos.z-z)>0.8)return false;
+  if(p.pos.y>=y-0.9 && p.pos.y-1.75<=y+0.9)return true;
+  return false;
+}
+function collides(p){
+  const hw=p.width/2;
+  const minx=Math.floor(p.pos.x-hw), maxx=Math.floor(p.pos.x+hw);
+  const miny=Math.floor(p.pos.y-1.74), maxy=Math.floor(p.pos.y);
+  const minz=Math.floor(p.pos.z-hw), maxz=Math.floor(p.pos.z+hw);
+  for(let x=minx;x<=maxx;x++)for(let y=miny;y<=maxy;y++)for(let z=minz;z<=maxz;z++)if(getBlock(x,y,z))return true;
+  return false;
+}
+function moveAxis(axis,delta){
+  player.pos[axis]+=delta;
+  if(collides(player)){
+    player.pos[axis]-=delta;
+    if(axis==='y'){ if(delta<0){player.onGround=true;player.vel.y=0;} else player.vel.y=0; }
+    return true;
+  }
+  return false;
+}
+function updatePhysics(dt){
+  const p=player;
+  let fx=Math.sin(p.yaw),fz=Math.cos(p.yaw);
+  let rx=Math.cos(p.yaw),rz=-Math.sin(p.yaw);
+  let ix=0,iz=0;
+  if(keys['KeyW']){ix-=fx;iz-=fz;} if(keys['KeyS']){ix+=fx;iz+=fz;}
+  if(keys['KeyA']){ix+=rx;iz+=rz;} if(keys['KeyD']){ix-=rx;iz-=rz;}
+  const len=Math.hypot(ix,iz); const speed=keys['ShiftLeft']?8:5;
+  if(len>0){ix=ix/len*speed;iz=iz/len*speed;}
+  p.vel.x=ix; p.vel.z=iz;
+  p.vel.y-=24*dt; if(p.vel.y<-30)p.vel.y=-30;
+  if(p.onGround && keys['Space']){p.vel.y=8.2;p.onGround=false;}
+  p.onGround=false;
+  moveAxis('y',p.vel.y*dt);
+  moveAxis('x',p.vel.x*dt);
+  moveAxis('z',p.vel.z*dt);
+  if(p.pos.y<-14){p.pos.set(0,terrainH(0,0)+3,4);p.vel.set(0,0,0);}
+  camera.position.set(p.pos.x,p.pos.y-p.eye+p.height-p.eye+p.eye, p.pos.z); // eye
+  camera.position.set(p.pos.x, p.pos.y-0.13, p.pos.z);
+  camera.rotation.set(p.pitch,p.yaw,0);
+}
+
+/* =================== 破壊 / 設置 =================== */
+let particles=[];
+function burst(pos,color){
+  const geo=new THREE.BoxGeometry(.16,.16,.16);
+  for(let i=0;i<10;i++){
+    const m=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color}));
+    m.position.set(pos.x,pos.y,pos.z);
+    m.userData.v=new THREE.Vector3((Math.random()-.5)*4,Math.random()*4+1,(Math.random()-.5)*4);
+    m.userData.life=0.7; scene.add(m); particles.push(m);
+  }
+}
+function updateParticles(dt){
+  for(let i=particles.length-1;i>=0;i--){
+    const m=particles[i]; m.userData.v.y-=14*dt;
+    m.position.addScaledVector(m.userData.v,dt); m.userData.life-=dt;
+    m.scale.setScalar(Math.max(0,m.userData.life/0.7));
+    if(m.userData.life<=0){scene.remove(m);particles.splice(i,1);}
+  }
+}
+function breakBlock(){
+  if(!target)return;
+  const b=target.block, p=b.userData, m=removeBlock(p.x,p.y,p.z);
+  if(m){burst({x:p.x,y:p.y,z:p.z},BLOCKS[p.type].color);broken++;updateStats();flashCross();}
+}
+function placeBlock(){
+  if(!target)return;
+  const face=target.face;
+  const nx=target.point.x+face.normal.x, ny=target.point.y+face.normal.y, nz=target.point.z+face.normal.z;
+  if(occupied(nx,ny,nz))return;
+  place(nx,ny,nz,HOTBAR[selected]); placed++; updateStats();
+}
+function flashCross(){const c=document.getElementById('cross');c.classList.add('hit');setTimeout(()=>c.classList.remove('hit'),110);}
+
+/* =================== 視点 / 入力 =================== */
+function lock(){document.getElementById('app').requestPointerLock();}
+document.addEventListener('pointerlockchange',()=>{
+  locked=(document.pointerLockElement===document.getElementById('app'));
+  document.getElementById('app').classList.toggle('pointer',locked);
+  if(!locked && started){showPause();}
+});
+document.addEventListener('mousemove',e=>{
+  if(!locked)return;
+  player.yaw-=e.movementX*0.0022;
+  player.pitch-=e.movementY*0.0022;
+  player.pitch=Math.max(-1.55,Math.min(1.55,player.pitch));
+});
+document.addEventListener('mousedown',e=>{
+  if(!locked)return;
+  if(e.button===0)breakBlock();
+  else if(e.button===2)placeBlock();
+});
+document.addEventListener('contextmenu',e=>e.preventDefault());
+document.addEventListener('wheel',e=>{
+  if(!locked)return;
+  setSelected((selected+(e.deltaY>0?1:-1)+HOTBAR.length)%HOTBAR.length);
+},{passive:true});
+document.addEventListener('keydown',e=>{
+  keys[e.code]=true;
+  if(e.code==='Space'&&locked)e.preventDefault();
+  if(e.code==='Escape')togglePause();
+  if(/^Digit[1-9]$/.test(e.code)){const n=+e.code.slice(5)-1;if(n<HOTBAR.length)setSelected(n);}
+});
+document.addEventListener('keyup',e=>{keys[e.code]=false;});
+
+/* =================== UI =================== */
+function buildHotbar(){
+  const hb=document.getElementById('hotbar'); hb.innerHTML='';
+  HOTBAR.forEach((b,i)=>{
+    const s=document.createElement('div'); s.className='slot'; s.dataset.i=i;
+    s.innerHTML=`<div class="ic" style="background:linear-gradient(135deg,${BLOCKS[b].top},${BLOCKS[b].side})"></div><div class="num">${i+1}</div><div class="nm">${BLOCKS[b].name}</div>`;
+    s.addEventListener('click',()=>{setSelected(i);});
+    hb.appendChild(s);
+  });
+  setSelected(0);
+}
+function setSelected(i){
+  selected=i;
+  document.querySelectorAll('.slot').forEach((s,j)=>s.classList.toggle('sel',j===i));
+  toast(BLOCKS[HOTBAR[i]].name);
+}
+let toastTimer;
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('on');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('on'),1200);}
+function updateStats(){document.getElementById('stPlaced').textContent=placed;document.getElementById('stBroken').textContent=broken;}
+function updateY(){document.getElementById('stY').textContent=Math.round(player.pos.y);}
+
+/* =================== 昼夜 =================== */
+let dayAngle=0.6;
+const DAY_LEN=110;
+function updateDay(dt){
+  dayAngle=(dayAngle+dt/DAY_LEN*Math.PI*2)%(Math.PI*2);
+  const h=Math.sin(dayAngle);
+  const day=Math.max(0,Math.min(1,h*1.2+0.35));
+  sun.intensity=0.15+day*0.85;
+  hemi.intensity=0.35+day*0.55;
+  const dir=new THREE.Vector3(Math.cos(dayAngle),Math.sin(dayAngle),0.35).normalize();
+  sun.position.copy(dir).multiplyScalar(90);
+  sunMesh.position.copy(dir).multiplyScalar(200);
+  moonMesh.position.copy(dir).multiplyScalar(-200);
+  sunMesh.visible=h>-0.1; moonMesh.visible=h<0.35;
+  stars.material.opacity=Math.max(0,-h*0.9+0.05);
+  const dayC=new THREE.Color('#86c5e8'), nightC=new THREE.Color('#0b1530'), duskC=new THREE.Color('#e58a4a');
+  let col;
+  if(h>0.25)col=dayC;
+  else if(h>-0.05)col=duskC.clone().lerp(dayC,(h+0.05)/0.3);
+  else col=nightC;
+  scene.background=col; skyMat.color.copy(col); fog.color.copy(col);
+  const isDay=h>0;
+  const di=document.getElementById('dayIcon'); di.classList.toggle('night',!isDay);
+  document.getElementById('stTime').textContent=isDay?'Day':'Night';
+  const fill=document.getElementById('hFill'), empty=document.getElementById('hEmpty');
+  fill.style.transform=`scaleX(${day})`; fill.style.transformOrigin='left';
+}
+
+/* =================== ループ =================== */
+let last=performance.now();
+function loop(now){
+  const dt=Math.min(0.05,(now-last)/1000); last=now;
+  if(started && !paused){
+    updatePhysics(dt);
+    ray.setFromCamera({x:0,y:0},camera);
+    target=ray.intersectObjects([...world.values()],false)[0]||null;
+    if(target&&target.block){
+      const p=target.block.userData;
+      SELECT.position.set(p.x,p.y,p.z); SELECT.visible=true;
+      OUTLINE.position.set(p.x,p.y,p.z); OUTLINE.visible=true;
+    }else{SELECT.visible=false;OUTLINE.visible=false;}
+    updateParticles(dt);
+    updateDay(dt);
+    updateY();
+  }
+  renderer.render(scene,camera);
+  requestAnimationFrame(loop);
+}
+
+/* =================== ステート =================== */
+function showPause(){paused=true;document.getElementById('pause').classList.remove('hidden');document.getElementById('hud').classList.add('hidden');}
+function hidePause(){paused=false;document.getElementById('pause').classList.add('hidden');document.getElementById('hud').classList.remove('hidden');}
+function togglePause(){if(!started)return;if(paused)startGame();else{hidePause();document.getElementById('app').requestPointerLock();}}
+function startGame(){
+  if(!paused){document.getElementById('start').classList.add('hidden');}
+  document.getElementById('hud').classList.remove('hidden');
+  document.getElementById('hint').classList.remove('hidden');
+  hidePause();
+  started=true;
+  renderer.domElement.requestPointerLock();
+}
+function regenerate(){world.forEach(m=>scene.remove(m));world.clear();buildTerrain();player.pos.set(0,terrainH(0,0)+3,4);player.vel.set(0,0,0);placed=broken=0;updateStats();}
+
+document.getElementById('playBtn').addEventListener('click',startGame);
+document.getElementById('menuBtn').addEventListener('click',togglePause);
+document.getElementById('resumeBtn').addEventListener('click',startGame);
+document.getElementById('regenBtn').addEventListener('click',()=>{regenerate();startGame();});
+
+/* =================== 起動 =================== */
+initThree();
+buildTerrain();
+initPlayer();
+buildHotbar();
+updateStats();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
+```
+
+## 遊び方
+- **WASD** で移動、**SPACE** ジャンプ、**SHIFT** 走る、**マウス** で視点
+- **左クリック** でブロック破壊（破片が飛び散ります）、**右クリック** で設置
+- **1〜9 / ホイール / ホットバー** で素材を切り替え（草・土・石・板・ガラス・レンガ・金など11種）
+- **ESC** でメニュー（世界を再生成もできます）
+
+## 仕込んだ演出
+- 起伏のある地形と木・小屋を自動生成、**昼夜サイクル**（太陽/月/星空/黄昏の空と霧が連動）
+- 十字照準に合わせた**ブロックの輪郭表示**、破壊時の**パーティクル**、素材選択の**ホバー/拡大アニメ**
+- 重力と当たり判定（ブロックにめり込まず、足元に立って壊せる）、ガラスは半透明
+
+ファイル名を `boxcraft.html` にしてブラウザで開けばすぐ動きます。素材を増やしたり、水や雪などのブロックを足したければ `BLOCKS` と `makeTex` に項目を足すだけで拡張できます。

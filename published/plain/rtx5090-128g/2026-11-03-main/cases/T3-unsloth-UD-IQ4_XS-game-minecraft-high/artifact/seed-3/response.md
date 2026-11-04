@@ -1,0 +1,947 @@
+以下は **ブラウザだけで動く「マイクラ風 3D 箱庭ゲーム」の単一HTMLファイル**です。  
+`three.js` を使うので、PCブラウザ（Chrome/Edge/Firefox）で開いてください。スマホでも動きますが、操作性はPC向けです。
+
+## 特徴
+- 3Dボクセル地形
+- WASD移動 / マウス視点 / Spaceジャンプ
+- 左クリックでブロック破壊
+- 右クリックでブロック設置
+- 数字キー `1〜8` でブロック切替
+- 木や葉、砂、ガラスなども設置可能
+- 落下処理・衝突判定あり
+- 単一ファイルで完結
+
+---
+
+## 使い方
+1. 下のコードを全部コピー  
+2. `minecraft-like.html` のような名前で保存  
+3. そのHTMLをブラウザで開く  
+4. 画面をクリックしてゲーム開始
+
+---
+
+## 完全コード
+
+```html
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>マイクラ風 3D 箱庭</title>
+  <style>
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #87ceeb;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      user-select: none;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    #overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      background: linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.55));
+      color: #fff;
+      text-align: center;
+      z-index: 20;
+      cursor: pointer;
+    }
+
+    #overlay h1 {
+      font-size: 2rem;
+      margin: 0 0 .5rem;
+      text-shadow: 0 2px 10px rgba(0,0,0,.7);
+    }
+
+    #overlay p {
+      margin: .25rem 0;
+      opacity: .95;
+    }
+
+    #ui {
+      position: fixed;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      pointer-events: none;
+      z-index: 10;
+      color: #fff;
+      text-shadow: 0 1px 4px rgba(0,0,0,.8);
+    }
+
+    #hotbar {
+      display: flex;
+      gap: 6px;
+      pointer-events: auto;
+    }
+
+    .slot {
+      width: 46px;
+      height: 46px;
+      border: 2px solid rgba(255,255,255,.55);
+      border-radius: 6px;
+      color: #fff;
+      font-weight: 700;
+      font-size: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.25);
+      cursor: pointer;
+      opacity: .85;
+    }
+
+    .slot.selected {
+      border-color: #fff;
+      outline: 3px solid #fff;
+      opacity: 1;
+      transform: scale(1.06);
+    }
+
+    #info {
+      max-width: 60vw;
+      opacity: .8;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    #crosshair {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      width: 24px;
+      height: 24px;
+      transform: translate(-50%, -50%);
+      color: #fff;
+      mix-blend-mode: difference;
+      font-size: 28px;
+      line-height: 24px;
+      text-align: center;
+      z-index: 9;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="overlay">
+    <h1>マイクラ風 3D 箱庭</h1>
+    <p>クリックしてゲーム開始</p>
+    <p>PC推奨（マウス＋キーボード）</p>
+  </div>
+
+  <div id="crosshair">+</div>
+
+  <div id="ui">
+    <div id="info"></div>
+    <div id="hotbar"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script>
+    (() => {
+      if (typeof THREE === "undefined") {
+        document.getElementById("overlay").innerHTML =
+          "<h1>エラー</h1><p>Three.js を読み込めませんでした。<br>インターネット接続を確認してください。</p>";
+        return;
+      }
+
+      const overlay = document.getElementById("overlay");
+      const info = document.getElementById("info");
+      const hotbar = document.getElementById("hotbar");
+
+      info.innerHTML =
+        "WASD:移動 / Space:ジャンプ / Shift:走る<br>" +
+        "左クリック:破壊 / 右クリック:設置<br>" +
+        "1〜8:ブロック切替 / R:リスポーン";
+
+      // ----------------------------------------
+      // Renderer / Scene / Camera
+      // ----------------------------------------
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      document.body.appendChild(renderer.domElement);
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x87ceeb);
+      scene.fog = new THREE.Fog(0x87ceeb, 45, 110);
+
+      const camera = new THREE.PerspectiveCamera(
+        75,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        500
+      );
+      camera.rotation.order = "YXZ";
+
+      scene.add(new THREE.AmbientLight(0xffffff, 0.68));
+      const sun = new THREE.DirectionalLight(0xffffff, 0.82);
+      sun.position.set(50, 100, 30);
+      scene.add(sun);
+
+      // ----------------------------------------
+      // Block Types
+      // ----------------------------------------
+      const BLOCK_TYPES = {
+        1: { name: "草", color: "#69c23f", kind: "grass" },
+        2: { name: "土", color: "#8a5a2e", kind: "dirt" },
+        3: { name: "石", color: "#9b9b9b", kind: "stone" },
+        4: { name: "砂", color: "#e4d59e", kind: "sand" },
+        5: { name: "木", color: "#7b5230", kind: "wood" },
+        6: { name: "葉", color: "#3d8f3f", kind: "leaves" },
+        7: { name: "ガラス", color: "#aee4ff", kind: "glass", transparent: true, opacity: 0.55 },
+        8: { name: "レンガ", color: "#b45446", kind: "brick" },
+      };
+
+      const hotbarOrder = [1, 2, 3, 4, 5, 6, 7, 8];
+      let selectedType = 1;
+
+      // ----------------------------------------
+      // Texture / Material
+      // ----------------------------------------
+      function makeCanvasTexture(kind, base) {
+        const c = document.createElement("canvas");
+        c.width = 16;
+        c.height = 16;
+        const ctx = c.getContext("2d");
+
+        ctx.fillStyle = base;
+        ctx.fillRect(0, 0, 16, 16);
+
+        const px = (x, y, w, h, color) => {
+          ctx.fillStyle = color;
+          ctx.fillRect(x, y, w, h);
+        };
+        const rand = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
+
+        if (kind === "grass") {
+          for (let i = 0; i < 60; i++) px(rand(0, 15), rand(0, 15), 1, 1, "rgba(0,60,0,.16)");
+          for (let i = 0; i < 30; i++) px(rand(0, 15), rand(0, 15), 1, 1, "rgba(255,255,255,.16)");
+        } else if (kind === "dirt") {
+          for (let i = 0; i < 50; i++) px(rand(0, 15), rand(0, 15), 1, 1, "rgba(0,0,0,.12)");
+          for (let i = 0; i < 30; i++) px(rand(0, 15), rand(0, 15), 1, 1, "rgba(255,255,255,.10)");
+        } else if (kind === "stone") {
+          for (let i = 0; i < 55; i++) px(rand(0, 15), rand(0, 15), 1, 1, "rgba(0,0,0,.14)");
+          for (let i = 0; i < 35; i++) px(rand(0, 15), rand(0, 15), 1, 1, "rgba(255,255,255,.14)");
+        } else if (kind === "sand") {
+          for (let i = 0; i < 40; i++) px(rand(0, 15), rand(0, 15), 1, 1, "rgba(0,0,0,.06)");
+        } else if (kind === "wood") {
+          for (let x = 1; x < 16; x += 5) px(x, 0, 2, 16, "rgba(0,0,0,.16)");
+          for (let i = 0; i < 25; i++) px(rand(0, 15), rand(0, 15), 1, 1, "rgba(0,0,0,.10)");
+        } else if (kind === "leaves") {
+          for (let i = 0; i < 80; i++) px(rand(0, 15), rand(0, 15), 1, 1, "rgba(0,40,0,.22)");
+          for (let i = 0; i < 25; i++) px(rand(0, 15), rand(0, 15), 1, 1, "rgba(255,255,255,.08)");
+        } else if (kind === "glass") {
+          px(0, 0, 16, 1, "rgba(255,255,255,.55)");
+          px(0, 15, 16, 1, "rgba(255,255,255,.45)");
+          px(0, 0, 1, 16, "rgba(255,255,255,.45)");
+          px(15, 0, 1, 16, "rgba(255,255,255,.45)");
+        } else if (kind === "brick") {
+          for (let y = 2; y < 16; y += 5) {
+            px(0, y, 16, 1, "rgba(255,235,200,.55)");
+          }
+          for (let i = 0; i < 35; i++) px(rand(0, 15), rand(0, 15), 1, 1, "rgba(0,0,0,.10)");
+        }
+
+        const tex = new THREE.CanvasTexture(c);
+        tex.magFilter = THREE.NearestFilter;
+        tex.minFilter = THREE.NearestFilter;
+        return tex;
+      }
+
+      const materials = {};
+      for (const type of Object.keys(BLOCK_TYPES)) {
+        const t = Number(type);
+        const cfg = BLOCK_TYPES[t];
+        const tex = makeCanvasTexture(cfg.kind, cfg.color);
+        materials[t] = new THREE.MeshLambertMaterial({
+          map: tex,
+          transparent: cfg.transparent === true,
+          opacity: cfg.opacity ?? 1,
+        });
+      }
+
+      // ----------------------------------------
+      // World data
+      // ----------------------------------------
+      const world = new Map(); // key string -> block type
+
+      function key(x, y, z) {
+        return `${x},${y},${z}`;
+      }
+
+      function getBlock(x, y, z) {
+        return world.get(key(x, y, z)) || 0;
+      }
+
+      function setBlock(x, y, z, type) {
+        const k = key(x, y, z);
+        if (type === 0) world.delete(k);
+        else world.set(k, type);
+      }
+
+      function isSolid(x, y, z) {
+        return getBlock(x, y, z) !== 0;
+      }
+
+      // ----------------------------------------
+      // Simple noise
+      // ----------------------------------------
+      function fract(x) {
+        return x - Math.floor(x);
+      }
+
+      function hash2(x, z) {
+        const n = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
+        return fract(n);
+      }
+
+      function smoothNoise(x, z) {
+        const xi = Math.floor(x);
+        const zi = Math.floor(z);
+        const xf = x - xi;
+        const zf = z - zi;
+
+        const a = hash2(xi, zi);
+        const b = hash2(xi + 1, zi);
+        const c = hash2(xi, zi + 1);
+        const d = hash2(xi + 1, zi + 1);
+
+        const u = xf * xf * (3 - 2 * xf);
+        const v = zf * zf * (3 - 2 * zf);
+
+        return a * (1 - u) * (1 - v) +
+               b * u * (1 - v) +
+               c * (1 - u) * v +
+               d * u * v;
+      }
+
+      function fbm(x, z) {
+        return (
+          smoothNoise(x, z) * 0.5 +
+          smoothNoise(x * 2, z * 2) * 0.3 +
+          smoothNoise(x * 4, z * 4) * 0.2
+        );
+      }
+
+      // ----------------------------------------
+      // Generate terrain
+      // ----------------------------------------
+      const WORLD_R = 34; // 半径: x,z in [-R, R)
+
+      function placeTree(x, y, z) {
+        const trunk = 3 + Math.floor(hash2(x + 0.1, z + 0.7) * 3);
+
+        for (let i = 0; i < trunk; i++) {
+          setBlock(x, y + i, z, 5);
+        }
+
+        const top = y + trunk - 1;
+
+        for (let dy = -2; dy <= 1; dy++) {
+          for (let dx = -2; dx <= 2; dx++) {
+            for (let dz = -2; dz <= 2; dz++) {
+              if (dy === 1 && !(Math.abs(dx) <= 1 && Math.abs(dz) <= 1)) continue;
+              if (dy === 0 && Math.abs(dx) === 2 && Math.abs(dz) === 2) continue;
+              if (dy === -1 && Math.abs(dx) === 2 && Math.abs(dz) === 2) continue;
+
+              const bx = x + dx;
+              const by = top + dy;
+              const bz = z + dz;
+
+              if (getBlock(bx, by, bz) === 0) {
+                setBlock(bx, by, bz, 6);
+              }
+            }
+          }
+        }
+
+        setBlock(x, top + 1, z, 6);
+      }
+
+      for (let x = -WORLD_R; x < WORLD_R; x++) {
+        for (let z = -WORLD_R; z < WORLD_R; z++) {
+          const hRaw =
+            5 +
+            6 * fbm(x / 32, z / 32) +
+            2.5 * fbm(x / 12, z / 12);
+
+          let h = Math.max(1, Math.floor(hRaw));
+          if (h > 18) h = 18;
+
+          const topType = h <= 3 ? 4 : 1; // sand / grass
+
+          for (let y = 0; y <= h; y++) {
+            let t = 3;
+
+            if (y === 0) {
+              t = 3;
+            } else if (y === h) {
+              t = topType;
+            } else if (y > h - 4) {
+              t = 2;
+            } else {
+              t = 3;
+            }
+
+            if (topType === 4 && y === h - 1) {
+              t = 4;
+            }
+
+            setBlock(x, y, z, t);
+          }
+
+          if (topType === 1 && h > 3) {
+            const r = hash2(x * 7.31 + 12.987, z * 4.123 + 8.543);
+            if (r < 0.014) {
+              placeTree(x, h + 1, z);
+            }
+          }
+        }
+      }
+
+      // ----------------------------------------
+      // Instanced rendering
+      // ----------------------------------------
+      const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+      const instanced = {};
+      const capacities = {};
+      const matrix = new THREE.Matrix4();
+
+      function rebuildVoxels() {
+        const counts = {};
+        for (const type of world.values()) {
+          counts[type] = (counts[type] || 0) + 1;
+        }
+
+        for (const type of Object.keys(BLOCK_TYPES)) {
+          const t = Number(type);
+          const count = counts[t] || 0;
+          let mesh = instanced[t];
+
+          if (!mesh) {
+            const capacity = Math.max(1024, Math.ceil(count * 1.6));
+            capacities[t] = capacity;
+            mesh = new THREE.InstancedMesh(boxGeo, materials[t], capacity);
+            mesh.frustumCulled = false;
+            mesh.count = 0;
+            scene.add(mesh);
+            instanced[t] = mesh;
+          }
+
+          if (capacities[t] < count) {
+            scene.remove(mesh);
+            mesh.dispose();
+
+            const capacity = Math.max(1024, Math.ceil(count * 1.6));
+            capacities[t] = capacity;
+            mesh = new THREE.InstancedMesh(boxGeo, materials[t], capacity);
+            mesh.frustumCulled = false;
+            mesh.count = 0;
+            scene.add(mesh);
+            instanced[t] = mesh;
+          }
+        }
+
+        const idx = {};
+
+        for (const [k, type] of world.entries()) {
+          const parts = k.split(",");
+          const x = Number(parts[0]);
+          const y = Number(parts[1]);
+          const z = Number(parts[2]);
+
+          const mesh = instanced[type];
+          if (!mesh) continue;
+
+          const i = idx[type] === undefined ? 0 : idx[type];
+          matrix.setPosition(x + 0.5, y + 0.5, z + 0.5);
+          mesh.setMatrixAt(i, matrix);
+          idx[type] = i + 1;
+        }
+
+        for (const type of Object.keys(BLOCK_TYPES)) {
+          const t = Number(type);
+          const mesh = instanced[t];
+          if (!mesh) continue;
+          mesh.count = idx[t] || 0;
+          mesh.instanceMatrix.needsUpdate = true;
+        }
+      }
+
+      rebuildVoxels();
+
+      // ----------------------------------------
+      // Highlight selected block
+      // ----------------------------------------
+      const highlight = new THREE.LineSegments(
+        new THREE.EdgesGeometry(boxGeo),
+        new THREE.LineBasicMaterial({ color: 0x000000 })
+      );
+      highlight.scale.set(1.003, 1.003, 1.003);
+      highlight.visible = false;
+      scene.add(highlight);
+
+      // ----------------------------------------
+      // Player
+      // ----------------------------------------
+      const player = {
+        pos: new THREE.Vector3(0, 40, 0),
+        vel: new THREE.Vector3(0, 0, 0),
+        yaw: 0,
+        pitch: 0,
+        onGround: false,
+      };
+
+      function getTopY(x, z) {
+        for (let y = 80; y >= 0; y--) {
+          if (isSolid(x, y, z)) return y;
+        }
+        return 0;
+      }
+
+      player.pos.set(0, getTopY(0, 0) + 1.01, 0);
+
+      function respawn() {
+        player.pos.set(0, getTopY(0, 0) + 1.01, 0);
+        player.vel.set(0, 0, 0);
+        player.onGround = false;
+      }
+
+      // ----------------------------------------
+      // Hotbar
+      // ----------------------------------------
+      for (let i = 0; i < hotbarOrder.length; i++) {
+        const type = hotbarOrder[i];
+        const btn = document.createElement("button");
+        btn.className = "slot";
+        btn.dataset.type = String(type);
+        btn.textContent = String(i + 1);
+        btn.title = BLOCK_TYPES[type].name;
+        btn.style.background = BLOCK_TYPES[type].color;
+        btn.addEventListener("click", () => {
+          selectedType = type;
+          updateHotbar();
+        });
+        hotbar.appendChild(btn);
+      }
+
+      function updateHotbar() {
+        [...hotbar.children].forEach((el) => {
+          el.classList.toggle("selected", Number(el.dataset.type) === selectedType);
+        });
+      }
+
+      updateHotbar();
+
+      // ----------------------------------------
+      // Input
+      // ----------------------------------------
+      const keys = {};
+
+      function isLocked() {
+        return document.pointerLockElement === renderer.domElement;
+      }
+
+      window.addEventListener("keydown", (e) => {
+        keys[e.code] = true;
+
+        if (e.code.startsWith("Digit")) {
+          const n = parseInt(e.code.slice(5), 10);
+          if (n >= 1 && n <= hotbarOrder.length) {
+            selectedType = hotbarOrder[n - 1];
+            updateHotbar();
+          }
+        }
+
+        if (e.code === "KeyR") {
+          respawn();
+        }
+
+        if (e.code === "Space") {
+          e.preventDefault();
+        }
+      });
+
+      window.addEventListener("keyup", (e) => {
+        keys[e.code] = false;
+      });
+
+      document.addEventListener("mousemove", (e) => {
+        if (!isLocked()) return;
+
+        const sens = 0.0024;
+        player.yaw -= e.movementX * sens;
+        player.pitch -= e.movementY * sens;
+        player.pitch = Math.max(-1.55, Math.min(1.55, player.pitch));
+      });
+
+      document.addEventListener("contextmenu", (e) => e.preventDefault());
+
+      overlay.addEventListener("click", () => {
+        overlay.style.display = "none";
+        renderer.domElement.requestPointerLock();
+      });
+
+      renderer.domElement.addEventListener("mousedown", (e) => {
+        if (!isLocked()) {
+          overlay.style.display = "none";
+          renderer.domElement.requestPointerLock();
+          return;
+        }
+
+        if (e.button === 0) {
+          breakBlock();
+        } else if (e.button === 2) {
+          placeBlock();
+        }
+      });
+
+      window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      // ----------------------------------------
+      // Voxel raycast (DDA)
+      // ----------------------------------------
+      function raycastVoxel(origin, direction, maxDist) {
+        let x = Math.floor(origin.x);
+        let y = Math.floor(origin.y);
+        let z = Math.floor(origin.z);
+
+        const dx = direction.x;
+        const dy = direction.y;
+        const dz = direction.z;
+
+        const stepX = dx > 0 ? 1 : -1;
+        const stepY = dy > 0 ? 1 : -1;
+        const stepZ = dz > 0 ? 1 : -1;
+
+        let tMaxX = dx === 0
+          ? Infinity
+          : ((dx > 0 ? x + 1 - origin.x : origin.x - x) / Math.abs(dx));
+
+        let tMaxY = dy === 0
+          ? Infinity
+          : ((dy > 0 ? y + 1 - origin.y : origin.y - y) / Math.abs(dy));
+
+        let tMaxZ = dz === 0
+          ? Infinity
+          : ((dz > 0 ? z + 1 - origin.z : origin.z - z) / Math.abs(dz));
+
+        const tDeltaX = dx === 0 ? Infinity : Math.abs(1 / dx);
+        const tDeltaY = dy === 0 ? Infinity : Math.abs(1 / dy);
+        const tDeltaZ = dz === 0 ? Infinity : Math.abs(1 / dz);
+
+        let nx = 0;
+        let ny = 0;
+        let nz = 0;
+        let t = 0;
+
+        if (isSolid(x, y, z)) {
+          return { x, y, z, nx: 0, ny: 0, nz: 0 };
+        }
+
+        for (let i = 0; i < 300 && t <= maxDist; i++) {
+          if (tMaxX < tMaxY && tMaxX < tMaxZ) {
+            t = tMaxX;
+            x += stepX;
+            tMaxX += tDeltaX;
+            nx = -stepX;
+            ny = 0;
+            nz = 0;
+          } else if (tMaxY < tMaxZ) {
+            t = tMaxY;
+            y += stepY;
+            tMaxY += tDeltaY;
+            nx = 0;
+            ny = -stepY;
+            nz = 0;
+          } else {
+            t = tMaxZ;
+            z += stepZ;
+            tMaxZ += tDeltaZ;
+            nx = 0;
+            ny = 0;
+            nz = -stepZ;
+          }
+
+          if (t > maxDist) break;
+          if (isSolid(x, y, z)) {
+            return { x, y, z, nx, ny, nz };
+          }
+        }
+
+        return null;
+      }
+
+      const rayDir = new THREE.Vector3();
+
+      function getTarget() {
+        camera.getWorldDirection(rayDir);
+        return raycastVoxel(camera.position, rayDir, 6);
+      }
+
+      // ----------------------------------------
+      // Collision
+      // ----------------------------------------
+      const PLAYER_HALF_W = 0.3;
+      const PLAYER_H = 1.8;
+      const EPS = 1e-6;
+
+      function collidesBox(px, py, pz) {
+        const minX = Math.floor(px - PLAYER_HALF_W);
+        const maxX = Math.floor(px + PLAYER_HALF_W - EPS);
+        const minY = Math.floor(py + EPS);
+        const maxY = Math.floor(py + PLAYER_H - EPS);
+        const minZ = Math.floor(pz - PLAYER_HALF_W);
+        const maxZ = Math.floor(pz + PLAYER_HALF_W - EPS);
+
+        for (let x = minX; x <= maxX; x++) {
+          for (let y = minY; y <= maxY; y++) {
+            for (let z = minZ; z <= maxZ; z++) {
+              if (isSolid(x, y, z)) return true;
+            }
+          }
+        }
+
+        return false;
+      }
+
+      function blockIntersectsPlayer(x, y, z) {
+        const minX = player.pos.x - PLAYER_HALF_W;
+        const maxX = player.pos.x + PLAYER_HALF_W;
+        const minY = player.pos.y + 0.001;
+        const maxY = player.pos.y + PLAYER_H - 0.001;
+        const minZ = player.pos.z - PLAYER_HALF_W;
+        const maxZ = player.pos.z + PLAYER_HALF_W;
+
+        return !(
+          x + 1 <= minX ||
+          x >= maxX ||
+          y + 1 <= minY ||
+          y >= maxY ||
+          z + 1 <= minZ ||
+          z >= maxZ
+        );
+      }
+
+      // ----------------------------------------
+      // Physics
+      // ----------------------------------------
+      function moveAxis(axis, delta) {
+        if (delta === 0) return;
+
+        const sign = delta > 0 ? 1 : -1;
+        let remain = Math.abs(delta);
+
+        while (remain > 1e-6) {
+          const step = Math.min(0.08, remain);
+          const old = player.pos[axis];
+          player.pos[axis] += sign * step;
+
+          if (collidesBox(player.pos.x, player.pos.y, player.pos.z)) {
+            player.pos[axis] = old;
+
+            if (axis === "y") {
+              player.vel.y = 0;
+            } else {
+              player.vel[axis] = 0;
+            }
+            return;
+          }
+
+          remain -= step;
+        }
+      }
+
+      function update(dt) {
+        let wishX = 0;
+        let wishZ = 0;
+
+        if (isLocked()) {
+          if (keys.KeyW) {
+            wishX += -Math.sin(player.yaw);
+            wishZ += -Math.cos(player.yaw);
+          }
+          if (keys.KeyS) {
+            wishX += Math.sin(player.yaw);
+            wishZ += Math.cos(player.yaw);
+          }
+          if (keys.KeyD) {
+            wishX += Math.cos(player.yaw);
+            wishZ += -Math.sin(player.yaw);
+          }
+          if (keys.KeyA) {
+            wishX += -Math.cos(player.yaw);
+            wishZ += Math.sin(player.yaw);
+          }
+        }
+
+        const len = Math.hypot(wishX, wishZ);
+        const speed = keys.ShiftLeft || keys.ShiftRight ? 8.8 : 5.3;
+
+        if (len > 0) {
+          wishX = (wishX / len) * speed;
+          wishZ = (wishZ / len) * speed;
+        }
+
+        const accel = 16;
+        const t = Math.min(1, accel * dt);
+        player.vel.x += (wishX - player.vel.x) * t;
+        player.vel.z += (wishZ - player.vel.z) * t;
+
+        player.vel.y -= 24 * dt;
+        if (player.vel.y < -55) player.vel.y = -55;
+
+        if (keys.Space && player.onGround) {
+          player.vel.y = 8.2;
+        }
+
+        moveAxis("x", player.vel.x * dt);
+        moveAxis("z", player.vel.z * dt);
+        moveAxis("y", player.vel.y * dt);
+
+        player.onGround = collidesBox(
+          player.pos.x,
+          player.pos.y - 0.001,
+          player.pos.z
+        );
+
+        if (player.pos.y < -50) {
+          respawn();
+        }
+
+        camera.position.set(
+          player.pos.x,
+          player.pos.y + 1.62,
+          player.pos.z
+        );
+        camera.rotation.set(player.pitch, player.yaw, 0);
+
+        const target = getTarget();
+        if (target) {
+          highlight.visible = true;
+          highlight.position.set(
+            target.x + 0.5,
+            target.y + 0.5,
+            target.z + 0.5
+          );
+        } else {
+          highlight.visible = false;
+        }
+      }
+
+      // ----------------------------------------
+      // Break / Place
+      // ----------------------------------------
+      function breakBlock() {
+        const t = getTarget();
+        if (!t) return;
+
+        // y=0 は壊せなくする（落下防止）
+        if (t.y <= 0) return;
+
+        setBlock(t.x, t.y, t.z, 0);
+        rebuildVoxels();
+      }
+
+      function placeBlock() {
+        const t = getTarget();
+        if (!t) return;
+
+        if (t.nx === 0 && t.ny === 0 && t.nz === 0) return;
+
+        const x = t.x + t.nx;
+        const y = t.y + t.ny;
+        const z = t.z + t.nz;
+
+        if (y < 1) return;
+        if (y > 128) return;
+
+        if (isSolid(x, y, z)) return;
+
+        if (blockIntersectsPlayer(x, y, z)) return;
+
+        setBlock(x, y, z, selectedType);
+        rebuildVoxels();
+      }
+
+      // ----------------------------------------
+      // Animation loop
+      // ----------------------------------------
+      const clock = new THREE.Clock();
+
+      function animate() {
+        requestAnimationFrame(animate);
+
+        const dt = Math.min(clock.getDelta(), 0.05);
+        update(dt);
+
+        renderer.render(scene, camera);
+      }
+
+      animate();
+    })();
+  </script>
+</body>
+</html>
+```
+
+---
+
+## できること
+- 地面を掘る
+- 山の上に立つ
+- 木を立てる
+- ガラスで壁を作る
+- 石で階段を作る
+- 塔を建てる
+- 地下を掘り進める
+- 自分の足場を積んで移動する
+
+---
+
+## 注意点
+- 初回起動時は `three.js` をCDNから読み込むため、ネット接続が必要です。
+- 左クリックで画面クリック後、マウス視点がロックされます。
+- 画面から抜けたいときは `Esc` です。
+- 完全に「Minecraft」を再現しているわけではありません。  
+  ただし **ボクセル建造ゲームの核（移動・破壊・設置・地形・衝突判定）** は入っています。
+
+---
+
+## 次に追加するなら
+このコードに足していくと、さらに面白くなります。
+
+- **水中ブロック**
+- **スニーク / 落ち防止**
+- **インベントリ**
+- **クラフト**
+- **モブ**
+- **昼夜切り替え**
+- **音**
+- **ブロック回転**
+- **チャンク分割で無限マップ**
+- **保存 / 読み込み（localStorage）**
+
+---
+
+## 一言
+これは **自作マイクラ風の入口としてかなり分かりやすい構成**です。  
+まずこれで「動いた！」を確かめた上で、  
+次は「チャンク化」「無限地形」「モブ追加」あたりを見ると一気に本格的になります。

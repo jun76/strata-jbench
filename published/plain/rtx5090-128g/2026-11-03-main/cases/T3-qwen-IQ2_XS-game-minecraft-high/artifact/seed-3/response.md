@@ -1,0 +1,1079 @@
+下をそのまま `.html` ファイルとして保存し、ブラウザで開くと遊べる「マイクラ風3D箱庭ゲーム」です。
+
+- **左クリック**: ブロック破壊
+- **右クリック**: ブロック設置
+- **1〜7**: 手持ちブロック切り替え
+- **R**: 世界再生成
+- **Space**: ジャンプ
+- **WASD**: 移動
+- **マウス**: 視点移動
+
+---
+
+```html
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>マイクラ風3D箱庭</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #111;
+    font-family: sans-serif;
+    color: #fff;
+  }
+
+  canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    cursor: crosshair;
+  }
+
+  #ui {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  #center {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 8px;
+    height: 8px;
+    transform: translate(-50%, -50%);
+    background: rgba(255,255,255,.75);
+    border-radius: 2px;
+  }
+
+  #hotbar {
+    position: absolute;
+    left: 50%;
+    bottom: 18px;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 6px;
+    background: rgba(0,0,0,.55);
+    padding: 8px;
+    border-radius: 10px;
+    border: 2px solid rgba(255,255,255,.2);
+  }
+
+  .slot {
+    width: 46px;
+    height: 46px;
+    border-radius: 8px;
+    background: #222;
+    border: 2px solid #555;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    text-shadow: 0 1px 2px #000;
+  }
+
+  .slot.active {
+    border-color: #fff;
+    background: #444;
+  }
+
+  #help {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(0,0,0,.62);
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  #tip {
+    margin-top: 6px;
+    color: #ffd36a;
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="ui">
+  <div id="help">
+    <strong>マイクラ風3D箱庭</strong><br>
+    WASD移動 / Spaceジャンプ<br>
+    左クリック: 破壊<br>
+    右クリック: 設置<br>
+    1〜7: ブロック<br>
+    R: 世界再生成<br>
+    <div id="tip">クリックしてマウスロック</div>
+  </div>
+
+  <div id="center"></div>
+
+  <div id="hotbar">
+    <div class="slot active" data-key="1">草</div>
+    <div class="slot" data-key="2">土</div>
+    <div class="slot" data-key="3">石</div>
+    <div class="slot" data-key="4">木</div>
+    <div class="slot" data-key="5">葉</div>
+    <div class="slot" data-key="6">砂</div>
+    <div class="slot" data-key="7">水</div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById("game");
+  const gl = canvas.getContext("webgl");
+
+  if (!gl) {
+    document.getElementById("tip").textContent = "WebGLが使えません。最新ブラウザで開いてください。";
+    return;
+  }
+
+  // -------------------------
+  // World settings
+  // -------------------------
+  const W = 64;
+  const D = 64;
+  const H = 32;
+  const SEA = 8;
+
+  const AIR = 0;
+  const GRASS = 1;
+  const DIRT = 2;
+  const STONE = 3;
+  const WOOD = 4;
+  const LEAF = 5;
+  const SAND = 6;
+  const WATER = 7;
+
+  const blocks = new Uint8Array(W * H * D);
+  const heightMap = new Uint8Array(W * D);
+
+  function idx(x, y, z) {
+    return x + z * W + y * W * D;
+  }
+
+  function getBlock(x, y, z) {
+    if (x < 0 || z < 0 || y < 0 || x >= W || z >= D || y >= H) return AIR;
+    return blocks[idx(x, y, z)];
+  }
+
+  function setBlock(x, y, z, id) {
+    if (x < 0 || z < 0 || y < 0 || x >= W || z >= D || y >= H) return;
+    blocks[idx(x, y, z)] = id;
+  }
+
+  function isSolid(id) {
+    return id !== AIR && id !== WATER;
+  }
+
+  // -------------------------
+  // WebGL shaders
+  // -------------------------
+  const vs = `
+    attribute vec3 aPos;
+    attribute vec3 aColor;
+    uniform mat4 uProj;
+    uniform mat4 uView;
+    uniform float uAlpha;
+    varying vec3 vColor;
+    varying float vAlpha;
+
+    void main() {
+      gl_Position = uProj * uView * vec4(aPos, 1.0);
+      vColor = aColor;
+      vAlpha = uAlpha;
+    }
+  `;
+
+  const fs = `
+    precision mediump float;
+    varying vec3 vColor;
+    varying float vAlpha;
+
+    void main() {
+      gl_FragColor = vec4(vColor, vAlpha);
+    }
+  `;
+
+  function compileShader(type, source) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      console.error(gl.getShaderInfoLog(shader));
+      gl.deleteShader(shader);
+      return null;
+    }
+    return shader;
+  }
+
+  const vShader = compileShader(gl.VERTEX_SHADER, vs);
+  const fShader = compileShader(gl.FRAGMENT_SHADER, fs);
+
+  const program = gl.createProgram();
+  gl.attachShader(program, vShader);
+  gl.attachShader(program, fShader);
+  gl.linkProgram(program);
+
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    console.error(gl.getProgramInfoLog(program));
+    return;
+  }
+
+  gl.useProgram(program);
+
+  const aPos = gl.getAttribLocation(program, "aPos");
+  const aColor = gl.getAttribLocation(program, "aColor");
+  const uProj = gl.getUniformLocation(program, "uProj");
+  const uView = gl.getUniformLocation(program, "uView");
+  const uAlpha = gl.getUniformLocation(program, "uAlpha");
+
+  const posBuffer = gl.createBuffer();
+  const colorBuffer = gl.createBuffer();
+
+  gl.enable(gl.DEPTH_TEST);
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  gl.clearColor(0.46, 0.61, 0.82, 1.0);
+
+  // -------------------------
+  // Mesh builder
+  // -------------------------
+  class Mesh {
+    constructor(max) {
+      this.max = max;
+      this.pos = new Float32Array(max * 3);
+      this.col = new Float32Array(max * 3);
+      this.count = 0;
+    }
+
+    grow(n) {
+      const newMax = Math.max(this.max, n);
+      this.pos = new Float32Array(newMax * 3);
+      this.col = new Float32Array(newMax * 3);
+      this.max = newMax;
+    }
+
+    reset() {
+      this.count = 0;
+    }
+
+    addVertex(v, c) {
+      if (this.count >= this.max) this.grow(this.count + 1);
+
+      const i = this.count * 3;
+      this.pos[i] = v[0];
+      this.pos[i + 1] = v[1];
+      this.pos[i + 2] = v[2];
+
+      this.col[i] = c[0];
+      this.col[i + 1] = c[1];
+      this.col[i + 2] = c[2];
+
+      this.count++;
+    }
+
+    addQuad(verts, color) {
+      if (this.count + 6 > this.max) this.grow(this.count + 6);
+
+      // Triangle 1: 0,1,2
+      this.addVertex(verts[0], color);
+      this.addVertex(verts[1], color);
+      this.addVertex(verts[2], color);
+
+      // Triangle 2: 0,2,3
+      this.addVertex(verts[0], color);
+      this.addVertex(verts[2], color);
+      this.addVertex(verts[3], color);
+    }
+  }
+
+  const opaqueMesh = new Mesh(300000);
+  const waterMesh = new Mesh(100000);
+
+  // -------------------------
+  // Colors
+  // -------------------------
+  const COLORS = {
+    [GRASS]: [0.36, 0.57, 0.29],
+    [DIRT]:  [0.45, 0.33, 0.25],
+    [STONE]: [0.54, 0.54, 0.54],
+    [WOOD]:  [0.48, 0.37, 0.23],
+    [LEAF]:  [0.24, 0.49, 0.26],
+    [SAND]:  [0.84, 0.78, 0.60],
+    [WATER]: [0.20, 0.43, 0.68],
+  };
+
+  function blockColor(id, normal) {
+    const base = COLORS[id] || [1, 0, 1];
+
+    let shade = 1.0;
+    if (normal[1] > 0.5) shade = 1.00;
+    else if (normal[1] < -0.5) shade = 0.70;
+    else shade = 0.86;
+
+    // Grass side looks like dirt.
+    if (id === GRASS && normal[1] <= 0.5) {
+      const baseSide = COLORS[DIRT];
+      return [baseSide[0] * shade, baseSide[1] * shade, baseSide[2] * shade];
+    }
+
+    return [base[0] * shade, base[1] * shade, base[2] * shade];
+  }
+
+  const FACES = [
+    {
+      n: [1, 0, 0],
+      v: [[1,0,0], [1,0,1], [1,1,1], [1,1,0]]
+    },
+    {
+      n: [-1, 0, 0],
+      v: [[0,0,1], [0,0,0], [0,1,0], [0,1,1]]
+    },
+    {
+      n: [0, 1, 0],
+      v: [[0,1,0], [0,1,1], [1,1,1], [1,1,0]]
+    },
+    {
+      n: [0, -1, 0],
+      v: [[0,0,0], [1,0,0], [1,0,1], [0,0,1]]
+    },
+    {
+      n: [0, 0, 1],
+      v: [[0,0,1], [1,0,1], [1,1,1], [0,1,1]]
+    },
+    {
+      n: [0, 0, -1],
+      v: [[1,0,0], [0,0,0], [0,1,0], [1,1,0]]
+    },
+  ];
+
+  function addFace(mesh, id, x, y, z, face) {
+    const color = blockColor(id, face.n);
+
+    const verts = [
+      [x + face.v[0][0], y + face.v[0][1], z + face.v[0][2]],
+      [x + face.v[1][0], y + face.v[1][1], z + face.v[1][2]],
+      [x + face.v[2][0], y + face.v[2][1], z + face.v[2][2]],
+      [x + face.v[3][0], y + face.v[3][1], z + face.v[3][2]],
+    ];
+
+    mesh.addQuad(verts, color);
+  }
+
+  function buildMesh() {
+    opaqueMesh.reset();
+    waterMesh.reset();
+
+    for (let x = 0; x < W; x++) {
+      for (let z = 0; z < D; z++) {
+        for (let y = 0; y < H; y++) {
+          const id = getBlock(x, y, z);
+          if (id === AIR) continue;
+
+          for (const face of FACES) {
+            const nx = x + face.n[0];
+            const ny = y + face.n[1];
+            const nz = z + face.n[2];
+            const neighbor = getBlock(nx, ny, nz);
+
+            if (id === WATER) {
+              if (neighbor === AIR) {
+                addFace(waterMesh, id, x, y, z, face);
+              }
+            } else {
+              if (neighbor === AIR || neighbor === WATER) {
+                addFace(opaqueMesh, id, x, y, z, face);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  function drawMesh(mesh, alpha) {
+    if (mesh.count === 0) return;
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, posBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, mesh.pos.subarray(0, mesh.count * 3), gl.DYNAMIC_DRAW);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, mesh.col.subarray(0, mesh.count * 3), gl.DYNAMIC_DRAW);
+
+    gl.uniform1f(uAlpha, alpha);
+
+    gl.enableVertexAttribArray(aPos);
+    gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
+
+    gl.enableVertexAttribArray(aColor);
+    gl.vertexAttribPointer(aColor, 3, gl.FLOAT, false, 0, 0);
+
+    gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
+  }
+
+  // -------------------------
+  // World generation
+  // -------------------------
+  let seed = Math.floor(Math.random() * 1e9);
+
+  function hash(x, z) {
+    let h = seed + x * 374761393 + z * 668265263;
+    h ^= h << 13;
+    h ^= h >>> 17;
+    h ^= h << 5;
+    return ((h & 0x7fffffff) / 0x7fffffff);
+  }
+
+  function lerp(a, b, t) {
+    return a + (b - a) * t;
+  }
+
+  function noise(x, z) {
+    const x0 = Math.floor(x);
+    const z0 = Math.floor(z);
+    const tx = x - x0;
+    const tz = z - z0;
+
+    const h00 = hash(x0, z0);
+    const h10 = hash(x0 + 1, z0);
+    const h01 = hash(x0, z0 + 1);
+    const h11 = hash(x0 + 1, z0 + 1);
+
+    const h0 = lerp(h00, h10, tx);
+    const h1 = lerp(h01, h11, tx);
+
+    return lerp(h0, h1, tz);
+  }
+
+  function generateWorld() {
+    blocks.fill(AIR);
+
+    for (let x = 0; x < W; x++) {
+      for (let z = 0; z < D; z++) {
+        const n = noise(x * 0.14, z * 0.14);
+        let h = Math.floor(8 + n * 10);
+        if (h < 1) h = 1;
+        if (h > H - 2) h = H - 2;
+
+        heightMap[x + z * W] = h;
+
+        for (let y = 0; y < H; y++) {
+          let id = AIR;
+
+          if (h <= SEA) {
+            if (y < h - 3) {
+              id = STONE;
+            } else if (y < h) {
+              id = DIRT;
+            } else if (y <= SEA) {
+              id = WATER;
+            }
+          } else {
+            if (y < h - 3) {
+              id = STONE;
+            } else if (y < h) {
+              id = DIRT;
+            } else if (y === h) {
+              id = GRASS;
+            }
+          }
+
+          blocks[idx(x, y, z)] = id;
+        }
+      }
+    }
+
+    // Trees
+    for (let x = 2; x < W - 2; x++) {
+      for (let z = 2; z < D - 2; z++) {
+        const h = heightMap[x + z * W];
+
+        if (h <= SEA) continue;
+        if (getBlock(x, h, z) !== GRASS) continue;
+
+        const r = hash(x * 7 + 13, z * 19 + 37);
+        if (r > 0.035) continue;
+
+        const trunkTop = h + 3;
+
+        for (let t = 0; t < 4; t++) {
+          setBlock(x, h + t, z, WOOD);
+        }
+
+        for (let lx = x - 2; lx <= x + 2; lx++) {
+          for (let lz = z - 2; lz <= z + 2; lz++) {
+            for (let ly = h + 2; ly <= h + 4; ly++) {
+              if (lx === x && lz === z && ly < trunkTop) continue;
+
+              const d = Math.max(Math.abs(lx - x), Math.abs(lz - z));
+              if (d <= 2 && getBlock(lx, ly, lz) === AIR) {
+                setBlock(lx, ly, lz, LEAF);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    buildMesh();
+  }
+
+  // -------------------------
+  // Player
+  // -------------------------
+  const player = {
+    x: W / 2 + 0.5,
+    y: 12,
+    z: D / 2 + 0.5,
+    vx: 0,
+    vy: 0,
+    vz: 0,
+    yaw: 0,
+    pitch: 0,
+    grounded: false,
+    height: 1.8,
+    eye: 1.62,
+    radius: 0.35,
+  };
+
+  let selectedBlock = GRASS;
+
+  const keys = new Set();
+
+  function spawnPlayer() {
+    const cx = Math.floor(W / 2);
+    const cz = Math.floor(D / 2);
+
+    for (let y = H - 1; y >= 0; y--) {
+      if (isSolid(getBlock(cx, y, cz))) {
+        player.x = cx + 0.5;
+        player.y = y + 1;
+        player.z = cz + 0.5;
+        player.vx = player.vy = player.vz = 0;
+        player.grounded = true;
+        break;
+      }
+    }
+  }
+
+  function collides(x, y, z) {
+    const minX = Math.floor(x - player.radius);
+    const maxX = Math.floor(x + player.radius);
+    const minZ = Math.floor(z - player.radius);
+    const maxZ = Math.floor(z + player.radius);
+    const minY = Math.floor(y);
+    const maxY = Math.floor(y + player.height - 0.001);
+
+    for (let bx = minX; bx <= maxX; bx++) {
+      for (let bz = minZ; bz <= maxZ; bz++) {
+        for (let by = minY; by <= maxY; by++) {
+          if (isSolid(getBlock(bx, by, bz))) {
+            return true;
+          }
+        }
+      }
+    }
+
+    return false;
+  }
+
+  function blockOverlapsPlayer(x, y, z) {
+    const minX = Math.floor(player.x - player.radius);
+    const maxX = Math.floor(player.x + player.radius);
+    const minZ = Math.floor(player.z - player.radius);
+    const maxZ = Math.floor(player.z + player.radius);
+    const minY = Math.floor(player.y);
+    const maxY = Math.floor(player.y + player.height - 0.001);
+
+    if (x >= minX && x <= maxX &&
+        z >= minZ && z <= maxZ &&
+        y >= minY && y <= maxY) {
+      return true;
+    }
+
+    return false;
+  }
+
+  function moveHorizontal(dx, dz) {
+    if (dx === 0 && dz === 0) return;
+
+    const tx = player.x + dx;
+    const tz = player.z + dz;
+
+    if (!collides(tx, player.y, tz)) {
+      player.x = tx;
+      player.z = tz;
+      return;
+    }
+
+    // Step up.
+    const stepY = player.y + 0.6;
+    if (!collides(tx, stepY, tz)) {
+      player.x = tx;
+      player.y = stepY;
+      player.z = tz;
+    }
+  }
+
+  function moveVertical(dy) {
+    const targetY = player.y + dy;
+
+    if (!collides(player.x, targetY, player.z)) {
+      player.y = targetY;
+      player.grounded = collides(player.x, player.y - 0.01, player.z);
+      return;
+    }
+
+    if (dy < 0) {
+      // Land on top face.
+      let top = player.y;
+
+      const minX = Math.floor(player.x - player.radius);
+      const maxX = Math.floor(player.x + player.radius);
+      const minZ = Math.floor(player.z - player.radius);
+      const maxZ = Math.floor(player.z + player.radius);
+      const minY = Math.floor(targetY);
+      const maxY = Math.floor(targetY + player.height - 0.001);
+
+      for (let bx = minX; bx <= maxX; bx++) {
+        for (let bz = minZ; bz <= maxZ; bz++) {
+          for (let by = minY; by <= maxY; by++) {
+            if (isSolid(getBlock(bx, by, bz))) {
+              top = Math.max(top, by + 1);
+            }
+          }
+        }
+      }
+
+      player.y = top;
+      player.vy = 0;
+      player.grounded = true;
+    } else {
+      player.vy = 0;
+      player.grounded = collides(player.x, player.y - 0.01, player.z);
+    }
+  }
+
+  function updatePlayer(dt) {
+    const speed = 6.0;
+    const sprint = keys.has("Shift") ? 1.5 : 1.0;
+
+    const forward = {
+      x: Math.sin(player.yaw),
+      z: Math.cos(player.yaw),
+    };
+
+    const right = {
+      x: Math.cos(player.yaw),
+      z: -Math.sin(player.yaw),
+    };
+
+    let mx = 0;
+    let mz = 0;
+
+    if (keys.has("w") || keys.has("up")) {
+      mx += forward.x;
+      mz += forward.z;
+    }
+    if (keys.has("s") || keys.has("down")) {
+      mx -= forward.x;
+      mz -= forward.z;
+    }
+    if (keys.has("a")) {
+      mx += right.x;
+      mz += right.z;
+    }
+    if (keys.has("d")) {
+      mx -= right.x;
+      mz -= right.z;
+    }
+
+    const mag = Math.hypot(mx, mz);
+    if (mag > 0) {
+      mx /= mag;
+      mz /= mag;
+    }
+
+    const moveSpeed = speed * sprint * dt;
+
+    if (mx !== 0 || mz !== 0) {
+      moveHorizontal(mx * moveSpeed, mz * moveSpeed);
+    }
+
+    // Gravity
+    if (keys.has(" ") && player.grounded) {
+      player.vy = 7.5;
+      player.grounded = false;
+    }
+
+    player.vy -= 18.0 * dt;
+    if (player.vy < -30.0) player.vy = -30.0;
+
+    moveVertical(player.vy * dt);
+
+    // Keep inside world
+    player.x = Math.max(0.1, Math.min(W - 0.9, player.x));
+    player.z = Math.max(0.1, Math.min(D - 0.9, player.z));
+
+    if (player.y < 0.1) {
+      player.y = 0.1;
+      player.vy = 0;
+    }
+  }
+
+  // -------------------------
+  // Raycast
+  // -------------------------
+  function normalize(v) {
+    const d = Math.hypot(v.x, v.y, v.z);
+    if (d === 0) return { x: 0, y: 0, z: 0 };
+    return { x: v.x / d, y: v.y / d, z: v.z / d };
+  }
+
+  function getForward() {
+    const cp = Math.cos(player.pitch);
+    return {
+      x: cp * Math.sin(player.yaw),
+      y: Math.sin(player.pitch),
+      z: cp * Math.cos(player.yaw),
+    };
+  }
+
+  function raycast(maxDist = 8) {
+    const origin = {
+      x: player.x,
+      y: player.y + player.eye,
+      z: player.z,
+    };
+
+    const dir = normalize(getForward());
+
+    let x = Math.floor(origin.x);
+    let y = Math.floor(origin.y);
+    let z = Math.floor(origin.z);
+
+    let prevX = x;
+    let prevY = y;
+    let prevZ = z;
+
+    const sx = dir.x > 0 ? 1 : -1;
+    const sy = dir.y > 0 ? 1 : -1;
+    const sz = dir.z > 0 ? 1 : -1;
+
+    const tMaxX = dir.x === 0 ? Infinity : (sx > 0 ? x + 1 : x) - origin.x;
+    const tMaxY = dir.y === 0 ? Infinity : (sy > 0 ? y + 1 : y) - origin.y;
+    const tMaxZ = dir.z === 0 ? Infinity : (sz > 0 ? z + 1 : z) - origin.z;
+
+    if (dir.x === 0 || dir.y === 0 || dir.z === 0) {
+      if (getBlock(x, y, z) !== AIR) {
+        return {
+          hit: { x, y, z },
+          place: { x: prevX, y: prevY, z: prevZ },
+        };
+      }
+    }
+
+    const tDeltaX = dir.x === 0 ? Infinity : Math.abs(1 / dir.x);
+    const tDeltaY = dir.y === 0 ? Infinity : Math.abs(1 / dir.y);
+    const tDeltaZ = dir.z === 0 ? Infinity : Math.abs(1 / dir.z);
+
+    let tMaxXDist = dir.x === 0 ? Infinity : tMaxX / tDeltaX;
+    let tMaxYDist = dir.y === 0 ? Infinity : tMaxY / tDeltaY;
+    let tMaxZDist = dir.z === 0 ? Infinity : tMaxZ / tDeltaZ;
+
+    for (let i = 0; i < 200; i++) {
+      const id = getBlock(x, y, z);
+
+      if (id !== AIR) {
+        return {
+          hit: { x, y, z },
+          place: { x: prevX, y: prevY, z: prevZ },
+        };
+      }
+
+      if (tMaxXDist < tMaxYDist && tMaxXDist < tMaxZDist) {
+        tMaxXDist += tDeltaX;
+        prevX = x;
+        prevY = y;
+        prevZ = z;
+        x += sx;
+      } else if (tMaxYDist < tMaxZDist) {
+        tMaxYDist += tDeltaY;
+        prevX = x;
+        prevY = y;
+        prevZ = z;
+        y += sy;
+      } else {
+        tMaxZDist += tDeltaZ;
+        prevX = x;
+        prevY = y;
+        prevZ = z;
+        z += sz;
+      }
+
+      const dist = Math.hypot(
+        x + 0.5 - origin.x,
+        y + 0.5 - origin.y,
+        z + 0.5 - origin.z
+      );
+
+      if (dist > maxDist) break;
+      if (x < 0 || y < 0 || z < 0 || x >= W || y >= H || z >= D) break;
+    }
+
+    return null;
+  }
+
+  function breakBlock() {
+    const hit = raycast(8);
+    if (!hit) return;
+
+    const id = getBlock(hit.hit.x, hit.hit.y, hit.hit.z);
+    if (id !== AIR) {
+      setBlock(hit.hit.x, hit.hit.y, hit.hit.z, AIR);
+      buildMesh();
+    }
+  }
+
+  function placeBlock() {
+    const hit = raycast(8);
+    if (!hit) return;
+
+    const target = hit.hit;
+    const targetId = getBlock(target.x, target.y, target.z);
+
+    let place = target;
+
+    if (targetId !== AIR && targetId !== WATER) {
+      place = hit.place;
+    }
+
+    const placeId = getBlock(place.x, place.y, place.z);
+    if (placeId !== AIR && placeId !== WATER) return;
+
+    if (blockOverlapsPlayer(place.x, place.y, place.z)) {
+      return;
+    }
+
+    setBlock(place.x, place.y, place.z, selectedBlock);
+    buildMesh();
+  }
+
+  // -------------------------
+  // Matrices
+  // -------------------------
+  function normalizeVec(v) {
+    const d = Math.hypot(v.x, v.y, v.z);
+    if (d === 0) return { x: 0, y: 0, z: 0 };
+    return { x: v.x / d, y: v.y / d, z: v.z / d };
+  }
+
+  function cross(a, b) {
+    return {
+      x: a.y * b.z - a.z * b.y,
+      y: a.z * b.x - a.x * b.z,
+      z: a.x * b.y - a.y * b.x,
+    };
+  }
+
+  function dot(a, b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+  }
+
+  function perspective(fov, aspect, near, far) {
+    const f = 1 / Math.tan(fov / 2);
+
+    return [
+      f / aspect, 0, 0, 0,
+      0, f, 0, 0,
+      0, 0, (far + near) / (near - far), -1,
+      0, 0, (2 * far * near) / (near - far), 0,
+    ];
+  }
+
+  function lookAt(eye, target, up) {
+    const z = normalizeVec({
+      x: eye.x - target.x,
+      y: eye.y - target.y,
+      z: eye.z - target.z,
+    });
+
+    let x = cross(up, z);
+    x = normalizeVec(x);
+
+    const y = cross(z, x);
+
+    return [
+      x.x, y.x, z.x, 0,
+      x.y, y.y, z.y, 0,
+      x.z, y.z, z.z, 0,
+      -dot(x, eye), -dot(y, eye), -dot(z, eye), 1,
+    ];
+  }
+
+  function resizeCanvas() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.floor(window.innerWidth * dpr);
+    canvas.height = Math.floor(window.innerHeight * dpr);
+    canvas.style.width = "100%";
+    canvas.style.height = "100%";
+    gl.viewport(0, 0, canvas.width, canvas.height);
+  }
+
+  // -------------------------
+  // Pointer lock and input
+  // -------------------------
+  let pointerLocked = false;
+  const tip = document.getElementById("tip");
+
+  function updateTip() {
+    tip.textContent = pointerLocked
+      ? "マウスロック中: 左=破壊 / 右=設置"
+      : "クリックしてマウスロック";
+  }
+
+  document.addEventListener("click", () => {
+    if (!pointerLocked) {
+      canvas.requestPointerLock();
+    }
+  });
+
+  document.addEventListener("pointerlockchange", () => {
+    pointerLocked = document.pointerLockElement === canvas;
+    updateTip();
+  });
+
+  document.addEventListener("contextmenu", e => e.preventDefault());
+
+  document.addEventListener("mousedown", e => {
+    if (!pointerLocked) return;
+
+    if (e.button === 0) breakBlock();
+    else if (e.button === 2) placeBlock();
+  });
+
+  document.addEventListener("mousemove", e => {
+    if (!pointerLocked) return;
+
+    const sens = 0.0022;
+    player.yaw -= e.movementX * sens;
+    player.pitch -= e.movementY * sens;
+
+    const clamp = Math.PI / 2 - 0.01;
+    player.pitch = Math.max(-clamp, Math.min(clamp, player.pitch));
+  });
+
+  document.addEventListener("keydown", e => {
+    keys.add(e.key);
+
+    if (!pointerLocked) return;
+
+    const keyToBlock = {
+      "1": GRASS,
+      "2": DIRT,
+      "3": STONE,
+      "4": WOOD,
+      "5": LEAF,
+      "6": SAND,
+      "7": WATER,
+    };
+
+    if (keyToBlock[e.key]) {
+      selectedBlock = keyToBlock[e.key];
+      updateHotbar();
+    }
+
+    if (e.key.toLowerCase() === "r") {
+      seed = Math.floor(Math.random() * 1e9);
+      generateWorld();
+      spawnPlayer();
+    }
+
+    if (e.key === " ") e.preventDefault();
+  });
+
+  document.addEventListener("keyup", e => {
+    keys.delete(e.key);
+  });
+
+  function updateHotbar() {
+    const slots = document.querySelectorAll(".slot");
+    for (const slot of slots) {
+      const key = Number(slot.dataset.key);
+      const map = {
+        1: GRASS,
+        2: DIRT,
+        3: STONE,
+        4: WOOD,
+        5: LEAF,
+        6: SAND,
+        7: WATER,
+      };
+
+      slot.classList.toggle("active", map[key] === selectedBlock);
+    }
+  }
+
+  // -------------------------
+  // Main loop
+  // -------------------------
+  let last = performance.now();
+
+  function render() {
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    const aspect = canvas.width / canvas.height;
+    const proj = perspective(Math.PI / 3, aspect, 0.1, 200);
+
+    const eye = {
+      x: player.x,
+      y: player.y + player.eye,
+      z: player.z,
+    };
+
+    const forward = normalize(getForward());
+    const target = {
+      x: eye.x + forward.x,
+      y: eye.y + forward.y,
+      z: eye.z + forward.z,
+    };
+
+    const view = lookAt(eye, target, { x: 0, y: 1, z: 0 });
+
+    gl.uniformMatrix4fv(uProj, false, new Float32Array(proj));
+    gl.uniformMatrix4fv(uView, false, new Float32Array(view));
+
+    drawMesh(opaqueMesh, 1.0);
+    drawMesh(waterMesh, 0.62);
+  }
+
+  function loop(now) {
+    const dt = Math.min((now - last) / 1000, 0.05);
+    last = now;
+
+    if (pointerLocked) {
+      updatePlayer(dt);
+    }
+
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  window.addEventListener("resize", resizeCanvas);
+
+  resizeCanvas();
+  generateWorld();
+  spawnPlayer();
+  updateHotbar();
+  requestAnimationFrame(loop);
+})();
+```

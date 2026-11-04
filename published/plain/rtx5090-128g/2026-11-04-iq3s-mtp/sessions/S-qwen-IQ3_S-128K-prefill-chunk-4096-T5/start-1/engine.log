@@ -1,0 +1,154 @@
+[strata] 2026-11-04 14:35:12 engine started: ~/.local/share/strata/components/engine/0.1.56-linux-x86_64-cuda-cuda13/strata --serve --pack ~/.local/share/strata/Strata-data/packs/iq3_s --native ~/.local/share/strata/Strata-data/models/IQ3_S/Qwen3.8-Flash-Next-GSQ-RCO-IQ3_S-00001-of-00002.gguf --ple-gguf ~/.local/share/strata/Strata-data/models/IQ3_S/Qwen3.8-Flash-Next-GSQ-RCO-IQ3_S-00002-of-00002.gguf --expert-profile ~/.local/share/strata/components/control/0.1.56/data/expert-profile.bin --expert-cache auto --spec 4 --spec-min-p 0.5 --mtp ~/.local/share/strata/Strata-data/mtp/rt --max-context 131072 --kv int8 --ple-io ram --kv-resident 32768 --pool-workers 13 --prefill 4096
+strata generate: memory guard: limit 123.2 GiB (source: meminfo), current 5.3 GiB, reclaimable cache credited 0.0 GiB; available 118.0 GiB (MemAvailable 118.0 GiB), floor 2560 MiB
+strata generate: PCIe probe: 26.6 GB/s host->device (best of 26.6 25.1 26.6 24.8) -> pcie_frac 0.55 (default 0.55)
+strata generate: this CPU has no AVX-512: the expert kernels run on AVX-2 (multi-token for the i-quant gate/up rows)
+strata generate: native pack: ~/.local/share/strata/Strata-data/packs/iq3_s experts (largest blob 2.66 MB), token embedding IQ4_XS in mapped host memory (322 MiB, 0.1 s)
+strata generate: 1466 MiB of weights loaded from ~/.local/share/strata/Strata-data/packs/iq3_s in 0.6 s (302 canonical tensors skipped: served natively)
+strata generate: 300 native projection matrices, 2018.88 MiB of weights, in 0.4 s
+strata: the PLE table (26.8 GiB) was not locked in RAM: this program may lock only 0.0 GiB (RLIMIT_MEMLOCK). It still works, with the table's pages faulted in but reclaimable; the lock was measured up to 6% faster in decode (#4671). In a systemd service set LimitMEMLOCK=infinity, elsewhere run `ulimit -l unlimited`
+strata generate: PLE table loaded (not locked) (--ple-io ram) in 0.1 s
+strata generate: profile ~/.local/share/strata/components/control/0.1.56/data/expert-profile.bin: 24576 ranked pairs, built for 24576 slots
+strata generate: KV streaming: 32768 of 131072 cells per QSA layer in VRAM, the K/V in 1.55 GiB of pinned RAM
+strata generate: PLE on, table 320001536 rows of ~/.local/share/strata/Strata-data/models/IQ3_S/Qwen3.8-Flash-Next-GSQ-RCO-IQ3_S-00002-of-00002.gguf
+strata mtp: draft layer loaded, 837 MiB of VRAM (experts 675, dense 111), files read in 0.22 s (3535 MiB/s)
+strata generate: experimental native Q5_K head, 521472000 bytes, in 0.1 s
+strata generate: GPU 0: NVIDIA GeForce RTX 5090, compute capability 12.0
+strata generate: expert arena read through the file cache (buffered (not Windows))
+strata generate: expert arena: cudaHostRegister PORTABLE ok; MAP_HUGETLB unavailable (needed 23983 2 MiB pages, vm.nr_hugepages=0); transparent huge pages requested (MADV_HUGEPAGE)
+strata generate: loaded 46.84 GiB at 3.07 GiB/s
+strata generate: GPU host-callback thread started before host-core pinning
+strata generate: CPU pool tasks/phase: 42 (automatic), participating threads: 14
+strata generate: 13 pool workers on logical processors 2,4,6,8,10,12,14,16,17,18,19,20,21, the host thread on 0 (draining too) (--host-core first)
+strata generate: CPU workers on logical processors 2,4,6,8,10,12,14,16,17,18,19,20,21 (13 workers, one per physical core; host on 0)
+strata aux cpus: threads that are neither pool workers nor the host go to CPUs 1,22,23,24,25,26,27 (off at start; a request's aux_cpus=1 turns it on)
+strata generate: expert cache auto: 24.44 GiB free, 700 MiB reserved (+220 MiB for the draft head, +256 MiB for what is allocated after the cache) -> 9394 slots
+strata generate: expert cache 12272 slots, 23.29 GiB of VRAM; policy is
+strata generate: the GPU computes the experts in the cache; it rounds differently from the CPU,
+                 so a reply can differ slightly from a run without the cache (same quality:
+                 bench/results/2026-09-27-cache-parity).
+                 PROFILE, ranked by routing frequency, no eviction.
+strata generate: pre-filled 12272 of 12272 slots from the profile in 1.0 s (24958 MB/s); slot 0 verified
+strata generate: R4 hit path ON - resident experts are computed on the GPU
+strata generate: 13 expert-pool workers + the host thread
+strata generate: session is up (engine 0.1.56)
+strata generate: token graph hit path: 12272 resident experts, decided on the device
+prefill: the CPU share is ON by default for prompt chunks up to 3072 tokens (the idle CPU takes some of the experts the GPU would stream; answers can differ slightly from 0.1.40.3, mean KL ~0.004 below 1024 tokens, ~0.011 at 1-3K). STRATA_PREFILL_CPU_SHARE=0 turns it off, STRATA_PREFILL_CPU_SHARE_MAX=1024 keeps the old limit.
+strata serve: the prompt path borrows 1557 CUDA0 cache slots (2.95 GiB)
+strata hc: CUDA0: the hyper-connection read runs as staged (the norm per token and stream, the down projection's activations staged ahead by cp.async); checked bit for bit against the plain read on this card (STRATA_HC_SPLIT=1 or 0 for the earlier ones)
+strata verify: window up to 12 tokens, 109.5 MiB of device buffers
+strata mtp: draft head over 106299 tokens (212.9 MiB)
+strata serve: conversation cache sized from the free RAM: 8192 MiB for up to 4 parked conversations, so an agent's next turn reuses its prompt (--conversation-cache-mib N sets it, 0 turns it off)
+strata serve: PCIe share: start 0.20 from 13 pool workers (assumed 52 GB/s of expert bytes) and the 26.6 GB/s link (was 0.55)
+strata serve: STRATA_ROUTE_TAIL_SKIP=7 is ON (default): a missed expert that every token of a verify window routes at rank 7 or lower is skipped (+10..20% decode on 12-16 GB cards that miss experts, answers differ slightly from 0.1.41); STRATA_ROUTE_TAIL_SKIP=0 turns it off
+strata serve: adaptive overlap: off (STRATA_ADAPT_OVERLAP=1 turns it on)
+strata serve: adaptive tier: blocking, and the asynchronous tier is tried once the session shows the swaps hold the windows up (--adapt-async 0 or STRATA_ADAPT_ASYNC=0: never)
+strata serve: 614 MiB of VRAM free with everything loaded
+strata serve: --lookup-max-t 12: MTP windows up to 4 tokens, window sizes 1,2,3,4,5,6,12
+strata verify: capturing the 12-token window (614 MiB of VRAM free)
+strata verify: captured the 12-token window (upload no error, sync no error) in 17.5 ms
+strata verify: capturing the 4-token window (582 MiB of VRAM free)
+strata verify: captured the 4-token window (upload no error, sync no error) in 6.6 ms
+strata verify: capturing the 1-token window (568 MiB of VRAM free)
+strata verify: captured the 1-token window (upload no error, sync no error) in 7.5 ms
+strata serve: prompt 53 tokens = 0 reused + 53 read in 185 ms (286.1 tok/s), 1 generated in 16 ms (63.3 tok/s), drafts accepted 0 of 0, 1 checkpoints
+strata serve: decode expert cache hit rate: 84.8% (373 hits / 440 lookups)
+strata serve: route tail skip: 1047 missed experts skipped (1173 entries) since the start
+strata serve: KV streaming: 96.30% of 4536 block reads hit VRAM, 0.7 MiB read from RAM
+strata serve: conversation cache: parked 53 tokens in 72.4 ms; parked=1 bytes=236986412 evictions=0 snapshot_bytes=236986412 reused_kv_bytes=0
+strata verify: capturing the 3-token window (552 MiB of VRAM free)
+strata verify: captured the 3-token window (upload no error, sync no error) in 8.4 ms
+strata verify: capturing the 6-token window (536 MiB of VRAM free)
+strata verify: captured the 6-token window (upload no error, sync no error) in 8.1 ms
+strata verify: capturing the 2-token window (514 MiB of VRAM free)
+strata verify: captured the 2-token window (upload no error, sync no error) in 7.6 ms
+strata serve: PCIe share: the CPU pool takes 42 us per missed expert (48.3 GB/s of expert bytes), the link 26.6 GB/s -> pcie_frac 0.25 (was 0.20; --pcie-frac N fixes it, STRATA_PCIE_FRAC_DEFAULT=old keeps the start-up rule)
+strata serve: prompt 46 tokens = 0 reused + 46 read in 240 ms (191.8 tok/s), 128 generated in 646 ms (198.2 tok/s), drafts accepted 79 of 119, 1 checkpoints
+strata serve: decode expert cache hit rate: 94.4% (73530 hits / 77909 lookups); 62 more read by the GPU over PCIe or from another GPU (0.1% of all 77971 routed)
+strata serve: route tail skip: 4890 missed experts skipped (5344 entries) since the start
+strata serve: KV streaming: 99.12% of 60228 block reads hit VRAM, 2.1 MiB read from RAM
+strata serve: WARNING: only 500 MiB of VRAM free at the start of this request (below 512 MiB): when the card is this full the driver can page GPU memory to system RAM, decode falls to a few tok/s and a window may never finish (#2065). Add --vram-reserve-mib 768 to the config's args, or lower --max-context / --batch
+strata serve: conversation cache: parked 174 tokens in 72.0 ms; parked=2 bytes=475804952 evictions=0 snapshot_bytes=238818540 reused_kv_bytes=0
+strata prefill: QSA layers: norm + rope in one pass on, attention gate in the attention epilogue off
+strata serve: adaptive tier: the swaps held the windows up by 12.0% (4.58 ms per token): trying the asynchronous tier for a while
+strata serve: PCIe share: the CPU pool takes 40 us per missed expert (50.9 GB/s of expert bytes), the link 26.6 GB/s -> pcie_frac 0.20 (was 0.25; --pcie-frac N fixes it, STRATA_PCIE_FRAC_DEFAULT=old keeps the start-up rule)
+strata serve: adaptive tier: the asynchronous tier stays on (3.42 against 4.58 ms per token)
+strata serve: prompt 105 tokens = 0 reused + 105 read in 390 ms (269.5 tok/s), 512 generated in 2035 ms (251.5 tok/s), drafts accepted 353 of 432, 1 checkpoints
+strata serve: decode expert cache hit rate: 95.0% (260208 hits / 273948 lookups); 904 more read by the GPU over PCIe or from another GPU (0.3% of all 274852 routed)
+strata serve: route tail skip: 14221 missed experts skipped (15226 entries) since the start
+strata serve: asynchronous adaptive tier: 20 rounds, 1406 experts swapped in, 12.9 ms per round (start to flip, between windows) (arena, copy-in only, batch 0, wait 1, pick inline 0.12 ms/round)
+strata serve: KV streaming: 99.71% of 633864 block reads hit VRAM, 7.5 MiB read from RAM
+strata serve: suffix drafts: 1 windows, 2 of 11 drafts accepted
+strata serve: conversation cache: parked 618 tokens in 74.4 ms; parked=3 bytes=721402720 evictions=0 snapshot_bytes=245597768 reused_kv_bytes=0
+strata serve: prompt 105 tokens = 0 reused + 105 read in 306 ms (343.0 tok/s), 512 generated in 1714 ms (298.8 tok/s), drafts accepted 356 of 431, 1 checkpoints
+strata serve: decode expert cache hit rate: 98.6% (274482 hits / 278464 lookups); 32 more read by the GPU over PCIe or from another GPU (0.0% of all 278496 routed)
+strata serve: route tail skip: 18841 missed experts skipped (20002 entries) since the start
+strata serve: asynchronous adaptive tier: 60 rounds, 2463 experts swapped in, 11.7 ms per round (start to flip, between windows) (arena, copy-in only, batch 0, wait 1, pick inline 0.11 ms/round)
+strata serve: KV streaming: 99.71% of 648480 block reads hit VRAM, 7.5 MiB read from RAM
+strata serve: conversation cache: parked 619 tokens in 74.0 ms; parked=4 bytes=967000492 evictions=0 snapshot_bytes=245597772 reused_kv_bytes=0
+strata serve: prompt 105 tokens = 0 reused + 105 read in 311 ms (337.1 tok/s), 512 generated in 1771 ms (289.1 tok/s), drafts accepted 353 of 454, 1 checkpoints
+strata serve: decode expert cache hit rate: 98.5% (286291 hits / 290769 lookups); 46 more read by the GPU over PCIe or from another GPU (0.0% of all 290815 routed)
+strata serve: route tail skip: 23582 missed experts skipped (24944 entries) since the start
+strata serve: asynchronous adaptive tier: 100 rounds, 3818 experts swapped in, 11.7 ms per round (start to flip, between windows) (arena, copy-in only, batch 0, wait 1, pick inline 0.11 ms/round)
+strata serve: KV streaming: 99.72% of 660180 block reads hit VRAM, 7.5 MiB read from RAM
+strata serve: suffix drafts: 1 windows, 1 of 3 drafts accepted
+strata serve: conversation cache: parked 619 tokens in 77.0 ms; parked=4 bytes=975611852 evictions=1 snapshot_bytes=245597772 reused_kv_bytes=0
+strata serve: prompt 97 tokens = 0 reused + 97 read in 357 ms (271.7 tok/s), 512 generated in 3323 ms (154.1 tok/s), drafts accepted 178 of 352, 1 checkpoints
+strata serve: decode expert cache hit rate: 92.9% (290759 hits / 312975 lookups); 636 more read by the GPU over PCIe or from another GPU (0.2% of all 313611 routed)
+strata serve: route tail skip: 38508 missed experts skipped (40761 entries) since the start
+strata serve: asynchronous adaptive tier: 184 rounds, 8484 experts swapped in, 11.5 ms per round (start to flip, between windows) (arena, copy-in only, batch 0, wait 1, pick inline 0.12 ms/round)
+strata serve: KV streaming: 99.75% of 728688 block reads hit VRAM, 7.3 MiB read from RAM
+strata serve: suffix drafts: 1 windows, 1 of 3 drafts accepted
+strata serve: conversation cache: parked 608 tokens in 75.4 ms; parked=4 bytes=982213984 evictions=2 snapshot_bytes=245420672 reused_kv_bytes=0
+strata serve: prompt 97 tokens = 0 reused + 97 read in 346 ms (280.3 tok/s), 512 generated in 2773 ms (184.7 tok/s), drafts accepted 191 of 349, 1 checkpoints
+strata serve: decode expert cache hit rate: 98.6% (311601 hits / 315910 lookups); 5 more read by the GPU over PCIe or from another GPU (0.0% of all 315915 routed)
+strata serve: route tail skip: 44119 missed experts skipped (46571 entries) since the start
+strata serve: asynchronous adaptive tier: 264 rounds, 9887 experts swapped in, 10.8 ms per round (start to flip, between windows) (arena, copy-in only, batch 0, wait 1, pick inline 0.12 ms/round)
+strata serve: KV streaming: 99.74% of 708480 block reads hit VRAM, 7.3 MiB read from RAM
+strata serve: suffix drafts: 1 windows, 1 of 3 drafts accepted
+strata serve: conversation cache: parked 608 tokens in 75.1 ms; parked=4 bytes=982036888 evictions=3 snapshot_bytes=245420672 reused_kv_bytes=0
+strata serve: prompt 97 tokens = 0 reused + 97 read in 341 ms (284.2 tok/s), 512 generated in 2745 ms (186.5 tok/s), drafts accepted 190 of 346, 1 checkpoints
+strata serve: decode expert cache hit rate: 99.1% (314204 hits / 316918 lookups)
+strata serve: route tail skip: 48318 missed experts skipped (50878 entries) since the start
+strata serve: asynchronous adaptive tier: 345 rounds, 10668 experts swapped in, 10.2 ms per round (start to flip, between windows) (arena, copy-in only, batch 0, wait 1, pick inline 0.12 ms/round)
+strata serve: KV streaming: 99.74% of 719808 block reads hit VRAM, 7.4 MiB read from RAM
+strata serve: conversation cache: parked 609 tokens in 72.3 ms; parked=4 bytes=981914704 evictions=4 snapshot_bytes=245475588 reused_kv_bytes=0
+strata: prompt experts on the fused int8 kernels (STRATA_PF_FUSED=1, #136)
+strata serve: prompt 32776 tokens = 0 reused + 32776 read in 10090 ms (3248.3 tok/s), 128 generated in 811 ms (157.8 tok/s), drafts accepted 81 of 115, 3 checkpoints
+strata serve: decode expert cache hit rate: 80.8% (58107 hits / 71932 lookups); 920 more read by the GPU over PCIe or from another GPU (1.3% of all 72852 routed)
+strata serve: route tail skip: 53403 missed experts skipped (56451 entries) since the start
+strata serve: asynchronous adaptive tier: 357 rounds, 11724 experts swapped in, 10.4 ms per round (start to flip, between windows) (arena, copy-in only, batch 0, wait 1, pick inline 0.12 ms/round)
+strata serve: KV streaming: 96.64% of 1041348 block reads hit VRAM, 141.1 MiB read from RAM
+strata serve: suffix drafts: 4 windows, 5 of 7 drafts accepted
+strata serve: WARNING: only 364 MiB of VRAM free at the start of this request (below 512 MiB): when the card is this full the driver can page GPU memory to system RAM, decode falls to a few tok/s and a window may never finish (#2065). Add --vram-reserve-mib 896 to the config's args, or lower --max-context / --batch
+strata serve: conversation cache: parked 32904 tokens in 286.5 ms; parked=4 bytes=1711287712 evictions=5 snapshot_bytes=974970780 reused_kv_bytes=0
+strata serve: prompt 32776 tokens = 0 reused + 32776 read in 10307 ms (3179.9 tok/s), 128 generated in 678 ms (188.8 tok/s), drafts accepted 76 of 114, 3 checkpoints
+strata serve: decode expert cache hit rate: 93.5% (72786 hits / 77808 lookups); 105 more read by the GPU over PCIe or from another GPU (0.1% of all 77913 routed)
+strata serve: route tail skip: 56549 missed experts skipped (59789 entries) since the start
+strata serve: asynchronous adaptive tier: 370 rounds, 12979 experts swapped in, 10.7 ms per round (start to flip, between windows) (arena, copy-in only, batch 0, wait 1, pick inline 0.12 ms/round)
+strata serve: KV streaming: 96.83% of 1078320 block reads hit VRAM, 137.8 MiB read from RAM
+strata serve: suffix drafts: 1 windows, 1 of 2 drafts accepted
+strata serve: conversation cache: parked 32906 tokens in 284.4 ms; parked=4 bytes=2440892740 evictions=6 snapshot_bytes=975025700 reused_kv_bytes=0
+strata serve: prompt 32776 tokens = 0 reused + 32776 read in 10304 ms (3180.8 tok/s), 128 generated in 541 ms (236.5 tok/s), drafts accepted 84 of 113, 3 checkpoints
+strata serve: decode expert cache hit rate: 97.4% (73087 hits / 75049 lookups); 23 more read by the GPU over PCIe or from another GPU (0.0% of all 75072 routed)
+strata serve: route tail skip: 58260 missed experts skipped (61606 entries) since the start
+strata serve: asynchronous adaptive tier: 382 rounds, 13666 experts swapped in, 10.7 ms per round (start to flip, between windows) (arena, copy-in only, batch 0, wait 1, pick inline 0.12 ms/round)
+strata serve: KV streaming: 96.71% of 1022880 block reads hit VRAM, 135.8 MiB read from RAM
+strata serve: conversation cache: parked 32906 tokens in 282.6 ms; parked=4 bytes=3170497768 evictions=7 snapshot_bytes=975025700 reused_kv_bytes=0
+strata serve: prompt 4104 tokens = 0 reused + 4104 read in 1651 ms (2485.7 tok/s), 128 generated in 486 ms (263.6 tok/s), drafts accepted 82 of 102, 1 checkpoints
+strata serve: decode expert cache hit rate: 98.5% (68582 hits / 69657 lookups); 12 more read by the GPU over PCIe or from another GPU (0.0% of all 69669 routed)
+strata serve: route tail skip: 59675 missed experts skipped (63084 entries) since the start
+strata serve: asynchronous adaptive tier: 394 rounds, 14011 experts swapped in, 10.7 ms per round (start to flip, between windows) (arena, copy-in only, batch 0, wait 1, pick inline 0.12 ms/round)
+strata serve: KV streaming: 98.79% of 948936 block reads hit VRAM, 46.2 MiB read from RAM
+strata serve: conversation cache: parked 4231 tokens in 87.6 ms; parked=4 bytes=3225783964 evictions=8 snapshot_bytes=300761784 reused_kv_bytes=0
+strata serve: prompt 4104 tokens = 0 reused + 4104 read in 1452 ms (2827.3 tok/s), 128 generated in 534 ms (239.7 tok/s), drafts accepted 80 of 117, 1 checkpoints
+strata serve: decode expert cache hit rate: 98.9% (78561 hits / 79446 lookups); 2 more read by the GPU over PCIe or from another GPU (0.0% of all 79448 routed)
+strata serve: route tail skip: 60906 missed experts skipped (64354 entries) since the start
+strata serve: asynchronous adaptive tier: 406 rounds, 14317 experts swapped in, 10.8 ms per round (start to flip, between windows) (arena, copy-in only, batch 0, wait 1, pick inline 0.12 ms/round)
+strata serve: KV streaming: 98.94% of 1072236 block reads hit VRAM, 45.9 MiB read from RAM
+strata serve: suffix drafts: 1 windows, 1 of 3 drafts accepted
+strata serve: conversation cache: parked 4234 tokens in 28.2 ms; parked=4 bytes=2551636036 evictions=9 snapshot_bytes=300822852 reused_kv_bytes=0
+strata serve: prompt 4104 tokens = 0 reused + 4104 read in 1370 ms (2995.3 tok/s), 128 generated in 488 ms (262.4 tok/s), drafts accepted 81 of 107, 1 checkpoints
+strata serve: decode expert cache hit rate: 99.1% (72289 hits / 72937 lookups); 2 more read by the GPU over PCIe or from another GPU (0.0% of all 72939 routed)
+strata serve: route tail skip: 61928 missed experts skipped (65409 entries) since the start
+strata serve: asynchronous adaptive tier: 418 rounds, 14463 experts swapped in, 10.8 ms per round (start to flip, between windows) (arena, copy-in only, batch 0, wait 1, pick inline 0.12 ms/round)
+strata serve: KV streaming: 98.84% of 985932 block reads hit VRAM, 46.0 MiB read from RAM

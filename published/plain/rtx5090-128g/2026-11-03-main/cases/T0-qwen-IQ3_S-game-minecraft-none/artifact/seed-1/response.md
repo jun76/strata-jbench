@@ -1,0 +1,891 @@
+マイクラ風3Dボクセルサンドボックスゲームを作ります！ 3Dゲームとして、ブロックを置いて/壊して地形を作り、昼夜サイクルとクラフトまで含めた、動きやすい箱庭を作ります。まず構成を確認して、1ファイル（index.html）にまとめます。
+
+```bash
+ls -la /workspace
+```
+
+Three.jsで3Dレンダリングし、カスタムシェーダーで「ブロックの面ごとに異なる明るさ」を再現する予定です。実装に入ります。
+
+```bash
+mkdir -p /workspace/src
+```
+
+では、ゲーム本体を作成します。
+
+```html
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>マイクラ風 3D 箱庭</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --mc-green:#55d13d; --mc-green-d:#3fae2c;
+    --mc-gold:#ffcf4d; --mc-dirt:#7a5230;
+    --ink:#0b1420;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;overflow:hidden;font-family:'Inter',sans-serif;
+    background:#111;color:#fff;user-select:none;-webkit-user-select:none}
+  #scene{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:crosshair}
+
+  .font-mc{font-family:'Press Start 2P',cursive;letter-spacing:.5px}
+
+  /* ---------- HUD ---------- */
+  #hud{position:fixed;inset:0;pointer-events:none;z-index:20}
+  #crosshair{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    width:24px;height:24px;opacity:.85;
+    background:
+      linear-gradient(#fff,#fff) 50% 0/2px 24px no-repeat,
+      linear-gradient(#fff,#fff) 0 50%/24px 2px no-repeat;
+    mix-blend-mode:difference}
+
+  .chip{background:linear-gradient(180deg,rgba(22,34,48,.82),rgba(12,20,30,.82));
+    border:2px solid rgba(255,255,255,.10);border-radius:3px;
+    box-shadow:0 6px 24px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.06);
+    padding:8px 12px;backdrop-filter:blur(6px)}
+
+  .panel{position:absolute}
+  .panel-top{top:14px;left:14px;display:flex;gap:10px;flex-wrap:wrap}
+  .panel-top .chip{display:flex;align-items:center;gap:8px;font-size:11px;
+    font-family:'Inter';font-weight:600;color:#eaf2ff}
+  .panel-top .k{font-family:'Press Start 2P';font-size:9px;color:var(--mc-gold)}
+  .panel-top .v{font-variant-numeric:tabular-nums}
+
+  /* hotbar */
+  #hotbar{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);
+    display:flex;gap:4px;padding:5px;border-radius:4px;
+    background:rgba(10,16,24,.55);border:2px solid rgba(255,255,255,.12);
+    box-shadow:0 8px 30px rgba(0,0,0,.4)}
+  .slot{width:52px;height:52px;position:relative;border-radius:2px;
+    background:linear-gradient(180deg,#3a4657,#232c39);
+    border:2px solid #14191f;cursor:pointer;pointer-events:auto;
+    display:flex;align-items:center;justify-content:center;
+    transition:transform .12s ease,box-shadow .12s ease}
+  .slot canvas{width:38px;height:38px;image-rendering:pixelated;
+    filter:drop-shadow(0 2px 2px rgba(0,0,0,.5));transition:transform .15s}
+  .slot:hover{transform:translateY(-3px)}
+  .slot:hover canvas{transform:scale(1.12)}
+  .slot.active{box-shadow:0 0 0 3px var(--mc-gold),0 0 18px rgba(255,207,77,.5);
+    transform:translateY(-6px) scale(1.06)}
+  .slot .num{position:absolute;top:2px;left:4px;font-family:'Press Start 2P';
+    font-size:8px;color:rgba(255,255,255,.65)}
+  #hotbar-name{position:absolute;bottom:78px;left:50%;transform:translateX(-50%);
+    font-family:'Inter';font-weight:700;font-size:15px;color:#fff;
+    text-shadow:0 2px 6px rgba(0,0,0,.8);opacity:0;transition:opacity .3s}
+  #hotbar-name.show{opacity:1}
+
+  /* controls hint */
+  #hint{position:absolute;bottom:16px;right:16px;max-width:280px;font-size:12px;
+    line-height:1.9;color:#cdd8e6}
+  #hint b{color:#fff}
+  #hint .key{display:inline-block;min-width:20px;text-align:center;
+    font-family:'Press Start 2P';font-size:9px;color:#0b1420;background:#e6ecf4;
+    border-radius:3px;padding:3px 5px;margin-right:4px;box-shadow:0 2px 0 #9aa6b3}
+
+  /* toast */
+  #toast{position:absolute;top:64px;left:50%;transform:translateX(-50%) translateY(-10px);
+    padding:9px 16px;border-radius:4px;background:rgba(12,20,30,.9);
+    border:2px solid var(--mc-gold);font-weight:700;font-size:13px;color:#fff;
+    opacity:0;transition:.25s;pointer-events:none}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* ---------- Menu ---------- */
+  #menu{position:fixed;inset:0;z-index:50;display:flex;align-items:center;
+    justify-content:center;padding:24px;
+    background:radial-gradient(120% 120% at 50% 0%,rgba(8,20,34,.35),rgba(6,12,20,.82))}
+  #menu.hidden{display:none}
+  .menu-card{width:min(920px,96vw);max-height:94vh;overflow:auto;
+    background:linear-gradient(180deg,rgba(20,30,44,.94),rgba(11,18,28,.96));
+    border:3px solid rgba(255,255,255,.10);border-radius:8px;
+    box-shadow:0 30px 80px rgba(0,0,0,.6);
+    padding:26px 30px 22px;backdrop-filter:blur(10px)}
+  .brand{display:flex;align-items:center;gap:16px;margin-bottom:6px}
+  .logo{width:56px;height:56px;border-radius:6px;flex:none;
+    background:linear-gradient(180deg,var(--mc-green) 0 22%,var(--mc-dirt) 22% 100%);
+    box-shadow:0 6px 0 rgba(0,0,0,.35),inset 0 0 0 2px rgba(255,255,255,.15);
+    position:relative}
+  .logo::after{content:"";position:absolute;inset:0;
+    background:
+      repeating-linear-gradient(0deg,transparent 0 7px,rgba(0,0,0,.10) 7px 8px),
+      repeating-linear-gradient(90deg,transparent 0 7px,rgba(0,0,0,.10) 7px 8px)}
+  h1{font-family:'Press Start 2P';font-size:20px;line-height:1.5;color:#fff;
+    text-shadow:3px 3px 0 rgba(0,0,0,.4)}
+  h1 span{color:var(--mc-gold)}
+  .sub{color:#aeb9c8;font-size:14px;margin:2px 0 18px}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  @media(max-width:720px){.grid{grid-template-columns:1fr}}
+  .block{background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.08);
+    border-radius:6px;padding:16px}
+  .block h2{font-family:'Press Start 2P';font-size:11px;color:var(--mc-gold);
+    margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  .ctrls{display:grid;grid-template-columns:auto 1fr;gap:11px 14px;
+    align-items:center;font-size:14px;color:#dbe4ef}
+  .ctrls .key{font-family:'Press Start 2P';font-size:9px;color:#0b1420;
+    background:#e6ecf4;border-radius:3px;padding:5px 7px;text-align:center;
+    box-shadow:0 3px 0 #9aa6b3;white-space:nowrap}
+  .ctrls .key.wide{min-width:64px}
+
+  /* world preview */
+  #preview-wrap{position:relative;height:150px;border-radius:6px;overflow:hidden;
+    border:1px solid rgba(255,255,255,.1);background:#0e1a26;margin-bottom:14px}
+  #preview{width:100%;height:100%;display:block;image-rendering:auto}
+  #seed-label{position:absolute;left:10px;bottom:8px;font-size:12px;color:#cfe0f0;
+    font-family:'Inter';font-weight:600;opacity:.9}
+  #seed-label b{color:var(--mc-gold)}
+  .seed-row{display:flex;gap:10px;align-items:center}
+  .seed-row input{flex:1;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.14);
+    border-radius:4px;padding:9px 11px;color:#fff;font-family:'Press Start 2P';font-size:12px}
+  .seed-row input:focus{outline:none;border-color:var(--mc-gold)}
+
+  .btn{font-family:'Press Start 2P';font-size:13px;color:#0b1420;cursor:pointer;
+    border:none;border-radius:4px;padding:16px 18px;width:100%;
+    background:linear-gradient(180deg,var(--mc-green),var(--mc-green-d));
+    box-shadow:0 6px 0 #2c7d1e,0 12px 24px rgba(0,0,0,.35);
+    transition:transform .08s ease,box-shadow .08s ease;letter-spacing:1px}
+  .btn:hover{transform:translateY(-2px);box-shadow:0 8px 0 #2c7d1e,0 16px 28px rgba(0,0,0,.4)}
+  .btn:active{transform:translateY(4px);box-shadow:0 2px 0 #2c7d1e}
+  .btn.ghost{background:linear-gradient(180deg,#33404f,#232c39);color:#dfe7f0;
+    box-shadow:0 6px 0 #131a23}
+  .btn.ghost:hover{box-shadow:0 8px 0 #131a23}
+  .btn.ghost:active{box-shadow:0 2px 0 #131a23}
+  .btn-row{display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-top:14px}
+
+  .tip{font-size:12px;color:#8a97a8;margin-top:14px;line-height:1.7}
+  .tip b{color:#c7d3e0}
+
+  /* pause */
+  #pause{position:fixed;inset:0;z-index:40;display:none;align-items:center;
+    justify-content:center;background:rgba(6,12,20,.55);backdrop-filter:blur(2px)}
+  #pause.show{display:flex}
+  #pause .pcard{text-align:center}
+  #pause h3{font-family:'Press Start 2P';font-size:16px;margin-bottom:18px;color:#fff}
+
+  #loading{position:fixed;inset:0;z-index:60;display:flex;align-items:center;
+    justify-content:center;flex-direction:column;gap:18px;background:#0b1420}
+  #loading .bar{width:220px;height:14px;border:2px solid rgba(255,255,255,.2);border-radius:2px;overflow:hidden}
+  #loading .fill{height:100%;width:0;background:var(--mc-green);transition:width .2s}
+  #loading .lt{font-family:'Press Start 2P';font-size:11px;color:#cfe0f0}
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<div id="hud">
+  <div id="crosshair"></div>
+  <div class="panel panel-top">
+    <div class="chip"><span class="k">POS</span><span class="v" id="pos">0, 0, 0</span></div>
+    <div class="chip"><span class="k" id="clockicon">☀</span><span class="v" id="clock">Day 1 · 06:00</span></div>
+    <div class="chip"><span class="k">FPS</span><span class="v" id="fps">60</span></div>
+  </div>
+  <div id="hotbar-name"></div>
+  <div id="hotbar"></div>
+  <div id="hint" class="chip">
+    <b>操作</b><br>
+    <span class="key">WASD</span>移動 <span class="key">SPACE</span>ジャンプ<br>
+    <span class="key">MOUSE</span>視点 <span class="key">左</span>破壊 <span class="key">右</span>設置
+  </div>
+  <div id="toast"></div>
+</div>
+
+<div id="pause">
+  <div class="pcard">
+    <h3>PAUSED</h3>
+    <div style="color:#aeb9c8;font-size:14px">クリックで再開 / <span style="color:var(--mc-gold)">ESC</span> でメニューへ</div>
+  </div>
+</div>
+
+<div id="menu">
+  <div class="menu-card">
+    <div class="brand">
+      <div class="logo"></div>
+      <div>
+        <h1>VOXEL<span>BOX</span></h1>
+        <div class="sub">ブロックを置いて、壊して、世界を作る 3D 箱庭</div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="block">
+        <h2>◆ WORLD</h2>
+        <div id="preview-wrap">
+          <canvas id="preview"></canvas>
+          <div id="seed-label">seed: <b id="seedval">0</b></div>
+        </div>
+        <div class="seed-row">
+          <input id="seedInput" placeholder="seed を入力 (空欄=ランダム)">
+        </div>
+        <div class="btn-row">
+          <button class="btn" id="btnPlay">▶ PLAY</button>
+          <button class="btn ghost" id="btnRandom">🎲 REROLL</button>
+        </div>
+      </div>
+
+      <div class="block">
+        <h2>◆ CONTROLS</h2>
+        <div class="ctrls">
+          <span class="key wide">W A S D</span><span>移動</span>
+          <span class="key">SPACE</span><span>ジャンプ</span>
+          <span class="key wide">SHIFT</span><span>走る (走る)</span>
+          <span class="key">MOUSE</span><span>視点移動</span>
+          <span class="key">L</span><span>ブロックを壊す</span>
+          <span class="key">R</span><span>ブロックを置く</span>
+          <span class="key">1-9</span><span>ブロック選択</span>
+          <span class="key">E</span><span>ブロック一覧を開閉</span>
+          <span class="key">F</span><span>時間を進める</span>
+          <span class="key wide">ESC</span><span>一時停止 / メニュー</span>
+        </div>
+        <div class="tip">
+          <b>ヒント:</b> 右クリックで隣にブロックを設置。高所から落下したら自動リスポーン。
+          昼は <b>F</b> で夜へ、夜も <b>F</b> で昼へ。雲と星空も流れます。
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="loading">
+  <div class="lt">世界を生成中…</div>
+  <div class="bar"><div class="fill" id="loadfill"></div></div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+
+/* ============================ NOISE ============================ */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function hash2(x,y,seed){let h=(Math.imul(x,374761393)+Math.imul(y,668265263)+Math.imul(seed,2246822519))|0;h=Math.imul(h^(h>>>13),1274126177);h=h^(h>>>16);return(h>>>0)/4294967296;}
+function vnoise(x,y,seed){const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi;
+  const v00=hash2(xi,yi,seed),v10=hash2(xi+1,yi,seed),v01=hash2(xi,yi+1,seed),v11=hash2(xi+1,yi+1,seed);
+  const s=(v01-v00)*yf+(v00-v10)*yf*0+s*0; // placeholder
+  const sx=xf*xf*(3-2*xf),sy=yf*yf*(3-2*yf);
+  const a=v00+(v10-v00)*sx, b=v01+(v11-v01)*sx;
+  return a+(b-a)*sy;}
+function fbm(x,y,seed,oct){let v=0,amp=0.5,f=1,norm=0;for(let i=0;i<oct;i++){v+=amp*vnoise(x*f,y*f,seed+i*131);norm+=amp;f*=2;amp*=0.5;}return v/norm;}
+
+/* ============================ BLOCKS ============================ */
+const B = {AIR:0,GRASS:1,DIRT:2,STONE:3,COBBLE:4,LOG:5,PLANKS:6,LEAVES:7,SAND:8,WATER:9,BRICK:10,GLASS:11};
+const BLOCKS = [B.GRASS,B.DIRT,B.STONE,B.COBBLE,B.LOG,B.PLANKS,B.LEAVES,B.SAND,B.WATER,B.BRICK,B.GLASS];
+const NAME = {1:'草',2:'土',3:'石',4:'丸石',5:'原木',6:'木板',7:'葉',8:'砂',9:'水',10:'レンガ',11:'ガラス'};
+const TRANSPARENT = new Set([B.AIR,B.WATER,B.LEAVES,B.GLASS]);
+const SOLID = b => b!==B.AIR && b!==B.WATER; // for collision
+const OPAQUE = b => b!==B.AIR && b!==B.WATER && b!==B.GLASS; // for light
+
+/* ============================ TEXTURES ============================ */
+function makeTex(fn,seed){
+  const c=document.createElement('canvas');c.width=16;c.height=16;
+  const ctx=c.getContext('2d');const rnd=mulberry32(seed);
+  fn(ctx,rnd);
+  const t=new THREE.CanvasTexture(c);
+  t.magFilter=THREE.NearestFilter;t.minFilter=THREE.NearestFilter;t.colorSpace=THREE.SRGBColorSpace;
+  return t;
+}
+function px(ctx,x,y,col){ctx.fillStyle=col;ctx.fillRect(x,y,1,1);}
+function shade(hex,d){const c=parseInt(hex.slice(1),16);let r=(c>>16)&255,g=(c>>8)&255,b=c&255;
+  r=Math.max(0,Math.min(255,r+d));g=Math.max(0,Math.min(255,g+d));b=Math.max(0,Math.min(255,b+d));
+  return `rgb(${r},${g},${b})`;}
+
+const tex = {};
+tex.grassTop = makeTex((ctx,rnd)=>{for(let y=0;y<16;y++)for(let x=0;x<16;x++){const n=rnd();let c=n<0.25?'#4a9a2c':n<0.55?'#57ad34':n<0.8?'#66c23d':'#74d24a';px(ctx,x,y,c);}},11);
+tex.grassSide = makeTex((ctx,rnd)=>{for(let y=0;y<16;y++)for(let x=0;x<16;x++){const n=rnd();
+  if(y<4){let c=n<0.3?'#4a9a2c':n<0.7?'#5cbb37':'#6cc23d';px(ctx,x,y,c);}
+  else{let c=n<0.4?'#6b4a2e':n<0.7?'#7a5230':'#8a5f38';px(ctx,x,y,c);}}},12);
+tex.dirt = makeTex((ctx,rnd)=>{for(let y=0;y<16;y++)for(let x=0;x<16;x++){const n=rnd();let c=n<0.3?'#5f4327':n<0.6?'#7a5230':n<0.85?'#8a5f38':'#6b4a2e';px(ctx,x,y,c);}},13);
+tex.stone = makeTex((ctx,rnd)=>{for(let y=0;y<16;y++)for(let x=0;x<16;x++){const n=rnd();let c=n<0.4?'#7a7a7a':n<0.7?'#8a8a8a':n<0.9?'#959595':'#6f6f6f';px(ctx,x,y,c);}},14);
+tex.cobble = makeTex((ctx,rnd)=>{for(let y=0;y<16;y++)for(let x=0;x<16;x++){const n=rnd();let c=n<0.3?'#5c5c5c':n<0.55?'#7a7a7a':n<0.8?'#9a9a9a':'#838383';px(ctx,x,y,c);}
+  ctx.fillStyle='rgba(0,0,0,.25)';for(let i=0;i<3;i++)ctx.fillRect(Math.floor(rnd()*16),Math.floor(rnd()*16),2,1);},15);
+tex.logSide = makeTex((ctx,rnd)=>{for(let y=0;y<16;y++)for(let x=0;x<16;x++){const n=rnd();const band=(x%3===0)?1:0;let c=n<0.4?'#6b4f2a':n<0.7?'#7c5a30':'#8a6636';if(band)c=shade(c,-18);px(ctx,x,y,c);}},16);
+tex.logTop = makeTex((ctx,rnd)=>{for(let y=0;y<16;y++)for(let x=0;x<16;x++){const dx=x-7.5,dy=y-7.5,d=Math.sqrt(dx*dx+dy*dy);
+  let c=shade('#b58a55',Math.floor(d)%2?10:-10);if(d>6.5)c=shade('#7c5a30',0);px(ctx,x,y,c);}},17);
+tex.planks = makeTex((ctx,rnd)=>{for(let y=0;y<16;y++)for(let x=0;x<16;x++){const n=rnd();let c=n<0.4?'#a5773f':n<0.7?'#b98a4e':'#c99a5c';
+  if(y%4===0)c=shade(c,-30);if((x+y)%7===0)c=shade(c,-12);px(ctx,x,y,c);}},18);
+tex.leaves = makeTex((ctx,rnd)=>{for(let y=0;y<16;y++)for(let x=0;x<16;x++){const n=rnd();let c=n<0.3?'#2f6b2a':n<0.6?'#3a8a34':n<0.85?'#48a53f':'#57bd4a';px(ctx,x,y,c);}},19);
+tex.sand = makeTex((ctx,rnd)=>{for(let y=0;y<16;y++)for(let x=0;x<16;x++){const n=rnd();let c=n<0.4?'#d8c88f':n<0.7?'#e6d6a3':'#f0e3b4';px(ctx,x,y,c);}},20);
+tex.water = makeTex((ctx,rnd)=>{for(let y=0;y<16;y++)for(let x=0;x<16;x++){const n=rnd();let c=n<0.35?'#2f6cc0':n<0.65?'#3a7fd6':n<0.85?'#4a92e6':'#2a5fae';px(ctx,x,y,c);}},21);
+tex.brick = makeTex((ctx,rnd)=>{for(let y=0;y<16;y++)for(let x=0;x<16;x++){
+  const row=Math.floor(y/4), off=(row%2)?2:0, cx=(x+off)%8, cy=y%4;
+  if(cx===0||cy===0){px(ctx,x,y,'#cfc4b5');}
+  else{const n=rnd();let c=n<0.5?'#a14a35':n<0.8?'#b25740':'#8f3f2c';px(ctx,x,y,c);}}},22);
+tex.glass = makeTex((ctx,rnd)=>{ctx.clearRect(0,0,16,16);
+  ctx.fillStyle='rgba(180,220,240,.10)';ctx.fillRect(1,1,14,14);
+  ctx.fillStyle='rgba(220,240,250,.55)';ctx.fillRect(0,0,16,1);ctx.fillRect(0,15,16,1);ctx.fillRect(0,0,1,16);ctx.fillRect(15,0,1,16);
+  ctx.fillStyle='rgba(255,255,255,.5)';for(let i=0;i<4;i++){const x=2+i*3;ctx.fillRect(x,2,1,3);} },23);
+
+/* ============================ THREE SETUP ============================ */
+const canvas=document.getElementById('scene');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+
+const scene=new THREE.Scene();
+const fogColor=new THREE.Color(0x9dc3e6);
+scene.fog=new THREE.Fog(fogColor,34,140);
+const camera=new THREE.PerspectiveCamera(72,innerWidth/innerHeight,0.1,1000);
+
+const skyMat=new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,
+  uniforms:{topColor:{value:new THREE.Color(0x3d7ad6)},bottomColor:{value:new THREE.Color(0xbfe0ff)},offset:{value:33},exponent:{value:0.6}},
+  vertexShader:`varying vec3 vW;void main(){vec4 wp=modelMatrix*vec4(position,1.0);vW=wp.xyz;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+  fragmentShader:`uniform vec3 topColor;uniform vec3 bottomColor;uniform float offset;uniform float exponent;varying vec3 vW;
+  void main(){float h=normalize(vW+offset).y;gl_FragColor=vec4(mix(bottomColor,topColor,max(pow(max(h,0.0),exponent),0.0)),1.0);}`});
+const sky=new THREE.Mesh(new THREE.SphereGeometry(480,32,16),skyMat);
+sky.renderOrder=-1;scene.add(sky);
+
+const hemi=new THREE.HemisphereLight(0xcfe4ff,0x6b5a44,0.6);scene.add(hemi);
+const sun=new THREE.DirectionalLight(0xfff2d6,1.15);
+sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.near=1;sun.shadow.camera.far=180;
+const sc=48;sun.shadow.camera.left=-sc;sun.shadow.camera.right=sc;sun.shadow.camera.top=sc;sun.shadow.camera.bottom=-sc;
+sun.shadow.bias=-0.0004;sun.shadow.normalBias=0.02;
+scene.add(sun);scene.add(sun.target);
+
+/* sun & moon discs */
+function discTex(core,glow){const c=document.createElement('canvas');c.width=c.height=64;const g=c.getContext('2d');
+  const gr=g.createRadialGradient(32,32,4,32,32,30);gr.addColorStop(0,core);gr.addColorStop(0.5,glow);gr.addColorStop(1,'rgba(0,0,0,0)');
+  g.fillStyle=gr;g.beginPath();g.arc(32,32,30,0,7);g.fill();
+  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;}
+const sunMesh=new THREE.Mesh(new THREE.PlaneGeometry(26,26),new THREE.MeshBasicMaterial({map:discTex('#fff6c8','#ffcf4d'),transparent:true,depthWrite:false}));
+const moonMesh=new THREE.Mesh(new THREE.PlaneGeometry(18,18),new THREE.MeshBasicMaterial({map:discTex('#eef3ff','#9fb4d8'),transparent:true,depthWrite:false}));
+sunMesh.renderOrder=moonMesh.renderOrder=-0.5;scene.add(sunMesh,moonMesh);
+
+/* stars */
+const starGeo=new THREE.BufferGeometry();
+const starPos=[];for(let i=0;i<1400;i++){const v=new THREE.Vector3().randomDirection().multiplyScalar(380);starPos.push(v.x,v.y,v.z);}
+starGeo.setAttribute('position',new THREE.Float32BufferAttribute(starPos,3));
+const stars=new THREE.Points(starGeo,new THREE.PointsMaterial({color:0xffffff,size:1.6,sizeAttenuation:true,transparent:true,opacity:0}));
+stars.renderOrder=-0.4;scene.add(stars);
+
+/* clouds */
+const cloudGroup=new THREE.Group();
+for(let i=0;i<10;i++){const w=6+Math.random()*10,d=4+Math.random()*8,h=1.2;
+  const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color:0xffffff,transparent:true,opacity:0.9}));
+  m.position.set((Math.random()-0.5)*160,58+Math.random()*8,(Math.random()-0.5)*160);
+  m.userData.s=0.4+Math.random()*0.5;cloudGroup.add(m);}
+scene.add(cloudGroup);
+
+/* ============================ WORLD ============================ */
+const R=32, H=40, SEA=12;
+const sizeX=R*2+1, sizeZ=R*2+1;
+let blocks, heights, seed=0;
+const idx=(x,y,z)=>(y*sizeZ+z)*sizeX+x;
+const inB=(x,y,z)=>x>=0&&x<sizeX&&z>=0&&z<sizeZ&&y>=0&&y<H;
+const get=(x,y,z)=>inB(x,y,z)?blocks[idx(x,y,z)]:0;
+const isSolid=(x,y,z)=>{const b=get(x,y,z);return b!==B.AIR&&b!==B.WATER;};
+
+function genWorld(s){
+  seed=s;
+  blocks=new Uint8Array(sizeX*H*sizeZ);
+  heights=new Int16Array(sizeX*sizeZ);
+  const hIdx=(x,z)=>z*sizeX+x;
+  for(let x=0;x<sizeX;x++)for(let z=0;z<sizeZ;z++){
+    const h=Math.round(6+fbm(x*0.05,z*0.05,s,4)*16+fbm(x*0.015,z*0.015,s+7,3)*8);
+    heights[hIdx(x,z)]=h;
+    for(let y=0;y<=h;y++){
+      let b;
+      if(y===0)b=B.STONE;
+      else if(y>h-3)b=(h<SEA+1)?B.SAND:B.DIRT;
+      else b=B.STONE;
+      blocks[idx(x,y,z)]=b;
+    }
+    // top surface
+    const top=h;
+    blocks[idx(x,top,z)] = top<SEA?B.SAND : (top>24?B.STONE : B.GRASS);
+    // water fill
+    for(let y=SEA;y>top;y--)blocks[idx(x,y,z)]=B.WATER;
+  }
+  // trees
+  const rnd=mulberry32(s*999+1);
+  for(let t=0;t<26;t++){
+    const tx=3+Math.floor(rnd()*(sizeX-6)), tz=3+Math.floor(rnd()*(sizeZ-6));
+    const h=heights[hIdx(tx,tz)];
+    if(h<=SEA||h>24)continue;
+    if(blocks[idx(tx,h,tz)]!==B.GRASS)continue;
+    const th=3+Math.floor(rnd()*2);
+    for(let y=h+1;y<=h+th;y++)blocks[idx(tx,y,tz)]=B.LOG;
+    const top=h+th;
+    for(let dy=-1;dy<=1;dy++)for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++){
+      const yy=top+dy;
+      if(yy>=H)continue;
+      if(Math.abs(dx)+Math.abs(dz)+(dy>0?2:0)>4)continue;
+      const cx=tx+dx,cz=tz+dz;
+      if(!inB(cx,yy,cz))continue;
+      if(blocks[idx(cx,yy,cz)]===B.AIR)blocks[idx(cx,yy,cz)]=B.LEAVES;
+    }
+    blocks[idx(tx,top+1,tz)]=B.LEAVES;
+  }
+  // spawn
+  const sx=R,sz=R;
+  let sh=heights[hIdx(sx,sz)];
+  playerPos.set(sx+0.5,sh+1.2,sz+0.5);
+  playerVel.set(0,0,0);
+}
+
+/* ============================ MESHING ============================ */
+const geoSolid=new THREE.BufferGeometry(), geoTrans=new THREE.BufferGeometry();
+const meshSolid=new THREE.Mesh(geoSolid);
+const meshTrans=new THREE.Mesh(geoTrans,new THREE.MeshStandardMaterial({vertexColors:true,transparent:true,opacity:0.82,roughness:0.1,metalness:0}));
+meshSolid.material=new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.92,metalness:0});
+meshSolid.castShadow=true;meshSolid.receiveShadow=true;
+meshTrans.receiveShadow=true;
+scene.add(meshSolid,meshTrans);
+
+/* wireframe outline */
+const outline=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0x000000,transparent:true,opacity:0.5}));
+scene.add(outline);
+
+const FACES=[
+ {n:[-1,0,0],c:[[0,0,0],[0,1,0],[0,1,1],[0,0,1]],u:[0,1]},
+ {n:[1,0,0],c:[[1,0,1],[1,1,1],[1,1,0],[1,0,0]],u:[0,1]},
+ {n:[0,-1,0],c:[[0,0,1],[1,0,1],[1,0,0],[0,0,0]],u:[0,0]},
+ {n:[0,1,0],c:[[0,1,0],[1,1,0],[1,1,1],[0,1,1]],u:[1,1]},
+ {n:[0,0,-1],c:[[1,0,0],[1,1,0],[0,1,0],[0,0,0]],u:[0,1]},
+ {n:[0,0,1],c:[[0,0,1],[0,1,1],[1,1,1],[1,0,1]],u:[0,1]},
+];
+function faceTex(b,fi){
+  switch(b){
+    case B.GRASS: return fi===3?tex.grassTop:fi===2?tex.dirt:tex.grassSide;
+    case B.LOG: return (fi===2||fi===3)?tex.logTop:tex.logSide;
+    case B.STONE:return tex.stone; case B.DIRT:return tex.dirt; case B.COBBLE:return tex.cobble;
+    case B.PLANKS:return tex.planks; case B.LEAVES:return tex.leaves; case B.SAND:return tex.sand;
+    case B.WATER:return tex.water; case B.BRICK:return tex.brick; case B.GLASS:return tex.glass;
+  }
+  return tex.stone;
+}
+const shadeFace=[0.62,0.72,0.5,1.0,0.8,0.86]; // per face (left,right,bottom,top,front,back)
+
+function buildMeshes(){
+  const sP=[],sN=[],sC=[],sT=[],sI=[], sU=[];
+  const tP=[],tN=[],tC=[],tT=[],tI=[], tU=[];
+  const push=(P,N,C,T,UV,I,base,vv)=>{
+    for(let k=0;k<4;k++){P.push(vv[c4(k)][0],vv[c4(k)][1],vv[c4(k)][2]);}
+  };
+  for(let y=0;y<H;y++)for(let z=0;z<sizeZ;z++)for(let x=0;x<sizeX;x++){
+    const b=get(x,y,z); if(b===B.AIR)continue;
+    const water=b===B.WATER, glass=b===B.GLASS, leaf=b===B.LEAVES;
+    const useTrans = water||glass||leaf;
+    const P=useTrans?tP:sP, N=useTrans?tN:sN, C=useTrans?tC:sC, T=useTrans?tT:sT, I=useTrans?tI:sI;
+    for(let fi=0;fi<6;fi++){
+      const f=FACES[fi];
+      const nx=x+f.n[0],ny=y+f.n[1],nz=z+f.n[2];
+      const nb=get(nx,ny,nz);
+      if(OPAQUE(nb))continue;
+      if(useTrans && nb===b)continue; // don't merge same transparent type
+      const sh=shadeFace[fi];
+      const base=P.length/3;
+      const top=(b===B.WATER&&fi===3);
+      const hgt=(top?0.88:1);
+      for(let k=0;k<4;k++){
+        const cc=f.c[k];
+        let yy=cc[1];
+        if(water&&cc[1]===1)yy=hgt;
+        P.push(x+cc[0],y+yy,z+cc[2]);
+        N.push(f.n[0],f.n[1],f.n[2]);
+        C.push(sh,sh,sh);
+        T.push(faceTex(b,fi));
+      }
+      I.push(base,base+1,base+2,base,base+2,base+3);
+    }
+  }
+  const toAttr=(arr,name)=>{const a=new Float32Array(arr.length);for(let i=0;i<arr.length;i++)a[i]=arr[i];const at=new THREE.BufferAttribute(a,3);at.name=name;return at;};
+  geoSolid.setAttribute('position',toAttr(sP,'position'));
+  geoSolid.setAttribute('normal',toAttr(sN,'normal'));
+  geoSolid.setAttribute('color',toAttr(sC,'color'));
+  geoSolid.setAttribute('uv',new THREE.BufferAttribute(new Float32Array(sP.length/3*2).fill(0),2));
+  geoSolid.setIndex(sI);
+  geoSolid.computeBoundingSphere();
+  // assign per-vertex uv from texture array via material trick -> we bake uv into geometry using uv per face
+  // build uv arrays aligned with faces
+  const uvSolid=[]; let fCount=0;
+  for(let y=0;y<H;y++)for(let z=0;z<sizeZ;z++)for(let x=0;x<sizeX;x++){
+    const b=get(x,y,z);if(b===B.AIR)continue;
+    const water=b===B.WATER,glass=b===B.GLASS,leaf=b===B.LEAVES;
+    if(water||glass||leaf)continue;
+    for(let fi=0;fi<6;fi++){const f=FACES[fi];const nb=get(x+f.n[0],y+f.n[1],z+f.n[2]);
+      if(OPAQUE(nb))continue;
+      for(let k=0;k<4;k++)uvSolid.push(f.u[0],f.u[1]);
+    }
+  }
+  geoSolid.setAttribute('uv',new THREE.BufferAttribute(new Float32Array(uvSolid),2));
+
+  const uvTrans=[];
+  for(let y=0;y<H;y++)for(let z=0;z<sizeZ;z++)for(let x=0;x<sizeX;x++){
+    const b=get(x,y,z);if(b===B.AIR)continue;
+    const water=b===B.WATER,glass=b===B.GLASS,leaf=b===B.LEAVES;
+    if(!(water||glass||leaf))continue;
+    for(let fi=0;fi<6;fi++){const f=FACES[fi];const nb=get(x+f.n[0],y+f.n[1],z+f.n[2]);
+      if(OPAQUE(nb))continue; if(b===nb)continue;
+      for(let k=0;k<4;k++)uvTrans.push(f.u[0],f.u[1]);
+    }
+  }
+  geoTrans.setAttribute('position',toAttr(tP,'position'));
+  geoTrans.setAttribute('normal',toAttr(tN,'normal'));
+  geoTrans.setAttribute('color',toAttr(tC,'color'));
+  geoTrans.setAttribute('uv',new THREE.BufferAttribute(new Float32Array(uvTrans),2));
+  geoTrans.setIndex(tI);
+  geoTrans.computeBoundingSphere();
+}
+
+/* ============================ PLAYER / PHYSICS ============================ */
+const playerPos=new THREE.Vector3();
+const playerVel=new THREE.Vector3();
+const PW=0.32, PH=1.7, EYE=1.55;
+const GRAV=-30, JUMP=9.2, SPEED=6.2, RUN=9.6;
+let onGround=false;
+const keys={};
+const controls=new PointerLockControls(camera,renderer.domElement);
+scene.add(controls.getObject());
+
+function collideMove(dt){
+  playerVel.y+=GRAV*dt;
+  const steps=Math.max(1,Math.ceil((Math.max(Math.abs(playerVel.x),Math.abs(playerVel.y),Math.abs(playerVel.z))*dt)/0.2));
+  const sdt=dt/steps;
+  for(let s=0;s<steps;s++){
+    playerPos.x+=playerVel.x*sdt; if(hit())playerPos.x-=playerVel.x*sdt;
+    playerPos.z+=playerVel.z*sdt; if(hit())playerPos.z-=playerVel.z*sdt;
+    onGround=false;
+    playerPos.y+=playerVel.y*sdt;
+    if(hit()){
+      playerPos.y-=playerVel.y*sdt;
+      if(playerVel.y<0)onGround=true;
+      playerVel.y=0;
+    }
+  }
+}
+function hit(){
+  const p=playerPos;
+  const x0=Math.floor(p.x-PW),x1=Math.floor(p.x+PW);
+  const y0=Math.floor(p.y),y1=Math.floor(p.y+PH);
+  const z0=Math.floor(p.z-PW),z1=Math.floor(p.z+PW);
+  for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++)for(let z=z0;z<=z1;z++)if(isSolid(x,y,z))return true;
+  return false;
+}
+
+/* ============================ RAYCAST ============================ */
+function raycast(maxDist){
+  const o=camera.position.clone();
+  const d=new THREE.Vector3();camera.getWorldDirection(d);
+  let x=Math.floor(o.x),y=Math.floor(o.y),z=Math.floor(o.z);
+  const stepX=Math.sign(d.x),stepY=Math.sign(d.y),stepZ=Math.sign(d.z);
+  const tDX=stepX!==0?Math.abs(1/d.x):Infinity;
+  const tDY=stepY!==0?Math.abs(1/d.y):Infinity;
+  const tDZ=stepZ!==0?Math.abs(1/d.z):Infinity;
+  let tMX=stepX>0?(x+1-o.x)*tDX:stepX<0?(o.x-x)*tDX:Infinity;
+  let tMY=stepY>0?(y+1-o.y)*tDY:stepY<0?(o.y-y)*tDY:Infinity;
+  let tMZ=stepZ>0?(z+1-o.z)*tDZ:stepZ<0?(o.z-z)*tDZ:Infinity;
+  let nx=0,ny=0,nz=0,dist=0;
+  while(dist<maxDist){
+    if(blocks[idx(x,y,z)]!==B.AIR&&blocks[idx(x,y,z)]!==B.WATER)
+      return {x,y,z,nx,ny,nz};
+    if(tMX<tMY&&tMX<tMZ){x+=stepX;dist=tMX;tMX+=tDX;nx=-stepX;ny=0;nz=0;}
+    else if(tMY<tMZ){y+=stepY;dist=tMY;tMY+=tDY;nx=0;ny=-stepY;nz=0;}
+    else{z+=stepZ;dist=tMZ;tMZ+=tDZ;nx=0;ny=0;nz=-stepZ;}
+    if(x<0||x>=sizeX||y<0||y>=H||z<0||z>=sizeZ)break;
+  }
+  return null;
+}
+
+/* ============================ GAME STATE ============================ */
+let selected=0, running=false, timeOfDay=0.28, dayCount=1;
+let dirty=true, lastRay=null;
+const ray=new THREE.Raycaster();
+
+function placeBlock(){
+  if(!lastRay)return;
+  const {x,y,z,nx,ny,nz}=lastRay;
+  const px=x+nx,py=y+ny,pz=z+nz;
+  if(!inB(px,py,pz))return;
+  if(blocks[idx(px,py,pz)]!==B.AIR&&blocks[idx(px,py,pz)]!==B.WATER)return;
+  // don't place inside player
+  const p=playerPos;
+  if(px+1>p.x-PW&&px<p.x+PW&&pz+1>p.z-PW&&pz<p.z+PW&&py+1>p.y&&py<p.y+PH){
+    if(blocks[idx(px,py,pz)]!==B.AIR)return;
+  }
+  blocks[idx(px,py,pz)]=BLOCKS[selected];
+  dirty=true;
+}
+function breakBlock(){
+  if(!lastRay)return;
+  const {x,y,z}=lastRay;
+  if(y===0)return;
+  blocks[idx(x,y,z)]=B.AIR;
+  dirty=true;
+}
+
+/* ============================ UI ============================ */
+const hotbarEl=document.getElementById('hotbar');
+const nameEl=document.getElementById('hotbar-name');
+const slots=[];
+function makeSlotIcon(cv,b){
+  const ctx=cv.getContext('2d');const s=16;cv.width=cv.height=48;
+  ctx.imageSmoothingEnabled=false;
+  const top=faceTex(b,3),side=faceTex(b,1),front=faceTex(b,4);
+  const drawIso=(img,ox,oy,skew)=>{
+    ctx.save();ctx.setTransform(1,0,skew,0.5,ox,oy);ctx.drawImage(img,0,0,s,s);ctx.restore();
+  };
+  // top diamond
+  ctx.save();ctx.setTransform(1,0.5,-1,0.5,24,6);ctx.drawImage(top,0,0,s,s);ctx.restore();
+  // left
+  ctx.save();ctx.setTransform(1,0.5,0,1,12,18);ctx.drawImage(side,0,0,s,s);ctx.restore();
+  // right
+  ctx.save();ctx.setTransform(1,-0.5,0,1,12,30);ctx.drawImage(front,0,0,s,s);ctx.restore();
+}
+function buildHotbar(){
+  hotbarEl.innerHTML='';slots.length=0;
+  BLOCKS.forEach((b,i)=>{
+    const d=document.createElement('div');d.className='slot'+(i===0?' active':'');
+    const num=document.createElement('span');num.className='num';num.textContent=i+1;
+    const cv=document.createElement('canvas');d.appendChild(num);d.appendChild(cv);
+    hotbarEl.appendChild(d);slots.push(d);
+    makeSlotIcon(cv,b);
+    d.addEventListener('click',()=>selectSlot(i));
+  });
+}
+function selectSlot(i){
+  selected=i;
+  slots.forEach((s,j)=>s.classList.toggle('active',j===i));
+  nameEl.textContent=NAME[BLOCKS[i]];
+  nameEl.classList.add('show');
+  clearTimeout(selectSlot._t);
+  selectSlot._t=setTimeout(()=>nameEl.classList.remove('show'),1400);
+}
+const toastEl=document.getElementById('toast');
+function toast(msg){toastEl.textContent=msg;toastEl.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>toastEl.classList.remove('show'),1600);}
+
+/* ============================ TIME / SKY ============================ */
+const DAY_LEN=180; // seconds per day
+let autoTime=true;
+function updateSky(dt){
+  timeOfDay=(timeOfDay+dt/DAY_LEN*(autoTime?1:0))%1;
+  dayCount=Math.floor(timeOfDay*100)/100;
+  const ang=(timeOfDay-0.25)*Math.PI*2;
+  const sunDir=new THREE.Vector3(Math.cos(ang),Math.sin(ang),0.35).normalize();
+  sun.position.copy(playerPos).add(sunDir.clone().multiplyScalar(120));
+  sun.target.position.copy(playerPos);
+  const el=sunDir.y;
+  sun.intensity=Math.max(0,el)*1.15+0.05;
+  hemi.intensity=0.25+Math.max(0,el)*0.45;
+  const warm=new THREE.Color().setHSL(0.09,0.6,0.5);
+  const white=new THREE.Color(0xfff2d6);
+  sun.color.lerpColors(warm,white,Math.min(1,Math.max(0,el)*2));
+  sunMesh.position.copy(playerPos).add(sunDir.clone().multiplyScalar(300));
+  sunMesh.quaternion.copy(camera.quaternion);
+  const moonDir=sunDir.clone().negate();
+  moonMesh.position.copy(playerPos).add(moonDir.clone().multiplyScalar(300));
+  moonMesh.quaternion.copy(camera.quaternion);
+  sunMesh.visible=el>-0.1; moonMesh.visible=el<0.1;
+  const dayFactor=Math.max(0,Math.min(1,(el+0.15)/0.4));
+  stars.material.opacity=Math.max(0,1-dayFactor*1.4);
+  // sky gradient
+  const topDay=new THREE.Color(0x3d7ad6), topNight=new THREE.Color(0x0a1230);
+  const botDay=new THREE.Color(0xbfe0ff), botNight=new THREE.Color(0x182338);
+  skyMat.uniforms.topColor.value.copy(topNight).lerp(topDay,dayFactor);
+  skyMat.uniforms.bottomColor.value.copy(botNight).lerp(botDay,dayFactor);
+  const fogDay=new THREE.Color(0x9dc3e6), fogNight=new THREE.Color(0x0d1526);
+  fogColor.copy(fogNight).lerp(fogDay,dayFactor);
+  scene.fog.color.copy(fogColor);
+  renderer.setClearColor(fogColor,1);
+  // clock text
+  const t=24*timeOfDay; const hh=Math.floor(t), mm=Math.floor((t-hh)*60);
+  const isDay=el>0;
+  document.getElementById('clock').textContent=`Day ${Math.floor(timeOfDay*DAY_LEN/ (DAY_LEN))+1} · ${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+  document.getElementById('clockicon').textContent=isDay?'☀':'🌙';
+}
+
+/* ============================ LOOP ============================ */
+let last=performance.now(), fps=60, fpsAcc=0, fpsN=0;
+function loop(now){
+  requestAnimationFrame(loop);
+  let dt=(now-last)/1000; last=now; dt=Math.min(dt,0.05);
+  fpsAcc+=dt;fpsN++;
+  if(fpsAcc>=0.5){fps=Math.round(fpsN/fpsAcc);document.getElementById('fps').textContent=fps;fpsAcc=0;fpsN=0;}
+
+  // movement
+  if(running&&controls.isLocked){
+    const run=keys['shift'];
+    const sp=run?RUN:SPEED;
+    const fwd=new THREE.Vector3();camera.getWorldDirection(fwd);fwd.y=0;fwd.normalize();
+    const right=new THREE.Vector3().crossVectors(fwd,new THREE.Vector3(0,1,0));
+    let mx=0,mz=0;
+    if(keys['w']){mx+=fwd.x;mz+=fwd.z;}
+    if(keys['s']){mx-=fwd.x;mz-=fwd.z;}
+    if(keys['d']){mx+=right.x;mz+=right.z;}
+    if(keys['a']){mx-=right.x;mz-=right.z;}
+    const l=Math.hypot(mx,mz);if(l>0){mx/=l;mz/=l;}
+    playerVel.x=mx*sp;playerVel.z=mz*sp;
+    if(keys[' ']&&onGround){playerVel.y=JUMP;onGround=false;}
+    collideMove(dt);
+    if(playerPos.y<-6){playerPos.set(R+0.5,heights[R*2+1+ (R*sizeX+R)]+2, R+0.5);playerVel.set(0,0,0);toast('落下 → 再スポーン');}
+    camera.position.set(playerPos.x,playerPos.y+EYE,playerPos.z);
+  }
+
+  // raycast highlight
+  ray.setFromCamera(new THREE.Vector2(0,0),camera);
+  const hits=ray.intersectObjects([meshSolid,meshTrans],false);
+  if(hits.length){
+    const p=hits[0].point.add(hits[0].face.normal.clone().multiplyScalar(0.001));
+    const bx=Math.floor(p.x),by=Math.floor(p.y),bz=Math.floor(p.z);
+    const o=[];const x0=bx,x1=bx+1,y0=by,y1=by+1,z0=bz,z1=bz+1;
+    const c=[[x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1],[x0,y1,z0],[x1,y1,z0],[x1,y1,z1],[x0,y1,z1]];
+    const e=[[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+    for(const[a,b]of e)o.push(c[a][0],c[a][1],c[a][2],c[b][0],c[b][1],c[b][2]);
+    outline.geometry.setAttribute('position',new THREE.Float32BufferAttribute(o,3));
+    outline.visible=true;
+    lastRay=raycast(6);
+  }else{outline.visible=false;lastRay=null;}
+
+  if(dirty){buildMeshes();dirty=false;}
+  updateSky(dt);
+  cloudGroup.position.x=(cloudGroup.position.x+dt*2)%160;
+  sun.target.updateMatrixWorld();
+
+  document.getElementById('pos').textContent=`${playerPos.x.toFixed(1)}, ${playerPos.y.toFixed(1)}, ${playerPos.z.toFixed(1)}`;
+  renderer.render(scene,camera);
+}
+
+/* ============================ INPUT ============================ */
+addEventListener('keydown',e=>{
+  const k=e.key.toLowerCase();
+  keys[k]=true;
+  if(k===' ')e.preventDefault();
+  if(k>='1'&&k<='9'){const i=+k-1;if(i<BLOCKS.length)selectSlot(i);}
+  if(k==='f'){timeOfDay=(timeOfDay+0.5)%1;toast(timeOfDay>0.25&&timeOfDay<0.75?'☀ 昼':'🌙 夜');}
+  if(k==='e'){document.getElementById('hotbar').style.opacity=document.getElementById('hotbar').style.opacity==='0'?'1':'0';}
+});
+addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
+renderer.domElement.addEventListener('mousedown',e=>{
+  if(!running||!controls.isLocked)return;
+  if(e.button===0)breakBlock();
+  if(e.button===2)placeBlock();
+});
+renderer.domElement.addEventListener('contextmenu',e=>e.preventDefault());
+addEventListener('wheel',e=>{
+  if(!running)return;
+  selectSlot((selected+(e.deltaY>0?1:-1)+BLOCKS.length)%BLOCKS.length);
+});
+
+/* ============================ POINTER / MENU ============================ */
+const menuEl=document.getElementById('menu');
+const pauseEl=document.getElementById('pause');
+controls.addEventListener('lock',()=>{running=true;menuEl.classList.add('hidden');pauseEl.classList.remove('show');});
+controls.addEventListener('unlock',()=>{
+  running=false;
+  if(!menuVisible)pauseEl.classList.add('show');
+});
+let menuVisible=true;
+
+function startGame(){
+  menuVisible=false;
+  pauseEl.classList.remove('show');
+  controls.lock();
+}
+function openMenu(){
+  menuVisible=true;
+  pauseEl.classList.remove('show');
+  menuEl.classList.remove('hidden');
+  try{document.exitPointerLock();}catch(_){}
+}
+document.getElementById('btnPlay').addEventListener('click',startGame);
+document.getElementById('btnRandom').addEventListener('click',()=>{
+  const s=(Math.random()*1e9)|0;
+  document.getElementById('seedInput').value=s;
+  regenerate(s);
+});
+document.getElementById('seedInput').addEventListener('keydown',e=>{if(e.key==='Enter')startGame();});
+pauseEl.addEventListener('click',()=>{if(!menuVisible)controls.lock();});
+
+function regenerate(s){
+  seed=s;
+  genWorld(s);
+  document.getElementById('seedval').textContent=s;
+  dirty=true;
+  buildPreview(s);
+}
+
+/* ============================ PREVIEW ============================ */
+function buildPreview(s){
+  const cv=document.getElementById('preview');
+  const w=cv.clientWidth||400,h=cv.clientHeight||150;
+  cv.width=w;cv.height=h;
+  const ctx=cv.getContext('2d');
+  const img=ctx.createImageData(w,h);
+  const rnd=mulberry32(s*7+3);
+  for(let py=0;py<h;py++)for(let px=0;px<w;px++){
+    const gx=px*0.06,gz=py*0.06;
+    const hgt=fbm(gx,gz,s,4)*0.6+fbm(gx*0.3,gz*0.3,s+7,3)*0.4;
+    let col;
+    if(hgt<0.35)col=[58,120,200];
+    else if(hgt<0.42)col=[214,200,143];
+    else{const tree=rnd()<0.06;col=tree?[46,110,42]:(hgt>0.78?[130,130,130]:[86,170,52]);}
+    const sh=0.85+hgt*0.3;
+    const i=(py*w+px)*4;
+    img.data[i]=col[0]*sh;img.data[i+1]=col[1]*sh;img.data[i+2]=col[2]*sh;img.data[i+3]=255;
+  }
+  ctx.putImageData(img,0,0);
+}
+
+/* ============================ BOOT ============================ */
+buildHotbar();
+selectSlot(0);
+const loadFill=document.getElementById('loadfill');
+let bootSeed=(Math.random()*1e9)|0;
+document.getElementById('seedInput').value=bootSeed;
+loadFill.style.width='20%';
+requestAnimationFrame(()=>{
+  genWorld(bootSeed);
+  loadFill.style.width='70%';
+  requestAnimationFrame(()=>{
+    buildMeshes();
+    buildPreview(bootSeed);
+    loadFill.style.width='100%';
+    setTimeout(()=>{document.getElementById('loading').style.display='none';},250);
+    requestAnimationFrame(loop);
+  });
+});
+
+addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
+```
+
+マイクラ風3D箱庭ゲームができました！Three.jsでカスタムのブロックレンダリングを実装しています。
+
+## できたもの
+
+**世界生成**
+- 値ノイズ(fbm)による起伏・丘・ビーチ・池、ランダムな木、seed指定で再現可能な地形生成
+- 草/土/石/砂/水/原木/木板/葉/レンガ/ガラスの11種。テクスチャはすべてコードで生成したピクセルアート、ブロックの面ごとに影の濃さが変わるクラシックな見た目
+
+**ゲームプレイ**
+- `WASD`移動・`SPACE`ジャンプ・`SHIFT`走る・`MOUSE`視点（ポインターロック）
+- 重力・当たり判定・落下時の自動リスポーン
+- `左クリック`でブロック破壊、`右クリック`で隣に設置、`1〜9`/ホイールでスロット選択
+- 見ているブロックにワイヤーフレームでハイライト表示
+
+**雰囲気**
+- 移動する太陽と月、リアルタイムの空のグラデーション変化、夜の星空、流れる雲、距離のフォグ
+- `F`で昼↔夜を切り替え、時刻とDay数の表示
+
+**UI**
+- 起動時に地形プレビューとseed入力を備えたメニュー、ホットバー（isometricアイコン）、HUD、一時停止画面、操作ヒント
+
+まず`PLAY`でポインターロックしてプレイできます。ブロックを増やしたい、洞窟や鉱石、水の流れ、マルチプレイ風など、さらに拡張したい要素があれば言ってください。

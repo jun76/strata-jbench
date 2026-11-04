@@ -1,0 +1,20 @@
+# The RTX 5090's power limit for the benchmark's rtx5090-128g environment (500 W; the card's default is 575 W; envs/rtx5090-128g/env.json).
+# Another card has other limits: disable this unit (or change the value) when the card is swapped (AGENTS.md 2.0).
+# nvidia-smi -pl is a driver setting: it is lost at every boot and may be lost on resume, so this sets it again then.
+#
+#   sudo install -m 644 scripts/system/gpu-power-limit.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now gpu-power-limit.service
+#   nvidia-smi -q -d POWER | grep -E "Current Power Limit"       -> 500.00 W
+#
+# Undo: sudo systemctl disable --now gpu-power-limit.service && sudo nvidia-smi -pl 575
+[Unit]
+Description=Set the NVIDIA GPU power limit to 500 W (strata-jbench)
+After=nvidia-persistenced.service suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/nvidia-smi -pl 500
+
+[Install]
+WantedBy=multi-user.target suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target
