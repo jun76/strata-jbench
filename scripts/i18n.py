@@ -93,10 +93,10 @@ TR = {
     'デスクトップアプリの保存値': ('the value saved by the desktop app', '桌面应用保存的值'),
     '画像は入れない。エンコーダが VRAM を取る分の損失だけを見る': (
         'no images; only the cost of the encoder taking VRAM', '不输入图像；只看编码器占用 VRAM 带来的损失'),
-    'P コア 1 つにつき 1 論理 CPU（lscpu で2スレッドを持つコア）、CPU 0 はホストスレッド用に除く。この PC では 2,4,6,8,10,12,14': (
+    'P コア 1 つにつき 1 論理 CPU（lscpu で2スレッドを持つコア）、CPU 0 はホストスレッド用に除く。実際の値は計測する PC の lscpu で決まり、起動の記録（launch.txt）に残る': (
         'one logical CPU per P-core (cores with 2 threads in lscpu), leaving CPU 0 for the host thread. '
-        'On this PC: 2,4,6,8,10,12,14',
-        '每个 P 核取 1 个逻辑 CPU（lscpu 中有 2 个线程的核），CPU 0 留给主机线程。本机为 2,4,6,8,10,12,14'),
+        "The list comes from the measuring PC's lscpu and is kept in the launch record (launch.txt)",
+        '每个 P 核取 1 个逻辑 CPU（lscpu 中有 2 个线程的核），CPU 0 留给主机线程。实际的值由测量用 PC 的 lscpu 决定，并记录在启动记录（launch.txt）中'),
     'クライアント並列数も 2': ('2 concurrent clients as well', '客户端并发数也为 2'),
     'クライアント並列数も 4': ('4 concurrent clients as well', '客户端并发数也为 4'),
     'tuner の所要時間も記録': ('the tuner\'s time is recorded too', '同时记录 tuner 的耗时'),

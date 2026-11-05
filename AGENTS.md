@@ -41,6 +41,8 @@ also read `results/` and are written to `preview/` (not in Git), so a running be
    own shell included).
 6. **Watch in two layers.** A systemd timer runs the healthcheck (every 15 minutes: detect and notify), and a scheduled
    task (hourly: find the cause, recover safely, report). Both run independently of the agent's session.
+   The scheduled task runs whether a benchmark is running or not, so it exists only while one is: registered when a
+   run starts and deleted when it ends, each time with the user's agreement (2.3, 2.6).
 7. **Keep progress in files,** not in the conversation's memory: the state in `run-status/STATUS.md`, problems in
    `run-status/ALERTS.log`, each stage's logs as in section 4.
 8. **Nothing else heavy during a measurement.** No downloads, conversions or another inference engine at the same time.
@@ -48,6 +50,13 @@ also read `results/` and are written to `preview/` (not in Git), so a running be
 ## 2. Procedures
 
 ### 2.0 When the hardware changes (another card, more RAM, another PC)
+On a PC that has not run the benchmark yet, first: Strata (the desktop app) installed with one model installed through
+it once (that writes `~/.local/share/strata/install/third_party/llama.cpp`), and Strata's source checked out at
+`~/Strata` (its `setup.py` pins every file fetched). `scripts/setup_acquire.py` then makes the rest (the venvs, the
+download list, the NVFP4-QAD converter); `scripts/start_pipeline.sh` runs it by itself. After the models are on disk,
+the NVFP4 ready-made packs need Strata's setup once with `--no-start` to write their run configs (otherwise
+`strata launch --plan` reports them as needing a download); it changes Strata's saved settings, so section 3 applies.
+
 1. `python3 -I scripts/envs.py list` shows whether an environment matches the hardware now (marked `*`).
 2. If none does, `python3 -I scripts/envs.py new <env>` writes `envs/<env>/env.json` (ids like `rtx5070-64g`: GPU and
    RAM). It fills in the GPU name, VRAM, RAM and whether DFlash2 is available (checked with `strata launch --plan`).
@@ -95,6 +104,7 @@ also read `results/` and are written to `preview/` (not in Git), so a running be
      `loginctl enable-linger` is needed (a system setting: the user does it).
    - Whether anything in section 3 ("Ask first") may become necessary during the run; if so, have the user decide
      beforehand what to do.
+   - That the hourly watch task will be registered at the start (step 3 of 2.3) and deleted at the end (2.6).
 2. After changing the runner or a fixture, run the affected cases under a RUN_ID starting with `test-` (`test-` results
    appear neither in the case lists nor in RESULTS.html):
    `python3 scripts/bench_runner.py --run-id test-xxx --steps 1 --ids <case id>,...`
@@ -113,7 +123,7 @@ also read `results/` and are written to `preview/` (not in Git), so a running be
    nothing starts. To measure only some models, add `MODELS="qwen:IQ3_S,..."` (for a re-run, say; the healthcheck's
    "cases without a result" then looks at those models only). The environment, RUN_ID, STEPS and MODELS started are
    kept in `run-status/current-run.json` (the watch task reads it, so a new RUN_ID needs no change to the task).
-   - `strata-jbench-acquire`: `scripts/overnight.py` (fetch the models → convert NVFP4-QAD → delete the conversion source
+   - `strata-jbench-acquire`: `scripts/setup_acquire.py` first, then `scripts/overnight.py` (fetch the models → convert NVFP4-QAD → delete the conversion source
      → fetch the last model). Not started when `downloads/READY` exists.
    - `strata-jbench-queue`: `scripts/overnight_bench.sh` (wait for READY → preflight → `scripts/bench_runner.py` Tier by
      Tier).
@@ -123,13 +133,15 @@ also read `results/` and are written to `preview/` (not in Git), so a running be
      temperatures and GPU). It ends by itself when the queue ends. Running `scripts/start_pipeline.sh` again attaches it
      to a RUN_ID already running (the queue is not touched).
 2. Check that the STATUS printed right after starting is RUNNING or WAITING.
-3. Register the hourly watch task with a scheduler (for example the desktop app's scheduled tasks,
-   `taskId: strata-jbench-watch`). Its prompt must be self-contained, with the steps of 2.4 and section 3. If it exists
-   already, check that it is enabled. If it cannot be registered, do not report the run as started: tell the user why
-   and have them decide on another way.
+3. With the user's agreement from 2.2, register the hourly watch task with a scheduler (for example the desktop app's
+   scheduled tasks, `taskId: strata-jbench-watch`). Its prompt must be self-contained, with the steps of 2.4 and
+   section 3, and must say that the task does not delete itself: when the run is DONE, or stopped with no resume
+   planned, its report says so and asks for the task to be deleted. If one is left over from an earlier run, check
+   that it is enabled and that its prompt is still right. If it cannot be registered, do not report the run as
+   started: tell the user why and have them decide on another way.
 4. Report the expected end time and what happens if something goes wrong (notifications, recovery by the watch task).
 
-To stop: `scripts/start_pipeline.sh --stop`.
+To stop: `scripts/start_pipeline.sh --stop`. If the run will not be resumed, delete the watch task as in 2.6.
 
 ### 2.4 When something goes wrong (healthcheck FAILED / STUCK)
 Read the logs and find the cause before acting. Never restart again and again without knowing why.
@@ -155,7 +167,16 @@ After fixing a code or environment problem, run one affected case under a `test-
    measure again under changed conditions, delete the old RUN_ID's results or use a RUN_ID that sorts later (`test-`
    RUN_IDs are never shown). Another environment is another case.
 
-### 2.6 Making results final and committing them
+### 2.6 When the run ends
+The watch task keeps firing every hour after the queue ends, so remove it as soon as the run is over.
+1. The run is over when STATUS is DONE, or when it is FAILED or stopped and the user has decided not to resume it.
+   A FAILED run that will be resumed after a fix is not over: keep the task.
+2. Ask the user whether the watch task (`strata-jbench-watch`) may be deleted, and delete it only after they agree
+   (the desktop app: the "Scheduled" section of the sidebar, or the scheduled-tasks tool). If the agent cannot delete
+   it, ask the user to.
+3. Check with the scheduler's list that no watch task is left.
+
+### 2.7 Making results final and committing them
 1. The user decides which RUN_ID becomes final (so that results meant to be thrown away are never published).
 2. `python3 -I scripts/publish.py <env> <RUN_ID> --dry-run` shows how many files would move, and their size.
 3. `python3 -I scripts/publish.py <env> <RUN_ID> --note "<one line on the run>"` moves it to
@@ -244,6 +265,9 @@ policy, report the cause and a proposal, and stop.
   (docs/SCOUTING.md section 2).
 - With thinking on and no `reasoning_budget_tokens`, answer_room fills in 3/4 of the cap. The runner states the same
   value (half the cap for the game task).
-- The NVFP4-QAD conversion tools expect llama.cpp at `<root>/third_party/llama.cpp`. Run them with the `.venv-qad`
-  Python from `work/qad-root/` (a copy of Terminal's tools with a link to the installer's llama.cpp).
+- The NVFP4-QAD conversion tools expect llama.cpp at `<root>/third_party/llama.cpp`, which neither Strata's source nor
+  the app has, and need torch and transformers, which the app does not ship (its own setup refuses this model for that
+  reason). `scripts/setup_acquire.py` makes `.venv-qad` (Strata's `requirements.txt` and `requirements-nvfp4-local.txt`)
+  and `work/qad-root/` (a copy of the source's tools with a link to the install's llama.cpp), and `scripts/overnight.py`
+  runs the conversion from there. `scripts/start_pipeline.sh` runs it while `downloads/READY` is missing.
 - Q2_0's first launch builds a pack for AVX-512 (about 40 GB). The first launch's time is not part of the measurements.

@@ -36,7 +36,7 @@
 
 ## 確定した結果
 
-確定した結果が増えるたびに、この表に行が足されます（`scripts/publish.py` が `published/` から書き直します）。
+確定した結果が増えるたびに、この表に行が足されます（`scripts/publish.py` が `published/` から書き直します）。新しい 3 件を表に出し、それより前は表の下に折りたたんでいます。
 同じ環境で同じケースが複数の RUN_ID にあるときは、ページは名前が後ろに並ぶ RUN_ID の結果を使います。
 
 <!-- published-runs:start (scripts/publish.py writes this list) -->
@@ -45,7 +45,15 @@
 | 2026-11-04 22:51 | プレーン（ハーネスなし） | GeForce RTX 5090 · 128 GB RAM | [`2026-11-04-long`](published/plain/rtx5090-128g/2026-11-04-long/) | 4b, 4c, 4d | 112 / 112 | Tier 4b・4c・4d（長文の読解 32K〜1M と YaRN の点検）。2026-11-03-main では長文の fixture が未作成で省いていたので、青空文庫と Project Gutenberg の日英10作品から長文を作って追加で測った | [グラフ](RESULTS.html?env=rtx5090-128g) · [ケース一覧](cases/plain/rtx5090-128g.html) |
 | 2026-11-04 18:20 | プレーン（ハーネスなし） | GeForce RTX 5090 · 128 GB RAM | [`2026-11-04-q8-t3`](published/plain/rtx5090-128g/2026-11-04-q8-t3/) | 3 | 9 / 9 | unsloth Q8_0 の Tier 3（thinking の有無とゲーム作成）。当初の計画では Q8_0 を Tier 3 から外していたので、計画に足して追加で測った | [グラフ](RESULTS.html?env=rtx5090-128g) · [ケース一覧](cases/plain/rtx5090-128g.html) |
 | 2026-11-04 15:25 | プレーン（ハーネスなし） | GeForce RTX 5090 · 128 GB RAM | [`2026-11-04-iq3s-mtp`](published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/) | 0, 1, 2, 3, 4a, 5 | 159 / 159 | qwen IQ3_S の測り直し（2026-11-03-main では MTP の draft layer が読み込まれていなかった）。DFlash2 のケースも含めて同じ Tier を流し直した | [グラフ](RESULTS.html?env=rtx5090-128g) · [ケース一覧](cases/plain/rtx5090-128g.html) |
+
+<details>
+<summary>それより前の RUN（1 件）</summary>
+
+| 計測完了 | 部門 | 環境 | RUN_ID | Tier | ケース（done / 全体） | 内容 | 見る |
+| --- | --- | --- | --- | --- | --- | --- | --- |
 | 2026-11-04 10:41 | プレーン（ハーネスなし） | GeForce RTX 5090 · 128 GB RAM | [`2026-11-03-main`](published/plain/rtx5090-128g/2026-11-03-main/) | 0, 1, 2, 3, 4a, 5 | 1231 / 1231 | 最初の通し計測（Tier 0・1・2・4a・3・5、18モデル）。このうち qwen IQ3_S は MTP が効いていなかったので、ページには 2026-11-04-iq3s-mtp の測り直しを使う | [グラフ](RESULTS.html?env=rtx5090-128g) · [ケース一覧](cases/plain/rtx5090-128g.html) |
+
+</details>
 <!-- published-runs:end -->
 
 ## 何を測ったか
@@ -101,10 +109,36 @@
 ストリームの生データ（SSE と思考の全文）と、PC 上の全プロセスを含むマシンのスナップショットは公開していません。
 公開するログでは、ホームフォルダを `~`、ホスト名を `<host>` に置き換えています。
 
+### 手元だけに作られるもの
+
+リポのスクリプトを動かすと、次のフォルダがリポの中に作られます。どれも Git の対象外（[.gitignore](.gitignore)）で、
+外へ送られることもありません（ネットワークへ出るのは、モデルのダウンロードだけです）。
+
+| フォルダ | 作るもの | 中身 |
+| --- | --- | --- |
+| `results/` | `scripts/bench_runner.py` ほか | 計測中の結果。`published/` に移すまでここにあります |
+| `results/…/<RUN_ID>/raw/` | `scripts/bench_runner.py` | ストリームの生データ（SSE と思考の全文）。`published/` へは移しません |
+| `results/…/<RUN_ID>/stats/snapshots.jsonl.gz`、`last.json` | `scripts/stats_watch.py` | **計測中の PC 全体のスナップショット**。セッション開始・起動・ケース終了・失敗・Tier の切り替わりと 5 分ごとに、動いている全プロセス（PID、ユーザー名、コマンドライン全体、CPU・メモリ・ディスク IO）、GPU を使っているプロセス、CPU・メモリ・PSI・温度を記録します。並走する処理が計測を乱していないか後で確かめるためのもので、他のプログラムのコマンドライン（引数に書いたパスや値を含む）が残るため、`published/` へは移しません |
+| `preview/` | `scripts/build_cases.py`、`scripts/build_results.py` | `results/` も読んで作る確認用のページ |
+| `run-status/` | `scripts/start_pipeline.sh`、`scripts/healthcheck.py`、`scripts/preflight.py` | 無人実行の状態（`STATUS.md`、`ALERTS.log`、`current-run.json`、`preflight.json`） |
+| `downloads/` | `scripts/download_models.py`、`scripts/overnight.py` | モデル取得の状態とログ（`manifest.json` に SHA-256） |
+| `work/` | `scripts/overnight.py`（NVFP4-QAD の変換） | NVFP4-QAD 変換用の作業フォルダ。長文コーパスの元データ（`work/corpus/raw/`、手で取得）もここに置き、`scripts/long_corpus.py` が読みます |
+
+スナップショットを取りたくないときは、`scripts/start_pipeline.sh` が起動する `strata-jbench-stats` ユニットを止めてください
+（`systemctl --user stop strata-jbench-stats`。計測そのものは続きます）。いらなくなったら `results/` の中を消してかまいません。
+
+リポの外では、モデルの重みが `~/.local/share/strata/Strata-data/models` に、Strata の起動プロファイル
+（`launch-<model>-<context>`）と Tier 5 の tune のプリセットが Strata の設定に書かれます。計測中は systemd のユーザーユニット
+（`strata-jbench-*`、`systemd-run` による一時的なもの）が動きます。
+
 ## 追試する
 
 計測は長時間かかるので、systemd のユーザーユニットとして無人で動かします。手順（環境の用意、preflight、開始、監視、異常時の復旧、結果の確定）は
 [AGENTS.md](AGENTS.md)（英語）に、環境の定義の書き方は [envs/README.md](envs/README.md) にあります。
+
+前提として、Strata（デスクトップアプリ）を入れて一度モデルをインストールしておくことと、Strata のソースを `~/Strata` に
+置いておくことが要ります（取得するファイルとその SHA-256 はソースの `setup.py` が決めます）。ダウンロード用と NVFP4-QAD 変換用の
+Python 環境は `scripts/setup_acquire.py` が作り、`scripts/start_pipeline.sh` が自動で呼びます。
 
 ```bash
 python3 -I scripts/envs.py list                                     # いまのハードウェアに合う環境
@@ -139,4 +173,4 @@ RUN_ID=<run id> STEPS="0 1 2 3 4a 4b 4c 4d 5" scripts/start_pipeline.sh       # 
 | [ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF](https://huggingface.co/ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF) | swift IQ2_XS, IQ3_XXS, IQ3_S |
 | [Maximilian228/Qwen3.8-Flash-Next-NVFP4-GPTQ-Strata](https://huggingface.co/Maximilian228/Qwen3.8-Flash-Next-NVFP4-GPTQ-Strata) | nvfp4 NVFP4 |
 | [Maximilian228/Qwen3.8-Flash-Next-NVIDIA-NVFP4-Strata](https://huggingface.co/Maximilian228/Qwen3.8-Flash-Next-NVIDIA-NVFP4-Strata) | nvfp4 NVFP4-NVIDIA |
-| [nvidia/Qwen3.8-Flash-Next-FP4-Local](https://huggingface.co/nvidia/Qwen3.8-Flash-Next-FP4-Local) | nvfp4 NVFP4-QAD（FP4 向けの再学習。この PC で Strata の形式に変換） |
+| [nvidia/Qwen3.8-Flash-Next-FP4-Local](https://huggingface.co/nvidia/Qwen3.8-Flash-Next-FP4-Local) | nvfp4 NVFP4-QAD（FP4 向けの再学習。計測する PC で Strata の変換ツールにより Strata の形式に変換。`scripts/overnight.py` が行う） |

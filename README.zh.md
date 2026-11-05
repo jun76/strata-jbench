@@ -34,7 +34,7 @@
 
 ## 已确定的结果
 
-每当有结果确定，本表就会增加一行（`scripts/publish.py` 根据 `published/` 重写）。
+每当有结果确定，本表就会增加一行（`scripts/publish.py` 根据 `published/` 重写）。表中显示最新的 3 个，更早的折叠在表的下方。
 同一环境中同一用例出现在多个 RUN_ID 时，页面使用名称排在最后的 RUN_ID 的结果。
 
 <!-- published-runs:start (scripts/publish.py writes this list) -->
@@ -43,7 +43,15 @@
 | 2026-11-04 22:51 | 纯模型（无 harness） | GeForce RTX 5090 · 128 GB RAM | [`2026-11-04-long`](published/plain/rtx5090-128g/2026-11-04-long/) | 4b, 4c, 4d | 112 / 112 | Tier 4b・4c・4d（32K〜1M 的长文阅读与 YaRN 检查）。2026-11-03-main 因长文 fixture 尚未制作而省略，之后用青空文库与 Project Gutenberg 的日英 10 部作品制作长文补测 | [图表](RESULTS.html?env=rtx5090-128g) · [用例一览](cases/plain/rtx5090-128g.html) |
 | 2026-11-04 18:20 | 纯模型（无 harness） | GeForce RTX 5090 · 128 GB RAM | [`2026-11-04-q8-t3`](published/plain/rtx5090-128g/2026-11-04-q8-t3/) | 3 | 9 / 9 | unsloth Q8_0 的 Tier 3（有无 thinking 与游戏制作）。最初的计划把 Q8_0 排除在 Tier 3 之外，因此加入计划后补测 | [图表](RESULTS.html?env=rtx5090-128g) · [用例一览](cases/plain/rtx5090-128g.html) |
 | 2026-11-04 15:25 | 纯模型（无 harness） | GeForce RTX 5090 · 128 GB RAM | [`2026-11-04-iq3s-mtp`](published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/) | 0, 1, 2, 3, 4a, 5 | 159 / 159 | qwen IQ3_S 的重测（2026-11-03-main 中 MTP 的 draft layer 未加载）。包括 DFlash2 用例在内重跑了相同的 Tier | [图表](RESULTS.html?env=rtx5090-128g) · [用例一览](cases/plain/rtx5090-128g.html) |
+
+<details>
+<summary>更早的 RUN（1 个）</summary>
+
+| 测量完成 | 部门 | 环境 | RUN_ID | Tier | 用例（done / 全部） | 内容 | 查看 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
 | 2026-11-04 10:41 | 纯模型（无 harness） | GeForce RTX 5090 · 128 GB RAM | [`2026-11-03-main`](published/plain/rtx5090-128g/2026-11-03-main/) | 0, 1, 2, 3, 4a, 5 | 1231 / 1231 | 第一次完整测量（Tier 0・1・2・4a・3・5，18 个模型）。其中 qwen IQ3_S 未启用 MTP，页面使用重测的 2026-11-04-iq3s-mtp | [图表](RESULTS.html?env=rtx5090-128g) · [用例一览](cases/plain/rtx5090-128g.html) |
+
+</details>
 <!-- published-runs:end -->
 
 ## 测量了什么
@@ -97,10 +105,35 @@
 
 流的原始数据（SSE 与思考全文）以及包含 PC 上全部进程的机器快照不公开。公开的日志中，主文件夹写作 `~`，主机名写作 `<host>`。
 
+### 只留在本机的内容
+
+运行仓库中的脚本时，会在仓库内生成以下文件夹。它们都不在 Git 中（[.gitignore](.gitignore)），也不会被发送到任何地方
+（访问网络的只有模型的下载）。
+
+| 文件夹 | 生成者 | 内容 |
+| --- | --- | --- |
+| `results/` | `scripts/bench_runner.py` 等 | 测量中的结果，移到 `published/` 之前放在这里 |
+| `results/…/<RUN_ID>/raw/` | `scripts/bench_runner.py` | 流的原始数据（SSE 与思考全文），不移到 `published/` |
+| `results/…/<RUN_ID>/stats/snapshots.jsonl.gz`、`last.json` | `scripts/stats_watch.py` | **测量期间整台 PC 的快照**。在会话开始、启动、用例结束、失败、Tier 切换时以及每 5 分钟，记录所有运行中的进程（PID、用户名、完整命令行、CPU・内存・磁盘 IO）、使用 GPU 的进程，以及 CPU・内存・PSI・温度。用于事后确认并行的处理是否干扰了测量。由于会留下其他程序的命令行（包括作为参数写入的路径和值），不移到 `published/` |
+| `preview/` | `scripts/build_cases.py`、`scripts/build_results.py` | 同时读取 `results/` 生成的检查用页面 |
+| `run-status/` | `scripts/start_pipeline.sh`、`scripts/healthcheck.py`、`scripts/preflight.py` | 无人值守运行的状态（`STATUS.md`、`ALERTS.log`、`current-run.json`、`preflight.json`） |
+| `downloads/` | `scripts/download_models.py`、`scripts/overnight.py` | 模型下载的状态与日志（`manifest.json` 含 SHA-256） |
+| `work/` | `scripts/overnight.py`（NVFP4-QAD 转换） | NVFP4-QAD 转换用的工作文件夹。长文语料的原始数据（`work/corpus/raw/`，手动获取）也放在这里，由 `scripts/long_corpus.py` 读取 |
+
+不想记录快照时，请停止 `scripts/start_pipeline.sh` 启动的 `strata-jbench-stats` 单元
+（`systemctl --user stop strata-jbench-stats`，测量本身会继续）。不再需要时，可以删除 `results/` 中的内容。
+
+在仓库之外，模型权重存放在 `~/.local/share/strata/Strata-data/models`，Strata 的启动配置
+（`launch-<model>-<context>`）和 Tier 5 tune 的预设写入 Strata 的设置。测量期间会运行 systemd 用户单元
+（`strata-jbench-*`，由 `systemd-run` 创建的临时单元）。
+
 ## 复现
 
 测量耗时很长，因此作为 systemd 用户单元无人值守运行。步骤（准备环境、preflight、开始、监视、异常恢复、确定结果）见
 [AGENTS.md](AGENTS.md)（英语），环境定义的写法见 [envs/README.md](envs/README.md)。
+
+前提是已安装 Strata（桌面应用）并安装过一次模型，且 Strata 的源码位于 `~/Strata`（下载哪些文件及其 SHA-256 由源码的
+`setup.py` 决定）。下载用和 NVFP4-QAD 转换用的 Python 环境由 `scripts/setup_acquire.py` 创建，`scripts/start_pipeline.sh` 会自动调用它。
 
 ```bash
 python3 -I scripts/envs.py list                                     # 与当前硬件匹配的环境
@@ -135,4 +168,4 @@ RUN_ID=<run id> STEPS="0 1 2 3 4a 4b 4c 4d 5" scripts/start_pipeline.sh       # 
 | [ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF](https://huggingface.co/ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF) | swift IQ2_XS, IQ3_XXS, IQ3_S |
 | [Maximilian228/Qwen3.8-Flash-Next-NVFP4-GPTQ-Strata](https://huggingface.co/Maximilian228/Qwen3.8-Flash-Next-NVFP4-GPTQ-Strata) | nvfp4 NVFP4 |
 | [Maximilian228/Qwen3.8-Flash-Next-NVIDIA-NVFP4-Strata](https://huggingface.co/Maximilian228/Qwen3.8-Flash-Next-NVIDIA-NVFP4-Strata) | nvfp4 NVFP4-NVIDIA |
-| [nvidia/Qwen3.8-Flash-Next-FP4-Local](https://huggingface.co/nvidia/Qwen3.8-Flash-Next-FP4-Local) | nvfp4 NVFP4-QAD（面向 FP4 的再训练；在本机转换为 Strata 的格式） |
+| [nvidia/Qwen3.8-Flash-Next-FP4-Local](https://huggingface.co/nvidia/Qwen3.8-Flash-Next-FP4-Local) | nvfp4 NVFP4-QAD（面向 FP4 的再训练；在测量用的 PC 上用 Strata 自带的工具转换为 Strata 的格式，由 `scripts/overnight.py` 执行） |

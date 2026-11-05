@@ -22,8 +22,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 STATE_DIR = ROOT / 'downloads'
 LOG = STATE_DIR / 'overnight.log'
-# The prepare tool expects llama.cpp at <root>/third_party; the installed Terminal has none, so run it from a copy of
-# its tools beside a link to the installer's llama.cpp (work/qad-root).
+# The prepare tool expects llama.cpp at <root>/third_party, which neither Strata's source nor the app has, so it runs
+# from a copy of the source's tools beside a link to the install's llama.cpp (work/qad-root). scripts/setup_acquire.py
+# makes it and both venvs.
 QAD_ROOT = ROOT / 'work/qad-root'
 GGUF_PY = Path.home() / '.local/share/strata/install/third_party/llama.cpp/gguf-py'
 QAD_PYTHON = ROOT / '.venv-qad/bin/python'

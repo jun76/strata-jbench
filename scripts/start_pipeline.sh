@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Start the unattended pipeline as systemd user units, so nothing depends on a terminal or a Claude session:
-#   strata-jbench-acquire   scripts/overnight.py      downloads, NVFP4-QAD prepare, Q8_0 (skipped when downloads/READY exists)
+#   strata-jbench-acquire   scripts/overnight.py      downloads, NVFP4-QAD prepare, Q8_0 (skipped when downloads/READY exists;
+#                           scripts/setup_acquire.py first makes what it runs with)
 #   strata-jbench-queue     scripts/overnight_bench.sh waits for READY, preflight, then the benchmark Tiers
 #   strata-jbench-health    scripts/healthcheck.py every 15 min: run-status/STATUS.md, alerts on FAILED / STUCK
 #   strata-jbench-stats     scripts/stats_watch.py    process list and machine stats at the runner's key points
@@ -45,6 +46,7 @@ UNIT=(--setenv=PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin" --setenv=RUN
 running() { systemctl --user is-active --quiet "$1"; }
 
 if [ ! -f downloads/READY ]; then
+  python3 -I scripts/setup_acquire.py      # the venvs, the download list and the NVFP4-QAD converter (skipped when there)
   python3 scripts/preflight.py --phase acquire
   if running strata-jbench-acquire; then
     echo "acquire: already running"

@@ -77,6 +77,9 @@ HEAD = {'ja': ['計測完了', '部門', '環境', 'RUN_ID', 'Tier', 'ケース�
         'zh': ['测量完成', '部门', '环境', 'RUN_ID', 'Tier', '用例（done / 全部）', '内容', '查看']}
 LINKS = {'ja': ('グラフ', 'ケース一覧'), 'en': ('Charts', 'Cases'), 'zh': ('图表', '用例一览')}
 NONE = {'ja': 'まだ確定した結果はありません', 'en': 'No published runs yet', 'zh': '尚无已确定的结果'}
+# The latest SHOWN runs stay in view; older ones go into a <details> block (GitHub cannot scroll a table in a box)
+SHOWN = 3
+OLDER = {'ja': 'それより前の RUN（{n} 件）', 'en': 'Earlier runs ({n})', 'zh': '更早的 RUN（{n} 个）'}
 MARK = ('<!-- published-runs:start (scripts/publish.py writes this list) -->', '<!-- published-runs:end -->')
 TIER_ORDER = ['0', '1', '2', '3', '4a', '4b', '4c', '4d', '5']
 
@@ -109,15 +112,21 @@ def update_readme():
         text = path.read_text()
         if MARK[0] not in text or MARK[1] not in text:
             raise SystemExit(f'{path.name} has no {MARK[0]} … {MARK[1]} block')
-        lines = ['| ' + ' | '.join(HEAD[lang]) + ' |', '| ' + ' | '.join(['---'] * len(HEAD[lang])) + ' |']
-        for r in rows:
+        table = ['| ' + ' | '.join(HEAD[lang]) + ' |', '| ' + ' | '.join(['---'] * len(HEAD[lang])) + ' |']
+        charts, cases = LINKS[lang]
+
+        def row(r):
             note = r['notes'].get(lang) or r['notes'].get('ja') or '–'
-            charts, cases = LINKS[lang]
-            lines.append(f'| {r["date"]} | {r["div_label"][lang]} | {r["label"]} | [`{r["run"]}`](published/{r["div"]}/{r["env"]}/{r["run"]}/) | '
-                         f'{r["tiers"]} | {r["cases"]} | {note} | '
-                         f'[{charts}](RESULTS.html?env={r["env"]}) · [{cases}](cases/{r["div"]}/{r["env"]}.html) |')
+            return (f'| {r["date"]} | {r["div_label"][lang]} | {r["label"]} | [`{r["run"]}`](published/{r["div"]}/{r["env"]}/{r["run"]}/) | '
+                    f'{r["tiers"]} | {r["cases"]} | {note} | '
+                    f'[{charts}](RESULTS.html?env={r["env"]}) · [{cases}](cases/{r["div"]}/{r["env"]}.html) |')
+        lines = table + [row(r) for r in rows[:SHOWN]]
         if not rows:
             lines.append('| ' + ' | '.join(['–'] * 6 + [NONE[lang], '–']) + ' |')
+        if rows[SHOWN:]:
+            # blank lines around the table: GitHub renders Markdown inside <details> only when it is set apart
+            lines += ['', '<details>', f'<summary>{OLDER[lang].format(n=len(rows) - SHOWN)}</summary>', '',
+                      *table, *(row(r) for r in rows[SHOWN:]), '', '</details>']
         head, rest = text.split(MARK[0], 1)
         path.write_text(head + MARK[0] + '\n' + '\n'.join(lines) + '\n' + MARK[1] + rest.split(MARK[1], 1)[1])
         print(f'{path.name}: {len(rows)} published run(s) listed')

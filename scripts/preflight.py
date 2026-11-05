@@ -49,13 +49,14 @@ def acquire_checks():
     check('disk: free space covers the remaining downloads + QAD prepare + 30 GB',
           free > left + qad_extra + 30e9, f'free {free / 1e9:.0f} GB, need {(left + qad_extra) / 1e9:.0f} GB + 30')
     rc, out = run([str(overnight.DL_PYTHON), '-c', 'import sys; print(sys.version)'])
-    check('downloader python runs', rc == 0, out)
+    check('downloader python runs (python3 -I scripts/setup_acquire.py)', rc == 0, out)
     if not overnight.qad_prepared():
         # the step that failed on 2026-11-03: import the converter exactly as prepare does
         rc, out = run([str(overnight.QAD_PYTHON), '-c',
                        'import sys; sys.path[:0] = ["tools"]; import nvfp4_convert, nvfp4_local_pack; print("ok")'],
                       cwd=overnight.QAD_ROOT)
-        check('QAD prepare: converter imports (torch, transformers, gguf, llama.cpp conversion)', rc == 0, out[-400:])
+        check('QAD prepare: converter imports (torch, transformers, gguf, llama.cpp conversion; '
+              'python3 -I scripts/setup_acquire.py)', rc == 0, out[-400:])
 
 
 def env_check(explicit):

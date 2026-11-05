@@ -91,7 +91,7 @@ TIER5_VARIANTS = [
     ('vram-reserve', '6512', '6512', '--set vram-reserve-mib=6512', 'デスクトップアプリの保存値'),
     ('vision', 'gpu', 'gpu', '--vision gpu', '画像は入れない。エンコーダが VRAM を取る分の損失だけを見る'),
     ('pool-workers', '8', '8', '--set pool-workers=8', ''),
-    ('cpu-pin', 'pcore', 'P コアのみ', '--pool-cores <P コアの論理 CPU>', 'P コア 1 つにつき 1 論理 CPU（lscpu で2スレッドを持つコア）、CPU 0 はホストスレッド用に除く。この PC では 2,4,6,8,10,12,14'),
+    ('cpu-pin', 'pcore', 'P コアのみ', '--pool-cores <P コアの論理 CPU>', 'P コア 1 つにつき 1 論理 CPU（lscpu で2スレッドを持つコア）、CPU 0 はホストスレッド用に除く。実際の値は計測する PC の lscpu で決まり、起動の記録（launch.txt）に残る'),
     ('ple-io', 'mmap', 'mmap', '--set ple-io=mmap', ''),
     ('parallel', '2', '2', '--parallel 2', 'クライアント並列数も 2'),
     ('parallel', '4', '4', '--parallel 4', 'クライアント並列数も 4'),

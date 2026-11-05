@@ -38,7 +38,7 @@ and between light and dark.
 
 ## Published runs
 
-A row is added here for every run made final (`scripts/publish.py` rewrites the table from `published/`). When the
+A row is added here for every run made final (`scripts/publish.py` rewrites the table from `published/`). The latest three are shown; earlier ones are folded below the table. When the
 same case is in several runs of one environment, the pages use the run whose name sorts last.
 
 <!-- published-runs:start (scripts/publish.py writes this list) -->
@@ -47,7 +47,15 @@ same case is in several runs of one environment, the pages use the run whose nam
 | 2026-11-04 22:51 | Plain (no harness) | GeForce RTX 5090 · 128 GB RAM | [`2026-11-04-long`](published/plain/rtx5090-128g/2026-11-04-long/) | 4b, 4c, 4d | 112 / 112 | Tiers 4b, 4c and 4d (long documents, 32K to 1M, and a YaRN check). 2026-11-03-main skipped them because the long fixtures did not exist yet; a long document was made from ten Japanese and English works of Aozora Bunko and Project Gutenberg and measured | [Charts](RESULTS.html?env=rtx5090-128g) · [Cases](cases/plain/rtx5090-128g.html) |
 | 2026-11-04 18:20 | Plain (no harness) | GeForce RTX 5090 · 128 GB RAM | [`2026-11-04-q8-t3`](published/plain/rtx5090-128g/2026-11-04-q8-t3/) | 3 | 9 / 9 | Tier 3 for unsloth Q8_0 (with and without thinking, and the game task). The first plan left Q8_0 out of Tier 3, so it was added and measured | [Charts](RESULTS.html?env=rtx5090-128g) · [Cases](cases/plain/rtx5090-128g.html) |
 | 2026-11-04 15:25 | Plain (no harness) | GeForce RTX 5090 · 128 GB RAM | [`2026-11-04-iq3s-mtp`](published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/) | 0, 1, 2, 3, 4a, 5 | 159 / 159 | qwen IQ3_S measured again (in 2026-11-03-main its MTP draft layer was not loaded); the same Tiers, DFlash2 cases included | [Charts](RESULTS.html?env=rtx5090-128g) · [Cases](cases/plain/rtx5090-128g.html) |
+
+<details>
+<summary>Earlier runs (1)</summary>
+
+| Finished | Division | Environment | RUN_ID | Tier | Cases (done / all) | Content | See |
+| --- | --- | --- | --- | --- | --- | --- | --- |
 | 2026-11-04 10:41 | Plain (no harness) | GeForce RTX 5090 · 128 GB RAM | [`2026-11-03-main`](published/plain/rtx5090-128g/2026-11-03-main/) | 0, 1, 2, 3, 4a, 5 | 1231 / 1231 | The first full run (Tiers 0, 1, 2, 4a, 3, 5; 18 models). qwen IQ3_S ran without MTP here, so the pages use its re-run, 2026-11-04-iq3s-mtp | [Charts](RESULTS.html?env=rtx5090-128g) · [Cases](cases/plain/rtx5090-128g.html) |
+
+</details>
 <!-- published-runs:end -->
 
 ## What is measured
@@ -110,11 +118,38 @@ Published runs are in `published/<division>/<environment>/<RUN_ID>/` (only `publ
 The raw streams (SSE and the full thinking text) and the machine snapshots (every process on the PC) are not published.
 In the published logs the home folder is written as `~` and the host name as `<host>`.
 
+### What stays on your machine
+
+Running the scripts creates these folders inside the repository. None of them is in Git ([.gitignore](.gitignore)),
+and nothing in them is sent anywhere (the only network traffic is downloading the models).
+
+| Folder | Written by | What it holds |
+| --- | --- | --- |
+| `results/` | `scripts/bench_runner.py` and others | Runs being measured; they stay here until moved to `published/` |
+| `results/…/<RUN_ID>/raw/` | `scripts/bench_runner.py` | The raw streams (SSE and the full thinking text); never moved to `published/` |
+| `results/…/<RUN_ID>/stats/snapshots.jsonl.gz`, `last.json` | `scripts/stats_watch.py` | **Snapshots of the whole PC during a run.** At each session start, launch, case end, failure and Tier change, and every 5 minutes: every running process (PID, user name, full command line, CPU, memory, disk IO), the processes using the GPU, and CPU, memory, PSI and temperatures. They are for checking afterwards that nothing running beside the benchmark disturbed it. They keep other programs' command lines (with any paths or values given as arguments), so they are never moved to `published/` |
+| `preview/` | `scripts/build_cases.py`, `scripts/build_results.py` | Pages for checking, built with `results/` too |
+| `run-status/` | `scripts/start_pipeline.sh`, `scripts/healthcheck.py`, `scripts/preflight.py` | The state of an unattended run (`STATUS.md`, `ALERTS.log`, `current-run.json`, `preflight.json`) |
+| `downloads/` | `scripts/download_models.py`, `scripts/overnight.py` | Download state and logs (`manifest.json` with SHA-256) |
+| `work/` | `scripts/overnight.py` (the NVFP4-QAD conversion) | The working folder for the NVFP4-QAD conversion. The long corpus's sources (`work/corpus/raw/`, fetched by hand) are kept here too, and `scripts/long_corpus.py` reads them |
+
+To take no snapshots, stop the `strata-jbench-stats` unit that `scripts/start_pipeline.sh` starts
+(`systemctl --user stop strata-jbench-stats`; the measurement goes on). Anything under `results/` can be deleted once
+it is no longer needed.
+
+Outside the repository, the model weights go to `~/.local/share/strata/Strata-data/models`, and Strata's launch
+profiles (`launch-<model>-<context>`) and Tier 5's tuned presets go into Strata's settings. During a run, systemd user
+units (`strata-jbench-*`, transient ones made by `systemd-run`) are running.
+
 ## Running it again
 
 The measurement takes a long time, so it runs unattended as systemd user units. The procedure (preparing an
 environment, preflight, starting, watching, recovering, making a run final) is in [AGENTS.md](AGENTS.md),
 and how to write an environment in [envs/README.md](envs/README.md).
+
+It needs Strata (the desktop app) installed, with one model installed once, and Strata's source in `~/Strata` (its
+`setup.py` pins the files fetched and their SHA-256). The Python environments for downloading and for the NVFP4-QAD
+conversion are made by `scripts/setup_acquire.py`, which `scripts/start_pipeline.sh` runs by itself.
 
 ```bash
 python3 -I scripts/envs.py list                                     # the environment this hardware matches
@@ -155,4 +190,4 @@ RUN_ID=<run id> STEPS="0 1 2 3 4a 4b 4c 4d 5" scripts/start_pipeline.sh       # 
 | [ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF](https://huggingface.co/ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF) | swift IQ2_XS, IQ3_XXS, IQ3_S |
 | [Maximilian228/Qwen3.8-Flash-Next-NVFP4-GPTQ-Strata](https://huggingface.co/Maximilian228/Qwen3.8-Flash-Next-NVFP4-GPTQ-Strata) | nvfp4 NVFP4 |
 | [Maximilian228/Qwen3.8-Flash-Next-NVIDIA-NVFP4-Strata](https://huggingface.co/Maximilian228/Qwen3.8-Flash-Next-NVIDIA-NVFP4-Strata) | nvfp4 NVFP4-NVIDIA |
-| [nvidia/Qwen3.8-Flash-Next-FP4-Local](https://huggingface.co/nvidia/Qwen3.8-Flash-Next-FP4-Local) | nvfp4 NVFP4-QAD (retrained for FP4; converted to Strata's format on this PC) |
+| [nvidia/Qwen3.8-Flash-Next-FP4-Local](https://huggingface.co/nvidia/Qwen3.8-Flash-Next-FP4-Local) | nvfp4 NVFP4-QAD (retrained for FP4; converted to Strata's format on the measuring PC with Strata's own tool, by `scripts/overnight.py`) |
