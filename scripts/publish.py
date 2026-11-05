@@ -81,6 +81,8 @@ HEAD = {'ja': ['計測完了', '部門', '環境', 'RUN_ID', 'Tier', 'ケース�
         'en': ['Finished', 'Division', 'Environment', 'RUN_ID', 'Tier', 'Cases (done / all)', 'Content', 'See'],
         'zh': ['测量完成', '部门', '环境', 'RUN_ID', 'Tier', '用例（done / 全部）', '内容', '查看']}
 LINKS = {'ja': ('グラフ', 'ケース一覧', 'エビデンス'), 'en': ('Charts', 'Cases', 'Evidence'), 'zh': ('图表', '用例一览', '证据')}
+# One emoji per link keeps the narrow column readable; the name is the link's title (shown on hover)
+ICONS = ('📈', '📋', '📁')
 NONE = {'ja': 'まだ結果はありません', 'en': 'No results yet', 'zh': '尚无结果'}
 SUFFIX = {'ja': '', 'en': '.en', 'zh': '.zh'}
 # The latest SHOWN runs stay in view; older ones go into a <details> block (GitHub cannot scroll a table in a box)
@@ -128,8 +130,9 @@ def update_readme():
             tag = envs.tag(r['env'], r['run'], r['div'])
             return (f'| {r["date"]} | {r["div_label"][lang]} | {r["label"]} | `{r["run"]}` | '
                     f'{r["tiers"]} | {r["cases"]} | {note} | '
-                    f'[{charts}]({f"{pages}/{snap}" if pages else snap}) · [{cases}]({f"{repo}/blob/{tag}/{lists}" if repo else lists}) · '
-                    f'[{files}](published/{r["div"]}/{r["env"]}/{r["run"]}/) |')
+                    f'[{ICONS[0]}]({f"{pages}/{snap}" if pages else snap} "{charts}") '
+                    f'[{ICONS[1]}]({f"{repo}/blob/{tag}/{lists}" if repo else lists} "{cases}") '
+                    f'[{ICONS[2]}](published/{r["div"]}/{r["env"]}/{r["run"]}/ "{files}") |')
         lines = table + [row(r) for r in rows[:SHOWN]]
         if not rows:
             lines.append('| ' + ' | '.join(['–'] * 6 + [NONE[lang], '–']) + ' |')

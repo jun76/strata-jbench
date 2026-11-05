@@ -26,27 +26,27 @@
 
 計測が終わるたびに、この表の一番上に行が足されます。新しい 3 件を表に出し、それより前は表の下に折りたたんでいます。各行の「見る」から次の 3 つを開けます。
 
-| リンク | 中身 |
+| 見る | 中身 |
 | --- | --- |
-| グラフ | その RUN の計測が終わった時点の結果をまとめたページ（GitHub Pages）。モデル別の速さ、入力の長さと待ち時間、standard-v1、thinking の有無、コンテキスト長の確保コスト、長文の読解（〜1M token）、起動オプション、計測時の温度・電力・メモリ、モデル別の一覧。全ケースの数値（`summary.csv`）もここから。右上で日本語・English・中文と、ライト・ダークを切り替えられます |
-| ケース一覧 | 同じ時点の、環境ごとの全ケース（GitHub 上の Markdown と CSV）。Tier ごとの表に、ケースの条件・結果・記録へのリンク |
-| エビデンス | その RUN の記録そのもの（送ったリクエスト、返ってきた応答、集計、起動の記録など。中身は「データの置き場所」） |
+| 📈 グラフ | その RUN の計測が終わった時点の結果をまとめたページ（GitHub Pages）。モデル別の速さ、入力の長さと待ち時間、standard-v1、thinking の有無、コンテキスト長の確保コスト、長文の読解（〜1M token）、起動オプション、計測時の温度・電力・メモリ、モデル別の一覧。全ケースの数値（`summary.csv`）もここから。右上で日本語・English・中文と、ライト・ダークを切り替えられます |
+| 📋 ケース一覧 | 同じ時点の、環境ごとの全ケース（GitHub 上の Markdown と CSV）。Tier ごとの表に、ケースの条件・結果・記録へのリンク |
+| 📁 エビデンス | その RUN の記録そのもの（送ったリクエスト、返ってきた応答、集計、起動の記録など。中身は「データの置き場所」） |
 
 グラフとケース一覧には、その RUN までに計測した RUN の結果がまとめて載ります。同じ環境で同じケースが複数の RUN_ID にあるときは、名前が後ろに並ぶ RUN_ID の結果を使います。
 
 <!-- published-runs:start (scripts/publish.py writes this list) -->
 | 計測完了 | 部門 | 環境 | RUN_ID | Tier | ケース（done / 全体） | 内容 | 見る |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-11-04 22:51 | プレーン（ハーネスなし） | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-long` | 4b, 4c, 4d | 112 / 112 | Tier 4b・4c・4d（長文の読解 32K〜1M と YaRN の点検）。2026-11-03-main では長文の fixture が未作成で省いていたので、青空文庫と Project Gutenberg の日英10作品から長文を作って追加で測った | [グラフ](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-long/?env=rtx5090-128g) · [ケース一覧](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-long/cases/plain/rtx5090-128g/README.md) · [エビデンス](published/plain/rtx5090-128g/2026-11-04-long/) |
-| 2026-11-04 18:20 | プレーン（ハーネスなし） | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-q8-t3` | 3 | 9 / 9 | unsloth Q8_0 の Tier 3（thinking の有無とゲーム作成）。当初の計画では Q8_0 を Tier 3 から外していたので、計画に足して追加で測った | [グラフ](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-q8-t3/?env=rtx5090-128g) · [ケース一覧](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-q8-t3/cases/plain/rtx5090-128g/README.md) · [エビデンス](published/plain/rtx5090-128g/2026-11-04-q8-t3/) |
-| 2026-11-04 15:25 | プレーン（ハーネスなし） | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-iq3s-mtp` | 0, 1, 2, 3, 4a, 5 | 159 / 159 | qwen IQ3_S の測り直し（2026-11-03-main では MTP の draft layer が読み込まれていなかった）。DFlash2 のケースも含めて同じ Tier を流し直した | [グラフ](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-iq3s-mtp/?env=rtx5090-128g) · [ケース一覧](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/plain/rtx5090-128g/README.md) · [エビデンス](published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/) |
+| 2026-11-04 22:51 | プレーン（ハーネスなし） | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-long` | 4b, 4c, 4d | 112 / 112 | Tier 4b・4c・4d（長文の読解 32K〜1M と YaRN の点検）。2026-11-03-main では長文の fixture が未作成で省いていたので、青空文庫と Project Gutenberg の日英10作品から長文を作って追加で測った | [📈](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-long/?env=rtx5090-128g "グラフ") [📋](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-long/cases/plain/rtx5090-128g/README.md "ケース一覧") [📁](published/plain/rtx5090-128g/2026-11-04-long/ "エビデンス") |
+| 2026-11-04 18:20 | プレーン（ハーネスなし） | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-q8-t3` | 3 | 9 / 9 | unsloth Q8_0 の Tier 3（thinking の有無とゲーム作成）。当初の計画では Q8_0 を Tier 3 から外していたので、計画に足して追加で測った | [📈](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-q8-t3/?env=rtx5090-128g "グラフ") [📋](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-q8-t3/cases/plain/rtx5090-128g/README.md "ケース一覧") [📁](published/plain/rtx5090-128g/2026-11-04-q8-t3/ "エビデンス") |
+| 2026-11-04 15:25 | プレーン（ハーネスなし） | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-iq3s-mtp` | 0, 1, 2, 3, 4a, 5 | 159 / 159 | qwen IQ3_S の測り直し（2026-11-03-main では MTP の draft layer が読み込まれていなかった）。DFlash2 のケースも含めて同じ Tier を流し直した | [📈](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-iq3s-mtp/?env=rtx5090-128g "グラフ") [📋](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/plain/rtx5090-128g/README.md "ケース一覧") [📁](published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/ "エビデンス") |
 
 <details>
 <summary>それより前の RUN（1 件）</summary>
 
 | 計測完了 | 部門 | 環境 | RUN_ID | Tier | ケース（done / 全体） | 内容 | 見る |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-11-04 10:41 | プレーン（ハーネスなし） | GeForce RTX 5090 · 128 GB RAM | `2026-11-03-main` | 0, 1, 2, 3, 4a, 5 | 1231 / 1231 | 最初の通し計測（Tier 0・1・2・4a・3・5、18モデル）。このうち qwen IQ3_S は MTP が効いていなかったので、ページには 2026-11-04-iq3s-mtp の測り直しを使う | [グラフ](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-03-main/?env=rtx5090-128g) · [ケース一覧](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-03-main/cases/plain/rtx5090-128g/README.md) · [エビデンス](published/plain/rtx5090-128g/2026-11-03-main/) |
+| 2026-11-04 10:41 | プレーン（ハーネスなし） | GeForce RTX 5090 · 128 GB RAM | `2026-11-03-main` | 0, 1, 2, 3, 4a, 5 | 1231 / 1231 | 最初の通し計測（Tier 0・1・2・4a・3・5、18モデル）。このうち qwen IQ3_S は MTP が効いていなかったので、ページには 2026-11-04-iq3s-mtp の測り直しを使う | [📈](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-03-main/?env=rtx5090-128g "グラフ") [📋](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-03-main/cases/plain/rtx5090-128g/README.md "ケース一覧") [📁](published/plain/rtx5090-128g/2026-11-03-main/ "エビデンス") |
 
 </details>
 <!-- published-runs:end -->

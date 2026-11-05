@@ -25,27 +25,27 @@
 
 每次测量结束，本表最上方就会增加一行。表中显示最新的 3 个，更早的折叠在表的下方。每行的“查看”可打开以下 3 项：
 
-| 链接 | 内容 |
+| 查看 | 内容 |
 | --- | --- |
-| 图表 | 该 RUN 测量结束时的结果汇总页面（GitHub Pages）：各模型速度、输入长度与等待时间、standard-v1、有无 thinking、预留上下文长度的代价、长文阅读（至 1M token）、启动选项、测量时的温度・功耗・内存、各模型一览。全部用例的数值（`summary.csv`）也从这里链接。右上角可切换日本語・English・中文，以及浅色・深色 |
-| 用例一览 | 同一时点各环境的全部用例（GitHub 上的 Markdown 与 CSV）：每个 Tier 一张表，含用例的条件、结果和记录的链接 |
-| 证据 | 该 RUN 的记录本身（所发请求、所得回答、汇总、启动记录等；见“数据位置”） |
+| 📈 图表 | 该 RUN 测量结束时的结果汇总页面（GitHub Pages）：各模型速度、输入长度与等待时间、standard-v1、有无 thinking、预留上下文长度的代价、长文阅读（至 1M token）、启动选项、测量时的温度・功耗・内存、各模型一览。全部用例的数值（`summary.csv`）也从这里链接。右上角可切换日本語・English・中文，以及浅色・深色 |
+| 📋 用例一览 | 同一时点各环境的全部用例（GitHub 上的 Markdown 与 CSV）：每个 Tier 一张表，含用例的条件、结果和记录的链接 |
+| 📁 证据 | 该 RUN 的记录本身（所发请求、所得回答、汇总、启动记录等；见“数据位置”） |
 
 图表和用例一览汇总了截至该 RUN 测量的所有 RUN 的结果。同一环境中同一用例出现在多个 RUN_ID 时，使用名称排在最后的 RUN_ID 的结果。
 
 <!-- published-runs:start (scripts/publish.py writes this list) -->
 | 测量完成 | 部门 | 环境 | RUN_ID | Tier | 用例（done / 全部） | 内容 | 查看 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-11-04 22:51 | 纯模型（无 harness） | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-long` | 4b, 4c, 4d | 112 / 112 | Tier 4b・4c・4d（32K〜1M 的长文阅读与 YaRN 检查）。2026-11-03-main 因长文 fixture 尚未制作而省略，之后用青空文库与 Project Gutenberg 的日英 10 部作品制作长文补测 | [图表](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-long/?env=rtx5090-128g) · [用例一览](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-long/cases/plain/rtx5090-128g/README.zh.md) · [证据](published/plain/rtx5090-128g/2026-11-04-long/) |
-| 2026-11-04 18:20 | 纯模型（无 harness） | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-q8-t3` | 3 | 9 / 9 | unsloth Q8_0 的 Tier 3（有无 thinking 与游戏制作）。最初的计划把 Q8_0 排除在 Tier 3 之外，因此加入计划后补测 | [图表](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-q8-t3/?env=rtx5090-128g) · [用例一览](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-q8-t3/cases/plain/rtx5090-128g/README.zh.md) · [证据](published/plain/rtx5090-128g/2026-11-04-q8-t3/) |
-| 2026-11-04 15:25 | 纯模型（无 harness） | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-iq3s-mtp` | 0, 1, 2, 3, 4a, 5 | 159 / 159 | qwen IQ3_S 的重测（2026-11-03-main 中 MTP 的 draft layer 未加载）。包括 DFlash2 用例在内重跑了相同的 Tier | [图表](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-iq3s-mtp/?env=rtx5090-128g) · [用例一览](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/plain/rtx5090-128g/README.zh.md) · [证据](published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/) |
+| 2026-11-04 22:51 | 纯模型（无 harness） | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-long` | 4b, 4c, 4d | 112 / 112 | Tier 4b・4c・4d（32K〜1M 的长文阅读与 YaRN 检查）。2026-11-03-main 因长文 fixture 尚未制作而省略，之后用青空文库与 Project Gutenberg 的日英 10 部作品制作长文补测 | [📈](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-long/?env=rtx5090-128g "图表") [📋](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-long/cases/plain/rtx5090-128g/README.zh.md "用例一览") [📁](published/plain/rtx5090-128g/2026-11-04-long/ "证据") |
+| 2026-11-04 18:20 | 纯模型（无 harness） | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-q8-t3` | 3 | 9 / 9 | unsloth Q8_0 的 Tier 3（有无 thinking 与游戏制作）。最初的计划把 Q8_0 排除在 Tier 3 之外，因此加入计划后补测 | [📈](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-q8-t3/?env=rtx5090-128g "图表") [📋](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-q8-t3/cases/plain/rtx5090-128g/README.zh.md "用例一览") [📁](published/plain/rtx5090-128g/2026-11-04-q8-t3/ "证据") |
+| 2026-11-04 15:25 | 纯模型（无 harness） | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-iq3s-mtp` | 0, 1, 2, 3, 4a, 5 | 159 / 159 | qwen IQ3_S 的重测（2026-11-03-main 中 MTP 的 draft layer 未加载）。包括 DFlash2 用例在内重跑了相同的 Tier | [📈](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-iq3s-mtp/?env=rtx5090-128g "图表") [📋](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/plain/rtx5090-128g/README.zh.md "用例一览") [📁](published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/ "证据") |
 
 <details>
 <summary>更早的 RUN（1 个）</summary>
 
 | 测量完成 | 部门 | 环境 | RUN_ID | Tier | 用例（done / 全部） | 内容 | 查看 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-11-04 10:41 | 纯模型（无 harness） | GeForce RTX 5090 · 128 GB RAM | `2026-11-03-main` | 0, 1, 2, 3, 4a, 5 | 1231 / 1231 | 第一次完整测量（Tier 0・1・2・4a・3・5，18 个模型）。其中 qwen IQ3_S 未启用 MTP，页面使用重测的 2026-11-04-iq3s-mtp | [图表](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-03-main/?env=rtx5090-128g) · [用例一览](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-03-main/cases/plain/rtx5090-128g/README.zh.md) · [证据](published/plain/rtx5090-128g/2026-11-03-main/) |
+| 2026-11-04 10:41 | 纯模型（无 harness） | GeForce RTX 5090 · 128 GB RAM | `2026-11-03-main` | 0, 1, 2, 3, 4a, 5 | 1231 / 1231 | 第一次完整测量（Tier 0・1・2・4a・3・5，18 个模型）。其中 qwen IQ3_S 未启用 MTP，页面使用重测的 2026-11-04-iq3s-mtp | [📈](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-03-main/?env=rtx5090-128g "图表") [📋](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-03-main/cases/plain/rtx5090-128g/README.zh.md "用例一览") [📁](published/plain/rtx5090-128g/2026-11-03-main/ "证据") |
 
 </details>
 <!-- published-runs:end -->
