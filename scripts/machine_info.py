@@ -49,10 +49,16 @@ def drive_of(path):
     return read(f'/sys/block/{disk}/device/model') or None, None
 
 
-def env_summary(lscpu_c, smi, memory):
+def gpu_names():
+    """Every NVIDIA card's name, in nvidia-smi's order (its -i numbers)."""
+    return [n.strip() for n in run(['nvidia-smi', '--query-gpu=name', '--format=csv,noheader']).splitlines() if n.strip()]
+
+
+def env_summary(lscpu_c, smi, memory, gpu_index=0):
     os_release = dict(re.findall(r'^(\w+)="?([^"\n]*)"?$', read('/etc/os-release'), re.M))
     mem_kb = int(re.search(r'MemTotal:\s+(\d+)', read('/proc/meminfo')).group(1))
-    gpu_q = run(['nvidia-smi', '--query-gpu=name,memory.total,pcie.link.gen.max,pcie.link.width.max',
+    # one card: the one the environment measures on (env.json "gpu_index"); a PC with two cards lists both otherwise
+    gpu_q = run(['nvidia-smi', '-i', str(gpu_index), '--query-gpu=name,memory.total,pcie.link.gen.max,pcie.link.width.max',
                  '--format=csv,noheader,nounits']).strip().split(', ')
     threads = int(field(lscpu_c, 'CPU(s)') or 0)
     cores = int(field(lscpu_c, 'Core(s) per socket') or 0) * int(field(lscpu_c, 'Socket(s)') or 1)
@@ -61,6 +67,7 @@ def env_summary(lscpu_c, smi, memory):
     default = re.search(r'Default Power Limit\s+:\s+([\d.]+) W', smi)
     return {
         'gpu': gpu_q[0] if gpu_q and gpu_q[0] else field(smi, 'Product Name'),
+        'gpu_index': gpu_index, 'gpus': gpu_names(),
         'gpu_vram_mib': int(gpu_q[1]) if len(gpu_q) > 1 and gpu_q[1].isdigit() else None,
         'gpu_pcie': f'PCIe {gpu_q[2]}.0 x{gpu_q[3]}' if len(gpu_q) > 3 else None,
         'gpu_driver': field(smi, 'Driver Version'), 'cuda': field(smi, 'CUDA Version'),
@@ -78,12 +85,13 @@ def env_summary(lscpu_c, smi, memory):
     }
 
 
-def collect(p_cores=None, memory=None):
-    """memory: the environment's hand-written RAM details (envs/<id>/env.json), which need root to read."""
+def collect(p_cores=None, memory=None, gpu_index=0):
+    """memory: the environment's hand-written RAM details (envs/<id>/env.json), which need root to read. gpu_index: the card
+    the environment measures on (env.json "gpu_index")."""
     lscpu = run(['lscpu'])
-    smi = run(['nvidia-smi', '-q'])[:20000]
+    smi = run(['nvidia-smi', '-q', '-i', str(gpu_index)])[:20000]
     strata = run(['strata', '--version']).strip()
-    env = env_summary(run(['lscpu'], {'LC_ALL': 'C'}), smi, memory)
+    env = env_summary(run(['lscpu'], {'LC_ALL': 'C'}), smi, memory, gpu_index)
     env['strata'] = re.sub(r';\s*python .*\)', ')', strata)   # without the install path
     out = {'lscpu': lscpu, 'nvidia_smi': smi, 'strata': strata, 'uname': ' '.join(os.uname()), 'env': env}
     if p_cores is not None:
@@ -113,7 +121,7 @@ def env_for(root, cfg, published_only=False):
     import envs
     env, run_id = latest_env(root, cfg['id'], published_only)
     if not env and envs.detect()[0] == cfg['id']:
-        env = collect(memory=cfg.get('memory'))['env']
+        env = collect(memory=cfg.get('memory'), gpu_index=cfg.get('gpu_index', 0))['env']
     if not env:
         hw = cfg.get('hardware') or {}
         env = {'gpu': (cfg.get('match') or {}).get('gpu'), 'gpu_vram_mib': (hw.get('gpu_vram_gib') or 0) * 1024 or None,
@@ -222,7 +230,8 @@ def main():
     import envs
     path = Path(sys.argv[1])
     data = json.loads(path.read_text())
-    new = collect(memory=envs.load(sys.argv[2]).get('memory'))
+    cfg = envs.load(sys.argv[2])
+    new = collect(memory=cfg.get('memory'), gpu_index=cfg.get('gpu_index', 0))
     data['env'] = {**data.get('env', {}), **new['env']}
     # The GPU power limit belongs to the time of the run, not to now.
     limit = re.search(r'Current Power Limit\s+:\s+([\d.]+) W', data.get('nvidia_smi', ''))

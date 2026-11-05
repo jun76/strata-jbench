@@ -22,7 +22,7 @@
 ```bash
 python3 -I scripts/envs.py list              # 全環境と、いま合う環境（*）
 python3 -I scripts/envs.py detect            # いま合う環境の id
-python3 -I scripts/envs.py new rtx5070-64g   # いまのハードウェアから env.json の雛形を作る
+python3 -I scripts/envs.py new rtx5070-64g   # いまのハードウェアから env.json の雛形を作る（2枚目のカードなら --gpu 1）
 ```
 
 ## env.json の項目
@@ -31,11 +31,12 @@ python3 -I scripts/envs.py new rtx5070-64g   # いまのハードウェアから
 | --- | --- | --- |
 | `label` | ページに出す名前 | `"GeForce RTX 5090 · 128 GB RAM"` |
 | `match.gpu` | `nvidia-smi` の GPU 名。判定に使う | `new` が入れる |
+| `gpu_index` | 測るカードの番号（`nvidia-smi -i` の番号）。launch は `--gpu` でこのカードだけを使い、`match.gpu` もこの番号のカードと比べる。カードが2枚ある PC では1枚ずつ別の環境にする | `new --gpu N` が入れる（既定 0） |
 | `match.ram_gib` | MemTotal（GiB）。判定に使う | `new` が入れる |
 | `hardware.gpu_vram_gib`, `hardware.ram_gib` | 見積もりに使う（モデルの大きさを RAM + VRAM と比べた区分 small / edge / large） | `new` が入れる。まだ無い構成の計画を先に作るなら手で書く |
 | `gpu_power_limit_w` | 電力上限を設定して測るならその W。preflight が確かめる | `null` ならカードの既定で、確かめない |
 | `drafters` | 使える drafter。`dflash2` があると Tier 1 に DFlash2 の decode ケースが付く | `new` が `strata launch --plan` で確かめて入れる |
-| `models` | 測るモデル（`"qwen IQ3_S"` の形）。Tier 0・4・5 の代表モデルも、ここに無ければ外れる | `null` なら全18モデル |
+| `models` | 測るモデル（`"qwen IQ3_S"` の形）。Tier 0・4・5 の代表モデルも、ここに無ければ外れる。ダウンロードするモデルもこれに従う（`scripts/setup_acquire.py`） | `null` なら `scripts/build_cases.py` の `MODELS` の全モデル（増えたモデルも入る）。測るモデルを決めて固定するなら列挙する |
 | `memory` | RAM の種類・速度・枚数（`sudo dmidecode -t memory` の結果を書き写す） | `{"type": "DDR5", "speed_mts": 5600, "configured_mts": 5600, "modules": [{"slot": "...", "size_gib": 64}], "channels": 2, "recorded_at": "YYYY-MM-DD"}` |
 | `assume` | 見積もりの前提の上書き（`scripts/build_cases.py` の `ASSUME` と同じキー） | 遅いカードなら `{"decode_tps": {"small": 40, "edge": 25, "large": 8, "nvfp4": 30}}` など |
 | `notes` | 自由記述（電力上限の設定方法など） | |

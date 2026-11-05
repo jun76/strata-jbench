@@ -117,6 +117,7 @@ def proc_info(pid):
             'comm': st[st.find('(') + 1:st.rfind(')')], 'cmd': SECRET.sub(r'\1***', cmd)[:300]}
 
 
+CARD = '0'   # the environment's card (env.json "gpu_index"), set in main()
 GPU_Q = ('memory.used,memory.total,utilization.gpu,utilization.memory,power.draw,power.draw.average,power.draw.instant,'
          'power.limit,enforced.power.limit,temperature.gpu,temperature.gpu.tlimit,clocks.sm,clocks.max.sm,clocks.mem,'
          'pstate,fan.speed,clocks_throttle_reasons.active')
@@ -127,7 +128,8 @@ GPU_COUNTERS = {'SW Power Capping': 'power_cap', 'SW Thermal Slowdown': 'sw_ther
 
 def gpu_counters():
     try:
-        out = subprocess.run(['nvidia-smi', '-q', '-d', 'PERFORMANCE'], capture_output=True, text=True, timeout=20).stdout
+        out = subprocess.run(['nvidia-smi', '-q', '-i', CARD, '-d', 'PERFORMANCE'], capture_output=True, text=True,
+                             timeout=20).stdout
     except (OSError, subprocess.TimeoutExpired):
         return {}
     part = out.split('Clocks Event Reasons Counters', 1)[-1]
@@ -183,7 +185,7 @@ def throttle_delta(now_t, prev_t, cur, prev, gcur, gprev):
 def gpu():
     q = GPU_Q
     try:
-        r = subprocess.run(['nvidia-smi', f'--query-gpu={q}', '--format=csv,noheader,nounits'],
+        r = subprocess.run(['nvidia-smi', '-i', CARD, f'--query-gpu={q}', '--format=csv,noheader,nounits'],
                            capture_output=True, text=True, timeout=20)
         apps = subprocess.run(['nvidia-smi', '--query-compute-apps=pid,process_name,used_memory',
                                '--format=csv,noheader,nounits'], capture_output=True, text=True, timeout=20)
@@ -324,7 +326,7 @@ class ThermalLog:
         mhz = [float(x) for x in re.findall(r'cpu MHz\s+:\s+([\d.]+)', read('/proc/cpuinfo'))]
         c, thr, gc = cpu_total(), cpu_throttle(), gpu_counters()
         try:
-            r = subprocess.run(['nvidia-smi', f'--query-gpu={self.Q}', '--format=csv,noheader,nounits'],
+            r = subprocess.run(['nvidia-smi', '-i', CARD, f'--query-gpu={self.Q}', '--format=csv,noheader,nounits'],
                                capture_output=True, text=True, timeout=20).stdout.strip().split(',')
         except (OSError, subprocess.TimeoutExpired):
             r = []
@@ -400,7 +402,10 @@ def main():
     a = ap.parse_args()
     sys.path.insert(0, str(ROOT / 'scripts'))
     import envs
-    run_dir = envs.run_dir(a.env or envs.current(), a.run_id)
+    global CARD
+    env_id = a.env or envs.current()
+    CARD = str(envs.gpu_index(envs.load(env_id)))
+    run_dir = envs.run_dir(env_id, a.run_id)
     out_dir = run_dir / 'stats'
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / 'snapshots.jsonl.gz'

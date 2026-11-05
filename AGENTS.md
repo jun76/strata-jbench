@@ -64,11 +64,14 @@ the NVFP4 ready-made packs need Strata's setup once with `--no-start` to write t
 
 1. `python3 -I scripts/envs.py list` shows whether an environment matches the hardware now (marked `*`).
 2. If none does, `python3 -I scripts/envs.py new <env>` writes `envs/<env>/env.json` (ids like `rtx5070-64g`: GPU and
-   RAM). It fills in the GPU name, VRAM, RAM and whether DFlash2 is available (checked with `strata launch --plan`).
+   RAM). On a PC with two cards each card is an environment of its own: `--gpu N` picks the card (`gpu_index`; the
+   runner launches with `--gpu N` and reads that card alone). When two environments match the PC, name one with `BENCH_ENV`. It fills in the GPU name, VRAM, RAM and whether DFlash2 is available (checked with `strata launch --plan`).
    Then fill in by hand:
    - `memory`: the output of `sudo dmidecode -t memory` (type, speed, modules; it needs root, so ask the user to run it)
    - `gpu_power_limit_w`: the power limit, if one is set for measuring; `null` to measure at the card's default
-   - `models`: the list (in the form `"qwen IQ3_S"`) to measure only some models; `null` for all
+   - `models`: the list (in the form `"qwen IQ3_S"`) to measure only some models; `null` for every model of
+     `scripts/build_cases.py` (including models added later). The downloads follow it too: `scripts/setup_acquire.py`
+     lists only these models in `downloads/manifest.json`, and writes it again (removing `downloads/READY`) when it changes
 3. The GPU power-limit unit `gpu-power-limit.service` is fixed at 500 W (for the RTX 5090). On another card, ask the
    user to disable it (`sudo systemctl disable --now gpu-power-limit.service`) or change the value (it is a system
    setting, so the agent does not do it).
@@ -260,7 +263,7 @@ policy, report the cause and a proposal, and stop.
 - `strata launch --stop` stops only what the CLI started; the desktop app's engine keeps running.
 - The drafter is fixed with `--drafting mtp --mtp on` (the runner adds it). Since 0.2.10, Auto picks DFlash2 for qwen,
   gyro and unsloth and MTP for coder, swift and nvfp4, so without fixing it the drafter would differ between models.
-  DFlash2 is measured again as its own launches for Tier 1 decode on the 11 models that have it, and no drafter in
+  DFlash2 is measured again as its own launches for Tier 1 decode on the models that have it (qwen, gyro, unsloth), and no drafter in
   Tier 5. DFlash2 cases are made only in environments whose env.json lists `dflash2` in `drafters` (DFlash2 needs a
   CUDA 8.6 / 8.9 / 12.x GPU; a 7.5 card such as the RTX 2070 has none). Fetch the DFlash2 drafter (1.2 GB) with
   `strata drafting fetch` beforehand (preflight checks it).

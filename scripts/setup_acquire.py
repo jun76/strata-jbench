@@ -6,14 +6,15 @@ runs it while downloads/READY is missing). It writes only inside the repository 
 packages from PyPI and the PyTorch index; nothing in Strata's own folders is changed.
 
   1. .venv-hf      the downloader's Python: Strata's bundled Python + scripts/requirements-acquire.txt
-  2. downloads/manifest.json   every file to fetch, pinned by Strata's setup.py (scripts/download_models.py prepare)
+  2. downloads/manifest.json   every file to fetch, pinned by Strata's setup.py (scripts/download_models.py prepare): the
+                   models of the environment (env.json "models"); written again, and READY removed, when they change
   3. .venv-qad     the NVFP4-QAD converter's Python: Strata's requirements.txt + requirements-nvfp4-local.txt
                    (torch, transformers, safetensors; the CPU build of torch on Linux, as Strata's setup installs it)
   4. work/qad-root the Strata source's tools beside the install's llama.cpp: tools/nvfp4_convert.py imports llama.cpp
                    from <its own root>/third_party/llama.cpp, which neither the source checkout nor the app has
                    (setup writes it to ~/.local/share/strata/install/third_party), so the tools are copied (not
                    linked: they find their root through their resolved path) into a root whose third_party is a link.
-Steps 3 and 4 are skipped once NVFP4-QAD is prepared.
+Steps 3 and 4 are skipped once NVFP4-QAD is prepared, or when the environment does not measure it.
 
 The source is a checkout of Strata's source (default ~/Strata); the downloads are pinned by its setup.py, and the
 commit is kept in downloads/manifest.json.
@@ -102,6 +103,14 @@ def make_qad_root(source, rebuild):
     (root / 'third_party').symlink_to(INSTALL_THIRD_PARTY)
 
 
+def env_choices():
+    """(family, model) of every model this environment measures: env.json "models", else every model of the plan."""
+    import build_cases
+    import envs
+    build_cases.use_env(envs.load(envs.current()))
+    return [(f, m) for f, m, *_ in build_cases.env_models()]
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--source', type=Path, default=Path.home() / 'Strata', help="Strata's source checkout")
@@ -112,11 +121,21 @@ def main():
 
     make_venv(overnight.DL_PYTHON.parents[1], [ROOT / 'scripts/requirements-acquire.txt'],
               'import huggingface_hub', a.rebuild)
-    if not (overnight.STATE_DIR / 'manifest.json').exists():
-        say('downloads/manifest.json: writing the pinned file list')
-        subprocess.run([str(overnight.DL_PYTHON), 'scripts/download_models.py', 'prepare', '--source', str(source)],
-                       cwd=ROOT, check=True)
-    if (overnight.STATE_DIR / 'manifest.json').exists() and overnight.qad_prepared():
+    chosen = env_choices()
+    path = overnight.STATE_DIR / 'manifest.json'
+    listed = [tuple(c) for c in json.loads(path.read_text())['choices']] if path.exists() else None
+    if listed is None or set(listed) != set(chosen):
+        # A new environment, or env.json "models" changed: list the models it measures now. Files already on disk are
+        # kept (the downloader checks them by SHA-256), and READY no longer stands for this list.
+        say(f'downloads/manifest.json: writing the pinned file list ({len(chosen)} models)'
+            + ('' if listed is None else f', was {len(listed)}'))
+        subprocess.run([str(overnight.DL_PYTHON), 'scripts/download_models.py', 'prepare', '--source', str(source),
+                        *[a for f, m in chosen for a in ('--choose', f'{f}:{m}')]], cwd=ROOT, check=True)
+        (overnight.STATE_DIR / 'READY').unlink(missing_ok=True)
+    if ('nvfp4', 'NVFP4-QAD') not in chosen:
+        say('NVFP4-QAD is not measured in this environment; no converter needed')
+        return 0
+    if overnight.qad_prepared():
         say('NVFP4-QAD is prepared; no converter needed')
         return 0
     make_venv(overnight.QAD_PYTHON.parents[1],

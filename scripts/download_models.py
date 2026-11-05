@@ -25,15 +25,30 @@ def write_json(path, value):
     temp.replace(path)
 
 
-def build_manifest(s, source, models):
-    # Interleave providers first, then complete each provider's documented choices.
-    choices = [('qwen', 'Q2_0'), ('gyro', 'Gyro-S'), ('unsloth', 'UD-IQ4_XS'),
-               ('qwen', 'IQ2_XS'), ('gyro', 'Gyro-M'),
-               ('unsloth', 'UD-Q4_K_XL'), ('qwen', 'IQ3_XXS'), ('coder', 'IQ1_M'),
-               ('qwen', 'IQ3_S'),
-               ('unsloth', 'UD-Q5_K_XL'), ('unsloth', 'UD-Q6_K_XL'), ('unsloth', 'Q8_0'),
-               ('swift', 'IQ2_XS'), ('swift', 'IQ3_XXS'), ('swift', 'IQ3_S'),
-               ('nvfp4', 'NVFP4'), ('nvfp4', 'NVFP4-NVIDIA'), ('nvfp4', 'NVFP4-QAD')]
+# Every model the benchmark knows, in download order: providers interleaved first, then each provider's other choices;
+# Unsloth's Dynamic v3.1 sets (2026-11-04) last. scripts/build_cases.py MODELS is the list of record (sizes, roles);
+# scripts/setup_acquire.py passes the ones the environment measures (env.json "models") with --choose.
+ORDER = [('qwen', 'Q2_0'), ('gyro', 'Gyro-S'), ('unsloth', 'UD-IQ4_XS'),
+         ('qwen', 'IQ2_XS'), ('gyro', 'Gyro-M'),
+         ('unsloth', 'UD-Q4_K_XL'), ('qwen', 'IQ3_XXS'), ('coder', 'IQ1_M'),
+         ('qwen', 'IQ3_S'),
+         ('unsloth', 'UD-Q5_K_XL'), ('unsloth', 'UD-Q6_K_XL'), ('unsloth', 'Q8_0'),
+         ('swift', 'IQ2_XS'), ('swift', 'IQ3_XXS'), ('swift', 'IQ3_S'),
+         ('nvfp4', 'NVFP4'), ('nvfp4', 'NVFP4-NVIDIA'), ('nvfp4', 'NVFP4-QAD'),
+         ('unsloth', 'UD-IQ1_M'), ('unsloth', 'UD-Q2_0'), ('unsloth', 'UD-IQ2_XS'), ('unsloth', 'UD-Q2_K_XL'),
+         ('unsloth', 'UD-IQ3_XXS'), ('unsloth', 'UD-Q3_K_XL'), ('unsloth', 'UD-IQ4_XS-v31')]
+
+
+def build_manifest(s, source, models, chosen=None):
+    """The pinned files of the chosen models (FAMILY:MODEL strings; None: every model of ORDER), in ORDER's order."""
+    if chosen is None:
+        choices = list(ORDER)
+    else:
+        want = {tuple(c.split(':', 1)) for c in chosen}
+        unknown = want - set(ORDER)
+        if unknown:
+            raise ValueError(f'not a model of the benchmark: {sorted(":".join(u) for u in unknown)}')
+        choices = [c for c in ORDER if c in want]
     files = []
 
     def add(url, destination, family, model):
@@ -55,7 +70,7 @@ def build_manifest(s, source, models):
             folder = models / (fam['tag'] + model)
             for i in range(1, s['model_shards'](fam, model) + 1):
                 filename = s['model_file'](fam, model, i)
-                add(fam['hf'].format(q=model) + filename, folder / filename, family, model)
+                add(s['model_hf'](fam, model) + filename, folder / filename, family, model)
             add(fam['mmproj_hf'] + fam['mmproj'], models / fam['mmproj'], family, model)
     # Exact same destination (shared encoders / Engram / DSpark) is downloaded once.
     unique = {}
@@ -67,7 +82,8 @@ def build_manifest(s, source, models):
             ['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip(),
             'source_setup_sha256': hashlib.sha256((source / 'setup.py').read_bytes()).hexdigest(),
             'models_root': str(models), 'choices': choices, 'files': list(unique.values()),
-            'scope': '18 Qwen3.8 variants: ISTA 4, Coder 1, Gyro 2, Unsloth 5, Swift 3, NVFP4 3. Excludes Qwen3.6, Orca, DeepSeek. QAD checkpoint download only; conversion separate.'}
+            'scope': f'{len(choices)} of the {len(ORDER)} Qwen3.8-Flash-Next variants the benchmark knows (the environment\'s env.json "models"). '
+                     'Excludes Qwen3.6, Orca, DeepSeek. QAD checkpoint download only; conversion separate.'}
 
 
 def main():
@@ -78,6 +94,8 @@ def main():
     parser.add_argument('--state', type=Path, default=Path(__file__).resolve().parents[1] / 'downloads')
     # Hold a model back for a later run, e.g. until a conversion has freed disk.
     parser.add_argument('--exclude', action='append', default=[], metavar='FAMILY:MODEL')
+    # prepare: the models to list (default: every model of ORDER); scripts/setup_acquire.py passes the environment's
+    parser.add_argument('--choose', action='append', default=None, metavar='FAMILY:MODEL')
     args = parser.parse_args()
     args.state.mkdir(parents=True, exist_ok=True)
     lock = (args.state / 'queue.lock').open('w')
@@ -121,7 +139,7 @@ def main():
     s['download'].__globals__['_urlopen'] = authenticated_open
     manifest_path = args.state / 'manifest.json'
     if args.action == 'prepare':
-        manifest = build_manifest(s, args.source, args.models)
+        manifest = build_manifest(s, args.source, args.models, args.choose)
         write_json(manifest_path, manifest)
         print(f"Prepared {len(manifest['choices'])} models, {len(manifest['files'])} paths", flush=True)
         return
@@ -132,6 +150,7 @@ def main():
         raise RuntimeError('Model directory differs from manifest')
     # Index existing checked Strata files, enabling hardlinks for byte-identical shards.
     pins = {name: (size, sha) for table in s['REPO_PINS'].values() for name, (size, sha) in table.items()}
+    pins.update(s.get('UNSLOTH_V31_SHARDS', {}))   # Unsloth v3.1's files are pinned by commit, not in REPO_PINS
     checked = {}
     for path in args.models.rglob('*.gguf'):
         pin = pins.get(path.name)
@@ -166,7 +185,7 @@ def main():
                     part = dst.with_name(dst.name + '.part')
                     allocated = part.stat().st_blocks * 512 if part.exists() else 0
                     remaining = 0 if dst.exists() and s['done'](dst) else max(0, f['bytes'] - allocated)
-                    if shutil.disk_usage(args.models).free < remaining + 30_000_000_000:  # 30 GB headroom
+                    if shutil.disk_usage(args.models).free < remaining + 10_000_000_000:  # 10 GB headroom (preflight.py checks the same)
                         status['state'] = 'paused_low_disk'
                         save()
                         return

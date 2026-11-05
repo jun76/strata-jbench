@@ -8,6 +8,8 @@ and downloads/overnight-state.json; downloads/READY appears when every model is 
   2. tools/nvfp4_local_pack.py prepare on NVIDIA's FP4-Local checkpoint (as setup runs it)
   3. delete the checkpoint's *.safetensors once every prepare step is marked done
   4. download Q8_0 (same watchdog)
+"Everything" is downloads/manifest.json: the environment's models (env.json "models"); steps 2-4 are skipped when it
+does not list NVFP4-QAD or Q8_0.
 """
 import json
 import os
@@ -177,21 +179,26 @@ def drop_qad_checkpoint():
 def main():
     log(f'start pid {os.getpid()}')
     set_state(pid=os.getpid(), started_at=now(), phase='start', error=None)
-    others = [(f['family'], f['model']) for f in manifest()['files'] if f['model'] != 'Q8_0']
-    others = list(dict.fromkeys(others))
+    # downloads/manifest.json lists the environment's models (scripts/setup_acquire.py); Q8_0 and NVFP4-QAD may not be there
+    listed = list(dict.fromkeys((f['family'], f['model']) for f in manifest()['files']))
+    others = [c for c in listed if c != ('unsloth', 'Q8_0')]
+    has_q8, has_qad = ('unsloth', 'Q8_0') in listed, ('nvfp4', 'NVFP4-QAD') in listed
 
     def others_done():
         return all(model_complete(fam, m) or (m == 'NVFP4-QAD' and qad_prepared()) for fam, m in others)
 
-    if not download(['--exclude', 'unsloth:Q8_0'], others_done, 'download'):
+    if not download(['--exclude', 'unsloth:Q8_0'] if has_q8 else [], others_done, 'download'):
         return 1
-    if not qad_prepared() and not prepare_qad():
-        set_state(phase='qad', error='prepare failed')
-        return 1
-    drop_qad_checkpoint()
-    # The QAD checkpoint is gone on purpose by now; keep the downloader from fetching it again.
-    if not download(['--exclude', 'nvfp4:NVFP4-QAD'], lambda: model_complete('unsloth', 'Q8_0'), 'download-q8'):
-        return 1
+    if has_qad:
+        if not qad_prepared() and not prepare_qad():
+            set_state(phase='qad', error='prepare failed')
+            return 1
+        drop_qad_checkpoint()
+    if has_q8:
+        # The QAD checkpoint is gone on purpose by now; keep the downloader from fetching it again.
+        if not download(['--exclude', 'nvfp4:NVFP4-QAD'] if has_qad else [], lambda: model_complete('unsloth', 'Q8_0'),
+                        'download-q8'):
+            return 1
     (STATE_DIR / 'READY').write_text(now() + '\n')
     set_state(phase='done')
     log('all models ready')

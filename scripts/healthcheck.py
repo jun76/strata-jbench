@@ -166,7 +166,7 @@ def main():
     bad = [p for p in parts if p['state'] in ('FAILED', 'STUCK')]
     overall = bad[0]['state'] if bad else 'DONE' if all(p['state'] in ('DONE', 'NOT_STARTED') for p in parts) \
         else 'RUNNING'
-    gpu = subprocess.run(['nvidia-smi', '--query-gpu=memory.used,temperature.gpu', '--format=csv,noheader'],
+    gpu = subprocess.run(['nvidia-smi', *envs.smi_card(env_id), '--query-gpu=memory.used,temperature.gpu', '--format=csv,noheader'],
                          capture_output=True, text=True).stdout.strip()
     disk = os.statvfs(ROOT)
     status = {'at': datetime.now().astimezone().isoformat(timespec='seconds'), 'overall': overall, 'env': env_id,

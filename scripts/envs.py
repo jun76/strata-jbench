@@ -10,7 +10,7 @@ and the runner and preflight refuse to measure under an environment that does no
 
     python3 -I scripts/envs.py detect              # the id of the environment this hardware is (exit 1 if none)
     python3 -I scripts/envs.py list                # every environment, and which one matches now
-    python3 -I scripts/envs.py new <id>            # write envs/<id>/env.json from the hardware found now
+    python3 -I scripts/envs.py new <id> [--gpu N]  # write envs/<id>/env.json from the hardware found now (card N, default 0)
     python3 -I scripts/envs.py run-dir <run id>    # results/<division>/<env>/<run id> for the detected environment
     python3 -I scripts/envs.py divisions           # every division and whether it is measured yet
 
@@ -54,9 +54,25 @@ def hardware():
     return machine_info.collect()['env']
 
 
+def gpu_index(cfg):
+    """The card the environment measures on: env.json "gpu_index" (nvidia-smi's -i number; 0 when not set). On a PC with
+    two cards each card is an environment of its own, and the runner launches on that card alone (--gpu)."""
+    return int((cfg or {}).get('gpu_index') or 0)
+
+
+def smi_card(env_id=None):
+    """nvidia-smi's arguments for the environment's card: ['-i', N]."""
+    try:
+        return ['-i', str(gpu_index(load(env_id or current())))]
+    except SystemExit:
+        return ['-i', '0']
+
+
 def matches(cfg, hw):
     m = cfg.get('match') or {}
-    if m.get('gpu') and m['gpu'] != hw.get('gpu'):
+    names = hw.get('gpus') or [hw.get('gpu')]
+    i = gpu_index(cfg)
+    if m.get('gpu') and (i >= len(names) or m['gpu'] != names[i]):
         return False
     if m.get('ram_gib') and hw.get('ram_gib'):
         if abs(hw['ram_gib'] - m['ram_gib']) > m['ram_gib'] * RAM_TOLERANCE:
@@ -199,11 +215,12 @@ def slug(hw):
     return f'{gpu}-{ram:.0f}g'
 
 
-def dflash2_here():
-    """Whether Auto drafting picks DFlash2 for a Qwen3.8 model on this card (strata launch --plan)."""
+def dflash2_here(card=0):
+    """Whether Auto drafting picks DFlash2 for a Qwen3.8 model on this card (strata launch --plan --gpu card)."""
     try:
         out = subprocess.run(['strata', 'launch', '--plan', '--family', 'qwen', '--model', 'IQ3_S', '--context', '128k',
-                              '--vision', 'off', '--parallel', '1', '--tune', 'skip', '--port', '18600', '--output', 'json'],
+                              '--vision', 'off', '--parallel', '1', '--tune', 'skip', '--port', '18600', '--gpu', str(card),
+                              '--output', 'json'],
                              capture_output=True, text=True, timeout=180, cwd='/tmp').stdout
         plan = json.loads(out[out.index('{'):])['plan']
         return 'dflash2' in json.dumps(plan.get('drafting', '')).lower()
@@ -211,8 +228,10 @@ def dflash2_here():
         return False
 
 
-def new(env_id):
-    hw = hardware()
+def new(env_id, card=0):
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import machine_info
+    hw = machine_info.collect(gpu_index=card)['env']
     path = ENVS / env_id / 'env.json'
     if path.exists():
         raise SystemExit(f'{path} already exists')
@@ -220,9 +239,10 @@ def new(env_id):
     cfg = {
         'label': f'{re.sub(r"^NVIDIA ", "", hw.get("gpu") or "?")} · {ram:.0f} GB RAM',
         'match': {'gpu': hw.get('gpu'), 'ram_gib': hw.get('ram_gib')},
+        'gpu_index': card,
         'hardware': {'gpu_vram_gib': round((hw.get('gpu_vram_mib') or 0) / 1024, 1), 'ram_gib': hw.get('ram_gib')},
         'gpu_power_limit_w': None,
-        'drafters': ['mtp', 'dflash2'] if dflash2_here() else ['mtp'],
+        'drafters': ['mtp', 'dflash2'] if dflash2_here(card) else ['mtp'],
         'models': None,
         'memory': None,
         'assume': {},
@@ -249,7 +269,9 @@ def main():
         if not ids():
             print(f'  (none yet: python3 -I scripts/envs.py new {slug(hw)})')
     elif cmd == 'new':
-        new(sys.argv[2] if len(sys.argv) > 2 else slug(hardware()))
+        card = int(sys.argv[sys.argv.index('--gpu') + 1]) if '--gpu' in sys.argv else 0
+        rest = [x for i, x in enumerate(sys.argv[2:], 2) if x != '--gpu' and sys.argv[i - 1] != '--gpu']
+        new(rest[0] if rest else slug(hardware()), card)
     elif cmd == 'run-dir':
         print(run_dir(current(), sys.argv[2], division(measuring=True)).relative_to(ROOT))
     elif cmd == 'divisions':

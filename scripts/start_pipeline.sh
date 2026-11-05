@@ -45,8 +45,10 @@ UNIT=(--setenv=PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin" --setenv=RUN
 
 running() { systemctl --user is-active --quiet "$1"; }
 
+# the venvs, the download list and the NVFP4-QAD converter (each skipped when there); it writes the list again and
+# removes READY when env.json "models" no longer matches it
+python3 -I scripts/setup_acquire.py || exit 1
 if [ ! -f downloads/READY ]; then
-  python3 -I scripts/setup_acquire.py      # the venvs, the download list and the NVFP4-QAD converter (skipped when there)
   python3 scripts/preflight.py --phase acquire
   if running strata-jbench-acquire; then
     echo "acquire: already running"

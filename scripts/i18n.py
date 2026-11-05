@@ -22,6 +22,7 @@ TR = {
     '元重みの量子化 (Unsloth)': ('quantized from the original weights (Unsloth)', '原始权重量化（Unsloth）'),
     '元重みの量子化 (Unsloth)、品質の参照点': ('quantized from the original weights (Unsloth), the quality reference',
                                        '原始权重量化（Unsloth），质量参照点'),
+    '元重みの量子化 (Unsloth v3.1)': ('quantized from the original weights (Unsloth v3.1)', '原始权重量化（Unsloth v3.1）'),
     '元重みの量子化 (GPTQ)': ('quantized from the original weights (GPTQ)', '原始权重量化（GPTQ）'),
     '元重みの量子化 (RTN)': ('quantized from the original weights (RTN)', '原始权重量化（RTN）'),
     'expert 半減の剪定版': ('pruned to half the experts', 'expert 减半的剪枝版'),

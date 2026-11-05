@@ -54,6 +54,7 @@ UNEXPECTED_CACHE = 64            # cached prompt tokens above this on a fresh-pr
 # not answered is a launch failure (its cases are failed, the next session starts). BENCH_LAUNCH_TIMEOUT: for tests.
 LAUNCH_TIMEOUT = int(os.environ.get('BENCH_LAUNCH_TIMEOUT') or 3 * 3600)
 P_CORES = None                   # filled from lscpu: the logical CPUs of the performance cores
+GPU = 0                          # the environment's card (env.json "gpu_index"): launches use it alone, telemetry reads it
 
 
 def now():
@@ -233,7 +234,7 @@ class Telemetry:
         with self.path.open('a') as f:
             f.write('t,gpu_mem_mib,power_w,temp_c,sm_mhz,util_pct,rss_mib,read_mib,avail_mib\n')
             while not self.stop.wait(1.0):
-                q = subprocess.run(['nvidia-smi', '--query-gpu=memory.used,power.draw,temperature.gpu,clocks.sm,'
+                q = subprocess.run(['nvidia-smi', '-i', str(GPU), '--query-gpu=memory.used,power.draw,temperature.gpu,clocks.sm,'
                                     'utilization.gpu', '--format=csv,noheader,nounits'],
                                    capture_output=True, text=True).stdout.strip().split(', ')
                 rss = read = None
@@ -448,7 +449,7 @@ def launch_args(row):
         opts = opts.replace('<P コアの論理 CPU>', P_CORES)
     args = ['strata', 'launch', '--family', row['family'], '--model', row['model'], '--context', str(row['context']),
             '--vision', 'off', '--parallel', '1', '--tune', 'skip', '--access', 'local', '--port', str(PORT),
-            '--no-tui', '--restart']
+            '--no-tui', '--restart', '--gpu', str(GPU)]
     # The drafter is pinned to MTP: since 0.2.10, Auto picks DFlash2 for some families and MTP for others, which would
     # mix two drafters across the models. Tier 5 changes it with its own --drafting.
     # --mtp on as well: when a launch runs setup (a changed choice), --drafting off makes it pass --mtp off, which saves
@@ -553,7 +554,7 @@ def kill_session(sid):
 
 
 def gpu_used_mib():
-    out = subprocess.run(['nvidia-smi', '--query-gpu=memory.used', '--format=csv,noheader,nounits'],
+    out = subprocess.run(['nvidia-smi', '-i', str(GPU), '--query-gpu=memory.used', '--format=csv,noheader,nounits'],
                          capture_output=True, text=True).stdout.strip()
     return int(out.split()[0]) if out else None
 
@@ -814,7 +815,7 @@ def run_standard(rows, run_dir, dry):
 # ------------------------------------------------------------------ main
 
 def main():
-    global P_CORES
+    global P_CORES, GPU
     ap = argparse.ArgumentParser()
     ap.add_argument('--run-id', required=True)
     ap.add_argument('--steps', default='0,1')
@@ -826,6 +827,7 @@ def main():
     P_CORES = lscpu_pcores()
     env_id = a.env if a.dry_run and a.env else envs.current(a.env)
     cfg = envs.load(env_id)
+    GPU = envs.gpu_index(cfg)
     div = envs.division(measuring=True)
     if div != 'plain':
         raise SystemExit(f'division {div!r}: this runner calls the engine directly (plain); a harness is not driven yet')
@@ -839,7 +841,7 @@ def main():
             and (not ids or r['id'] in ids)]
     if not (run_dir / 'machine.json').exists():
         (run_dir / 'machine.json').write_text(json.dumps(
-            {**machine_info.collect(P_CORES, cfg.get('memory')), 'env_id': env_id, 'created_at': now()},
+            {**machine_info.collect(P_CORES, cfg.get('memory'), GPU), 'env_id': env_id, 'created_at': now()},
             indent=2, ensure_ascii=False) + '\n')
     log(run_dir, f'start env={env_id} steps={steps} cases={len(rows)} dry={a.dry_run}')
     log(run_dir, f'models.json: {model_files.record(run_dir)}')

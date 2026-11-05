@@ -41,16 +41,19 @@ def run(args, timeout=120, **kw):
 def acquire_checks():
     m = overnight.manifest()
     root = overnight.models_root()
-    left = sum(f['bytes'] for f in m['files']
-               if not ((root / f['path']).is_file() and (root / (f['path'] + '.done')).is_file())
-               and not (f['model'] == 'NVFP4-QAD' and overnight.qad_prepared()))
+    # a file listed under two models (a shard shared by quantizations) is stored once: the downloader hard-links it, also
+    # to a copy already on disk
+    have = {f['sha256'] for f in m['files'] if (root / f['path']).is_file() and (root / (f['path'] + '.done')).is_file()}
+    left = sum({f['sha256']: f['bytes'] for f in m['files'] if f['sha256'] not in have
+                and not (f['model'] == 'NVFP4-QAD' and overnight.qad_prepared())}.values())
     free = shutil.disk_usage(root).free
-    qad_extra = 0 if overnight.qad_prepared() else 115e9
-    check('disk: free space covers the remaining downloads + QAD prepare + 30 GB',
-          free > left + qad_extra + 30e9, f'free {free / 1e9:.0f} GB, need {(left + qad_extra) / 1e9:.0f} GB + 30')
+    has_qad = any(f['model'] == 'NVFP4-QAD' for f in m['files'])
+    qad_extra = 0 if overnight.qad_prepared() or not has_qad else 115e9
+    check('disk: free space covers the remaining downloads + QAD prepare + 10 GB (the downloader stops below that)',
+          free > left + qad_extra + 10e9, f'free {free / 1e9:.0f} GB, need {(left + qad_extra) / 1e9:.0f} GB + 10')
     rc, out = run([str(overnight.DL_PYTHON), '-c', 'import sys; print(sys.version)'])
     check('downloader python runs (python3 -I scripts/setup_acquire.py)', rc == 0, out)
-    if not overnight.qad_prepared():
+    if has_qad and not overnight.qad_prepared():
         # the step that failed on 2026-11-03: import the converter exactly as prepare does
         rc, out = run([str(overnight.QAD_PYTHON), '-c',
                        'import sys; sys.path[:0] = ["tools"]; import nvfp4_convert, nvfp4_local_pack; print("ok")'],
@@ -82,11 +85,12 @@ def bench_checks(steps, env_id):
                       if r['step'] != '2' and not (ROOT / 'prompts' / f'{r["fixture"]}.json').exists()})
     check('fixtures: every case of the selected steps has its prompt file', not missing, ', '.join(missing))
     models = list(dict.fromkeys((r['family'], r['model']) for r in rows))
+    card = str(envs.gpu_index(cfg))              # the environment's card: the runner launches on it alone (--gpu)
     bad = []
     for fam, model in models:
         rc, out = run(['strata', 'launch', '--plan', '--family', fam, '--model', model, '--context', '128k',
                        '--vision', 'off', '--parallel', '1', '--tune', 'skip', '--port', '18600', '--drafting', 'mtp',
-                       '--output', 'json'], timeout=180, cwd='/tmp')
+                       '--gpu', card, '--output', 'json'], timeout=180, cwd='/tmp')
         try:
             plan = json.loads(out[out.index('{'):])['plan']
             if plan['download']['gb']:
@@ -112,7 +116,8 @@ def bench_checks(steps, env_id):
     if dflash:
         fam, model = dflash[0]
         rc, out = run(['strata', 'launch', '--plan', '--family', fam, '--model', model, '--context', '128k', '--vision', 'off',
-                       '--parallel', '1', '--tune', 'skip', '--port', '18600', '--drafting', 'dflash2', '--output', 'json'],
+                       '--parallel', '1', '--tune', 'skip', '--port', '18600', '--drafting', 'dflash2', '--gpu', card,
+                       '--output', 'json'],
                       timeout=180, cwd='/tmp')
         try:
             gb = json.loads(out[out.index('{'):])['plan']['download']['gb']
@@ -121,13 +126,13 @@ def bench_checks(steps, env_id):
         check('DFlash2 drafter is on disk (strata drafting fetch)', gb == 0, f'plan download {gb} GB')
     want = cfg.get('gpu_power_limit_w')
     if want:
-        rc, out = run(['nvidia-smi', '--query-gpu=power.limit', '--format=csv,noheader,nounits'])
+        rc, out = run(['nvidia-smi', '-i', card, '--query-gpu=power.limit', '--format=csv,noheader,nounits'])
         limit = float(out.split()[0]) if rc == 0 and out.strip() else None
         check(f'GPU power limit is {want:g} W (env.json; gpu-power-limit.service)', limit is not None and abs(limit - want) < 1,
               f'{limit} W')
-    rc, out = run(['nvidia-smi', '--query-gpu=memory.used', '--format=csv,noheader,nounits'])
+    rc, out = run(['nvidia-smi', '-i', card, '--query-gpu=memory.used', '--format=csv,noheader,nounits'])
     used = int(out.split()[0]) if rc == 0 and out.strip() else None
-    check('GPU: no other engine holds VRAM (< 4 GB used)', used is not None and used < 4000, f'{used} MiB')
+    check(f'GPU {card}: no other engine holds VRAM (< 4 GB used)', used is not None and used < 4000, f'{used} MiB')
     rc, out = run(['pgrep', '-af', 'strata --serve'])
     check('no other Strata engine is running', rc != 0, out)
     chrome = shutil.which('google-chrome') or shutil.which('chromium')
