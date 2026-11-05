@@ -1,25 +1,24 @@
 """Expand the benchmark plan in docs/SCOUTING.md into one row per case, for each test environment (envs/<id>/env.json).
 
-Per environment it writes plan/<division>/<env>/cases.jsonl and cases.csv (the case list the runner consumes) and cases/<division>/<env>.html
-(the human view), and CASES.html lists the environments. The environment decides which models run, how large each model
+Per environment it writes plan/<division>/<env>/cases.jsonl and cases.csv (the case list the runner consumes) and
+cases/<division>/<env>/ (the human view: Markdown and CSV read on GitHub), and cases/README.md lists the environments. The environment decides which models run, how large each model
 is for its GPU memory and RAM (for the estimate only), whether the DFlash2 cases exist (the card must have DFlash2) and
 the time estimate. Re-run after a benchmark run: results/<division>/<env>/<run-id>/cases/<case-id>/summary.json,
 when present, fills each row's status, headline metrics and evidence links. The newest run-id wins.
 
     python3 -I scripts/build_cases.py              # every environment, results/ and published/ -> preview/ (not tracked)
-    python3 -I scripts/build_cases.py --published  # published/ only -> CASES.html and cases/ (the committed pages)
-    python3 -I scripts/build_cases.py --env <id>   # one environment's case page
+    python3 -I scripts/build_cases.py --published  # published/ only -> cases/ (the committed lists)
+    python3 -I scripts/build_cases.py --env <id>   # one environment's case list
 """
 import os
 import argparse
 import csv
-import html
 import json
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from i18n import HEAD, SCRIPT, SWITCH, L, T, division_html, untranslated  # noqa: E402
+from i18n import one, tr, untranslated  # noqa: E402
 import envs  # noqa: E402
 import machine_info  # noqa: E402
 
@@ -459,7 +458,7 @@ COLUMNS = [
     ('seeds', 'seed'), ('timeout_s', 'timeout s'), ('measures', '見るもの'), ('note', '備考'),
     ('session', '起動セッション'), ('est_s', '見積 s'),
 ]
-# The page's column headings (CASES.html); cases.csv keeps the keys.
+# The case lists' column headings; the CSVs keep the keys.
 HEADINGS = {
     '設定': ('config', '配置'), '起動オプションの差分': ('launch options (vs. default)', '启动选项（相对默认）'),
     '入力の内容': ('input', '输入内容'), '入力 token': ('input tokens', '输入 token'), '出力 cap': ('output cap', '输出 cap'),
@@ -507,19 +506,39 @@ def cell(v, key):
     return '' if v is None else str(v)
 
 
-def result_text(r):
+# The case lists are Markdown and CSV, read with GitHub's viewer: one Markdown file per language (README.md is Japanese,
+# README.en.md English, README.zh.md Chinese, as for the repository's README). cases/README*.md lists the environments;
+# cases/<division>/<env>/README*.md is one environment (its Tiers, models and shared conditions), tier-<step>*.md its
+# cases, and tier-<step>.csv every case of the Tier with its parameters and result. The charts are separate (scripts/build_results.py).
+LANG_FILES = {'ja': '', 'en': '.en', 'zh': '.zh'}
+LANG_NAMES = {'ja': '日本語', 'en': 'English', 'zh': '中文'}
+CSV_RESULT = ['status', 'run_id', 'n', 'prefill_tps', 'decode_tps', 'ttft_ms', 'first_answer_ms', 'total_ms',
+              'reasoning_tokens', 'accept_rate', 'correct', 'evidence']
+
+
+def md(v):
+    """A table cell: no pipes or line breaks."""
+    return str(v).replace('|', '\\|').replace('\n', ' ')
+
+
+def langs_line(stem):
+    return ' · '.join(f'[{LANG_NAMES[x]}]({stem}{s}.md)' for x, s in LANG_FILES.items()) + '\n'
+
+
+def result_md(r, lang):
     m = r.get('result') or {}
+    L = one(lang)
     labels = [('prefill_tps', 'prefill'), ('decode_tps', 'decode'), ('ttft_ms', 'TTFT ms'),
               ('accept_rate', L('採用率', 'acceptance', '接受率')), ('reasoning_tokens', L('思考', 'thinking', '思考')),
               ('correct', L('正答', 'correct', '正确'))]
-    return ' / '.join(f'{label} {html.escape(str(m[k]))}' for k, label in labels if m.get(k) is not None)
+    return ' / '.join(f'{label} {m[k]}' for k, label in labels if m.get(k) is not None)
 
 
-def model_versions(rows, env_id, published_only, up):
+def model_versions(rows, env_id, published_only, up, lang):
     """Per model, the repository and commit its results were measured with, from each RUN_ID's models.json
     (scripts/model_files.py): one line per version, with the RUN_IDs that used it. Two versions of one model in one
-    environment are marked, since the pages then mix them."""
-    e = html.escape
+    environment are marked, since the case list then mixes them."""
+    L = one(lang)
     dirs = {d.name: d for d in envs.run_dirs(env_id, published_only)}
     used = {}
     for r in rows:
@@ -538,102 +557,213 @@ def model_versions(rows, env_id, published_only, up):
             seen.setdefault(v, []).append(run)
         lines = []
         for v, rs in seen.items():
-            links = ' + '.join(f'<a href="https://huggingface.co/{e(repo)}/tree/{e(rev)}">{e(repo)} @ <code>{e(rev[:7])}</code></a>'
+            links = ' + '.join(f'[{repo} @ `{rev[:7]}`](https://huggingface.co/{repo}/tree/{rev})'
                                for repo, rev in v[0]) if v else L('記録なし', 'not recorded', '无记录')
-            state = f' <span class="badge s-failed">{e(v[1])}</span>' if v and v[1] != 'verified' else ''
-            runs_ = ', '.join(f'<a href="{up}{e(str((dirs[x] / "models.json").relative_to(ROOT)))}">{e(x)}</a>'
-                              if (dirs[x] / 'models.json').exists() else e(x) for x in rs)
-            lines.append(f'{links}{state} <span class="muted">({runs_})</span>')
-        warn = (f'<div><span class="badge s-failed">{L("版が混在", "versions mixed", "版本混杂")}</span></div>' if len(seen) > 1 else '')
+            state = f' **{v[1]}**' if v and v[1] != 'verified' else ''
+            runs_ = ', '.join(f'[{x}]({up}{(dirs[x] / "models.json").relative_to(ROOT)})'
+                              if (dirs[x] / 'models.json').exists() else x for x in rs)
+            lines.append(f'{links}{state} ({runs_})')
+        warn = f'**{L("版が混在", "versions mixed", "版本混杂")}**: ' if len(seen) > 1 else ''
         out[key] = warn + '<br>'.join(lines)
     return out
 
 
-def write_html(rows, path, cfg, published_only=False):
-    """cases/<division>/<env>.html (or preview/cases/<division>/<env>.html): links to the result files are relative to where the page is."""
-    e = html.escape
-    up = os.path.relpath(ROOT, path.parent) + '/'
-    versions = model_versions(rows, cfg['id'], published_only, up)
+COMMON = {
+    'ja': '''- どのケースも3回測る（seed 1 / 2 / 3）。Tier 0 の IQ3_S は起動しなおしを含めて9回。standard-v1 はスイート全体を3回実行する。
+- 起動: 専用プロファイル・専用ポート、`--vision off --parallel 1 --tune skip --drafting mtp`、そのほかは Strata の既定（auto）。表の「起動オプションの差分」はこれとの差だけを書く。drafter を MTP に固定するのは、0.2.10 から Auto がモデルによって DFlash2 と MTP を選び分けるため（DFlash2 は Tier 1 の decode を対応する11モデルで測り直し、drafter なしは Tier 5 で測る）。
+- 同じ「起動セッション」のケースは、エンジンを1回起動したまま続けて回す（Tier 1・2・3・4a の 128K は同じセッション）。実行順は記録する。
+- sampling（temperature 以外）: top_p 0.95 / top_k 20 / min_p 0 / presence_penalty 0 / repetition_penalty 1.0 を毎回明示する（Tier 0 の作者条件だけ例外）。
+- thinking は毎回明示する。指定しないと、Web 画面で共有された Chat 設定 → 起動 config の値で埋まるため（`serve/server.py` の effort_default）。
+  - off（effort none）: `"reasoning_effort": "none"` と `"chat_template_kwargs": {"enable_thinking": false}`
+  - on（effort high）: `"reasoning_effort": "xhigh"` と `"chat_template_kwargs": {"enable_thinking": true}`、`reasoning_budget_tokens` も明示（出力 cap の 3/4。cap ≥ 1,024 で budget を省くと Strata の answer_room が同じ値を自動で入れる）
+  - standard-v1（Tier 2）は公式の指定（xhigh、budget 0）のまま。cap 2,048 の sanity では answer_room により思考が 1,536 で閉じられる点を記録する
+  - 各セッションの最初に `GET /settings`（共有設定が空であること）と `GET /config` を保存し、prompt token 数で effort の文が入ったかを確かめる
+- 各セッションの最初に warm-up を1回（回数には含めない）。prefix cache の再利用を避けるため各リクエストに固有 ID を入れる（Tier 4 の2問目以降は意図的に再利用する）。
+- OOM・起動失敗・timeout・skip も結果として残す。
+''',
+    'en': '''- Every case is measured 3 times (seed 1 / 2 / 3). Tier 0's IQ3_S runs 9 times, relaunching in between. standard-v1 runs the whole suite 3 times.
+- Launch: a dedicated profile and port, `--vision off --parallel 1 --tune skip --drafting mtp`, everything else at Strata's default (auto). The “launch options” column lists only the difference from this. The drafter is pinned to MTP because since 0.2.10 Auto picks DFlash2 for some models and MTP for others (DFlash2 is measured on Tier 1's decode cases for the 11 models that have it, no drafter in Tier 5).
+- Cases in the same “launch session” run one after another on a single engine launch (the 128K cases of Tiers 1, 2, 3 and 4a share one session). The order is recorded.
+- Sampling (besides temperature): top_p 0.95 / top_k 20 / min_p 0 / presence_penalty 0 / repetition_penalty 1.0, sent with every request (except Tier 0's author settings).
+- Thinking is set explicitly every time. Left out, it is filled from the Chat settings shared by the web UI, then from the launch config (effort_default in `serve/server.py`).
+  - off (effort none): `"reasoning_effort": "none"` and `"chat_template_kwargs": {"enable_thinking": false}`
+  - on (effort high): `"reasoning_effort": "xhigh"` and `"chat_template_kwargs": {"enable_thinking": true}`, with `reasoning_budget_tokens` set too (3/4 of the output cap; with cap ≥ 1,024 and no budget, Strata's answer_room puts in the same value)
+  - standard-v1 (Tier 2) keeps the official settings (xhigh, budget 0). For sanity at cap 2,048, answer_room closes the thinking at 1,536; this is recorded
+  - At the start of each session, `GET /settings` (the shared settings must be empty) and `GET /config` are saved, and the prompt token count confirms the effort text was added
+- One warm-up at the start of each session (not counted). Each request carries a unique ID so the prefix cache is not reused (Tier 4 reuses it on purpose from the second question).
+- OOM, launch failures, timeouts and skips are kept as results too.
+''',
+    'zh': '''- 每个用例测 3 次（seed 1 / 2 / 3）。Tier 0 的 IQ3_S 含重新启动共 9 次。standard-v1 整个套件运行 3 次。
+- 启动：专用 profile 和专用端口，`--vision off --parallel 1 --tune skip --drafting mtp`，其余为 Strata 默认（auto）。表中“启动选项”只写与此不同之处。将 drafter 固定为 MTP，是因为自 0.2.10 起 Auto 会按模型分别选择 DFlash2 或 MTP（DFlash2 在 Tier 1 的 decode 中对支持它的 11 个模型另行测量，不使用 drafter 在 Tier 5 中测量）。
+- 同一“启动会话”的用例在一次引擎启动中连续运行（Tier 1、2、3、4a 的 128K 共用一个会话）。记录运行顺序。
+- sampling（temperature 以外）：每次都显式指定 top_p 0.95 / top_k 20 / min_p 0 / presence_penalty 0 / repetition_penalty 1.0（仅 Tier 0 的作者条件例外）。
+- thinking 每次都显式指定。不指定时，会依次用 Web 界面共享的 Chat 设置 → 启动 config 的值填充（`serve/server.py` 的 effort_default）。
+  - off（effort none）：`"reasoning_effort": "none"` 和 `"chat_template_kwargs": {"enable_thinking": false}`
+  - on（effort high）：`"reasoning_effort": "xhigh"` 和 `"chat_template_kwargs": {"enable_thinking": true}`，并显式指定 `reasoning_budget_tokens`（输出 cap 的 3/4；cap ≥ 1,024 且省略 budget 时，Strata 的 answer_room 会自动填入相同的值）
+  - standard-v1（Tier 2）保持官方设置（xhigh，budget 0）。cap 2,048 的 sanity 中 answer_room 会在 1,536 处结束思考，这一点会记录下来
+  - 每个会话开始时保存 `GET /settings`（共享设置应为空）和 `GET /config`，并用 prompt token 数确认 effort 的提示已加入
+- 每个会话开始时做 1 次 warm-up（不计入次数）。每个请求带唯一 ID，以免复用 prefix cache（Tier 4 从第 2 题起有意复用）。
+- OOM、启动失败、超时、skip 也作为结果保留。
+''',
+}
+GAME_LAYOUT = {
+    'ja': ('ゲーム作成ケースの成果物の置き場所',
+           f'プロンプト「{GAME_PROMPT}」をそのまま送る（形式の指示は足さない）。出力の形がケースごとに違っても、必ず次の形に展開する。',
+           '''<run-id>/cases/<case id>/artifact/
+  response.md     最終回答の全文（thinking は requests.jsonl 側）
+  files/          コードブロックから取り出したファイル（ファイル名が書かれていればその名前、なければ言語ごとの既定名）
+  manifest.json   取り出したファイル、名前の決め方、形式（単体 HTML / 要サーバー / その他）、README の有無、起動方法
+  screenshot.png  単体 HTML か静的サーバーで開けた場合のみ。headless ブラウザで撮る''',
+           '3回分は `artifact/` の下に seed ごとのフォルダ（`seed-1/` など）で分ける。'),
+    'en': ('Where the game cases\' results go',
+           f'The prompt “{GAME_PROMPT}” (Japanese for “make a Minecraft-like 3D sandbox game”) is sent as is, with no format instructions. Whatever shape each answer takes, it is always unpacked like this:',
+           '''<run-id>/cases/<case id>/artifact/
+  response.md     the whole final answer (the thinking is in requests.jsonl)
+  files/          files taken from the code blocks (named as the answer names them, else a default per language)
+  manifest.json   the files, how they were named, the form (single HTML / needs a server / other), README or not, how to run it
+  screenshot.png  only if it opens as a single HTML file or from a static server; taken with a headless browser''',
+           'The 3 runs go in one folder per seed under `artifact/` (`seed-1/` and so on).'),
+    'zh': ('游戏制作用例的成果存放位置',
+           f'原样发送提示“{GAME_PROMPT}”（日语，意为“做一个类似 Minecraft 的 3D 沙盒游戏”），不附加格式要求。无论每个用例的输出形式如何，都按以下结构展开：',
+           '''<run-id>/cases/<case id>/artifact/
+  response.md     最终回答全文（thinking 在 requests.jsonl 中）
+  files/          从代码块中取出的文件（写了文件名就用该名称，否则用各语言的默认名）
+  manifest.json   取出的文件、命名方式、形式（单个 HTML / 需要服务器 / 其他）、有无 README、运行方法
+  screenshot.png  仅当能以单个 HTML 或静态服务器打开时。用 headless 浏览器截图''',
+           '3 次的结果在 `artifact/` 下按 seed 分文件夹（`seed-1/` 等）。'),
+}
+PREVIEW_NOTE = {
+    'ja': '> **プレビュー:** 計測中・公開前（`results/`）の結果も含む。コミットする一覧は `scripts/publish.py` で `published/` に移した結果だけから作る。\n',
+    'en': '> **Preview:** includes results still in `results/` (measuring, not published). The committed lists are built only from runs moved to `published/` by `scripts/publish.py`.\n',
+    'zh': '> **预览：** 包含 `results/` 中尚在测量、未发布的结果。提交的一览只由 `scripts/publish.py` 移到 `published/` 的结果生成。\n',
+}
+# The columns of a Tier's table; every other parameter is in the Tier's CSV.
+TIER_COLS = ['id', 'model', 'context_label', 'config', 'launch_opts', 'fixture', 'effort', 'temperature', 'concurrency',
+             'input_tokens', 'output_cap', 'reps']
+
+
+def heading(label, lang):
+    return one(lang)(label, *HEADINGS[label]) if label in HEADINGS else label
+
+
+def tier_file(step, lang):
+    return f'tier-{step}{LANG_FILES[lang]}.md'
+
+
+def evidence_md(r, up):
+    """The case's folder (summary.json, requests, responses, artifact), named by its RUN_ID."""
+    if not r.get('run_id'):
+        return ''
+    folder = next((x for x in r['evidence'] if x.endswith('summary.json')), None)
+    return f'[{r["run_id"]}]({up}{folder.rsplit("/", 1)[0]}/)' if folder else r['run_id']
+
+
+def write_md(rows, out, cfg, published_only=False):
+    """cases/<division>/<env>/ (or preview/cases/...): README*.md, tier-<step>*.md and tier-<step>.csv. Links to the result
+    files are relative, so they also work at the tag a publish leaves (scripts/publish.py)."""
+    up = os.path.relpath(ROOT, out) + '/'
+    out.mkdir(parents=True, exist_ok=True)
+    for old in out.glob('*.md'):
+        old.unlink()
     est = estimate(rows)
     sessions = {}
     for r in rows:
         sessions[r['session']] = max(sessions.get(r['session'], 0), r['restarts'])
     total_h = sum(s['total_h'] for s in est.values())
-    done = sum(r['status'] == 'done' for r in rows)
-    failed = sum(r['status'] in ('failed', 'unreadable') for r in rows)
-    cards = ''.join(f'<div class="card"><div class="k">{k}</div><div class="v">{v}</div></div>' for k, v in [
-        (L('ケース', 'cases', '用例'), f'{len(rows):,}'),
-        (L('本計測リクエスト', 'measured requests', '正式测量请求'), f'{sum(r["requests"] for r in rows):,}'),
-        (L('エンジン起動', 'engine launches', '引擎启动'), f'{sum(sessions.values()):,}'),
-        (L('見積もり', 'estimate', '预估'), f'{total_h:.0f} ' + L('時間', 'h', '小时')),
-        (L('完了', 'done', '完成'), done), (L('失敗', 'failed', '失败'), failed)])
+    steps = list(dict.fromkeys(r['step'] for r in rows))
+    division = envs.load_division(envs.division())
+    for lang, suffix in LANG_FILES.items():
+        L = one(lang)
+        versions = model_versions(rows, cfg['id'], published_only, up, lang)
+        done = sum(r['status'] == 'done' for r in rows)
+        failed = sum(r['status'] in ('failed', 'unreadable') for r in rows)
+        text = [langs_line('README'), f'[{L("← 環境の一覧", "← all environments", "← 环境一览")}]({os.path.relpath(out.parents[1], out)}/README{suffix}.md)\n',
+                f'# {L("Strata ベンチ ケース一覧", "Strata bench cases", "Strata 基准测试 用例一览")}: {envs.label(cfg)}\n']
+        if not published_only:
+            text.append(PREVIEW_NOTE[lang])
+        text.append(f'**{L("部門", "Division", "部门")}: {division["label"][lang]}** — {division["summary"][lang]} '
+                    f'[{L("部門の一覧（エージェント部門は予定）", "All divisions (the agentic ones are planned)", "部门一览（智能体部门在计划中）")}]({up}divisions/README{suffix if (ROOT / f"divisions/README{suffix}.md").exists() else ""}.md)\n')
+        text.append(L('Tier ごとにケースの表がある（1行が1ケース）。全パラメータと結果は Tier ごとの CSV（tier-<Tier>.csv）。'
+                      'エビデンス列の RUN_ID は、そのケースの記録（summary.json、送ったリクエスト、応答、成果物）のフォルダ。'
+                      f'生成: `scripts/build_cases.py`。',
+                      'One table of cases per Tier (a row per case). Every parameter and result: the CSV of each Tier (tier-<Tier>.csv). '
+                      'The RUN_ID in the evidence column opens the case\'s record (summary.json, the requests sent, the responses, the artifacts). '
+                      'Generated by `scripts/build_cases.py`.',
+                      '每个 Tier 一张用例表（每行一个用例）。全部参数与结果见各 Tier 的 CSV（tier-<Tier>.csv）。'
+                      '证据列中的 RUN_ID 打开该用例的记录（summary.json、发送的请求、响应、成果物）。由 `scripts/build_cases.py` 生成。') + '\n')
+        text.append(f'## {L("実行環境", "Test system", "运行环境")}\n\n' + machine_info.env_md(ROOT, cfg, lang, published_only))
+        text.append(f'## {L("概要", "Overview", "概要")}\n')
+        text.append(''.join(f'- {k}: {v}\n' for k, v in [
+            (L('ケース', 'cases', '用例'), f'{len(rows):,}'),
+            (L('本計測リクエスト', 'measured requests', '正式测量请求'), f'{sum(r["requests"] for r in rows):,}'),
+            (L('エンジン起動', 'engine launches', '引擎启动'), f'{sum(sessions.values()):,}'),
+            (L('見積もり', 'estimate', '预估'), f'{total_h:.0f} ' + L('時間', 'h', '小时')),
+            (L('完了', 'done', '完成'), f'{done:,}'), (L('失敗', 'failed', '失败'), f'{failed:,}')]))
+        text.append(f'\n## {L("Tier ごとの内訳", "By Tier", "各 Tier 明细")}\n')
+        text.append(f'| Tier | {L("内容", "what", "内容")} | {L("モデル", "models", "模型")} | {L("ケース", "cases", "用例")} | '
+                    f'{L("リクエスト", "requests", "请求")} | {L("見積 h", "est. h", "预估 h")} | {L("完了", "done", "完成")} |\n'
+                    '| --- | --- | ---: | ---: | ---: | ---: | ---: |\n')
+        tier_rows = []
+        for step in steps:
+            lst = [r for r in rows if r['step'] == step]
+            info = L(*TIER_INFO[step]) if step in TIER_INFO else ''
+            tier_rows.append(f'| [{step}]({tier_file(step, lang)}) | {md(info)} | {len({(r["family"], r["model"]) for r in lst})} | '
+                             f'{len(lst):,} | {sum(r["reps"] for r in lst):,} | {est[step]["total_h"]} | '
+                             f'{sum(r["status"] == "done" for r in lst)} |\n')
+        text[-1] += ''.join(tier_rows)
+        text.append(f'\n## {L("モデル", "Models", "模型")}\n\n'
+                    f'| family | model | GB | {L("種別", "kind", "类别")} | '
+                    f'{L("測った版（リポジトリ @ コミット、RUN_ID の models.json）", "version measured (repository @ commit, the RUN_ID's models.json)", "测量的版本（仓库 @ 提交，RUN_ID 的 models.json）")} |\n'
+                    '| --- | --- | ---: | --- | --- |\n')
+        text[-1] += ''.join(f'| {f} | {m} | {gb} | {md(tr(role, lang))} | {versions.get((f, m), "–")} |\n'
+                            for f, m, gb, role in env_models())
+        text.append(f'\n## {L("全ケース共通の条件", "Conditions shared by every case", "所有用例的共同条件")}\n\n{COMMON[lang]}')
+        title, intro, tree, after = GAME_LAYOUT[lang]
+        text.append(f'\n<details><summary>{title}</summary>\n\n{intro}\n\n```\n{tree}\n```\n\n{after}\n\n</details>\n')
+        text.append(f'\n<details><summary>{L("見積もりの前提（rtx5090-128g の初回の計測の中央値。ほかの環境は env.json の assume で上書き）", "What the estimate assumes (medians of the first run on rtx5090-128g; other environments override them in env.json \"assume\")", "预估的前提（rtx5090-128g 首次测量的中位数；其他环境在 env.json 的 assume 中覆盖）")}</summary>\n\n'
+                    f'```json\n{json.dumps(ASSUME, ensure_ascii=False, indent=2)}\n```\n\n</details>\n')
+        (out / f'README{suffix}.md').write_text('\n'.join(text))
 
-    tier_rows = []
-    for step in dict.fromkeys(r['step'] for r in rows):
-        lst = [r for r in rows if r['step'] == step]
-        tier_rows.append(
-            f'<tr><td><a href="#cases" data-step="{e(step)}">{e(step)}</a></td><td>{L(*TIER_INFO[step]) if step in TIER_INFO else ""}</td>'
-            f'<td class="num">{len({(r["family"], r["model"]) for r in lst})}</td><td class="num">{len(lst):,}</td>'
-            f'<td class="num">{sum(r["reps"] for r in lst):,}</td>'
-            f'<td class="num">{est[step]["total_h"]}</td>'
-            f'<td class="num">{sum(r["status"] == "done" for r in lst)}</td></tr>')
-    tiers = (f'<tr><th>Tier</th><th>{L("内容", "what", "内容")}</th><th class="num">{L("モデル", "models", "模型")}</th>'
-             f'<th class="num">{L("ケース", "cases", "用例")}</th><th class="num">{L("リクエスト", "requests", "请求")}</th>'
-             f'<th class="num">{L("見積 h", "est. h", "预估 h")}</th><th class="num">{L("完了", "done", "完成")}</th></tr>'
-             + ''.join(tier_rows))
+        for step in steps:
+            lst = [r for r in rows if r['step'] == step]
+            labels = dict(COLUMNS)
+            head = ([L('状態', 'status', '状态')] + [heading(labels.get(k, k), lang) for k in TIER_COLS]
+                    + [L('結果', 'result', '结果'), L('エビデンス', 'evidence', '证据')])
+            body = []
+            for r in lst:
+                cells = []
+                for k in TIER_COLS:
+                    if k == 'id':
+                        cells.append(f'`{r["id"]}`')
+                    elif k == 'model':
+                        cells.append(f'{r["family"]} {r["model"]}')
+                    elif k == 'context_label':
+                        cells.append(r['context_label'] + (f' (YaRN {r["yarn"]})' if r.get('yarn') else ''))
+                    else:
+                        cells.append(md(tr(cell(r[k], k), lang)))
+                body.append('| ' + ' | '.join([r['status']] + cells + [md(result_md(r, lang)), evidence_md(r, up)]) + ' |')
+            info = L(*TIER_INFO[step]) if step in TIER_INFO else ''
+            page = [langs_line(f'tier-{step}'), f'[{L("← ケース一覧", "← cases", "← 用例一览")}](README{suffix}.md)\n',
+                    f'# Tier {step}: {info}\n', f'{envs.label(cfg)} · ' + L(
+                        f'{len(lst):,} ケース / {sum(r["reps"] for r in lst):,} リクエスト。ほかのパラメータ（入力の内容、見るもの、備考、seed、timeout、起動セッション）は [tier-{step}.csv](tier-{step}.csv)。',
+                        f'{len(lst):,} cases / {sum(r["reps"] for r in lst):,} requests. The other parameters (input, measures, notes, seeds, timeout, launch session) are in [tier-{step}.csv](tier-{step}.csv).',
+                        f'{len(lst):,} 个用例 / {sum(r["reps"] for r in lst):,} 个请求。其他参数（输入内容、测量内容、备注、seed、timeout、启动会话）见 [tier-{step}.csv](tier-{step}.csv)。') + '\n',
+                    '| ' + ' | '.join(head) + ' |', '| ' + ' | '.join(['---'] * len(head)) + ' |', *body, '']
+            (out / tier_file(step, lang)).write_text('\n'.join(page))
 
-    models = (f'<tr><th>family</th><th>model</th><th class="num">GB</th><th>{L("種別", "kind", "类别")}</th>'
-              f'<th>{L("測った版（リポジトリ @ コミット、RUN_ID の models.json）", "version measured (repository @ commit, the RUN_ID's models.json)", "测量的版本（仓库 @ 提交，RUN_ID 的 models.json）")}</th></tr>'
-              + ''.join(f'<tr><td>{f}</td><td>{m}</td><td class="num">{gb}</td><td>{T(role)}</td>'
-                        f'<td class="wrap">{versions.get((f, m), "–")}</td></tr>'
-                        for f, m, gb, role in env_models()))
-
-    def heading(label):
-        return L(label, *HEADINGS[label]) if label in HEADINGS else e(label)
-    thead = (f'<tr><th>{L("状態", "status", "状态")}</th>' + ''.join(
-        f'<th class="{"num" if k in NUM_COLS else ""}">{heading(label)}</th>' for k, label in COLUMNS)
-        + f'<th>{L("結果", "result", "结果")}</th><th>{L("エビデンス", "evidence", "证据")}</th></tr>')
-    body = []
-    for r in rows:
-        tds = []
-        for k, _ in COLUMNS:
-            cls = 'id' if k == 'id' else 'num' if k in NUM_COLS else 'wrap' if k in WRAP_COLS else ''
-            text = cell(r[k], k)
-            tds.append(f'<td class="{cls}">{e(text) if k in UNTRANSLATED_COLS else T(text)}</td>')
-        ev = ''.join(f'<a href="{up}{e(x)}">{e(x.rstrip("/").split("/")[-1] + ("/" if x.endswith("/") else ""))}</a>'
-                     for x in r['evidence'])
-        if r.get('run_id'):
-            ev += f'<div class="muted">{e(r["run_id"])}</div>'
-        body.append(f'<tr data-step="{e(r["step"])}" data-model="{e(r["family"] + " " + r["model"])}" '
-                    f'data-status="{e(r["status"])}" data-reps="{r["reps"]}">'
-                    f'<td><span class="badge s-{e(r["status"])}">{e(r["status"])}</span></td>{"".join(tds)}'
-                    f'<td class="wrap">{result_text(r)}</td><td class="ev">{ev}</td></tr>')
-
-    def options(values):
-        return ''.join(f'<option>{e(v)}</option>' for v in values)
-
-    page = Path(__file__).with_name('cases_template.html').read_text()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    for key, value in {
-        'generated': e(__import__('datetime').datetime.now().astimezone().strftime('%Y-%m-%d %H:%M %Z')),
-        'cards': cards, 'tiers': tiers, 'models': models, 'thead': thead, 'tbody': '\n'.join(body),
-        'assume': e(json.dumps(ASSUME, ensure_ascii=False, indent=2)), 'game_prompt': e(GAME_PROMPT),
-        'opt_step': options(dict.fromkeys(r['step'] for r in rows)),
-        'opt_model': options(f'{f} {m}' for f, m, *_ in env_models()),
-        'opt_status': options(dict.fromkeys(['planned', 'done', 'failed', 'skipped'] + [r['status'] for r in rows])),
-        'count': f'{len(rows):,} cases / {sum(r["reps"] for r in rows):,} requests',
-        'i18n_head': HEAD, 'lang_switch': SWITCH, 'i18n_script': SCRIPT,
-        'env': machine_info.env_box(ROOT, cfg, published_only),
-        'mode_note': '' if published_only else PREVIEW_NOTE, 'env_label': e(envs.label(cfg)), 'env_id': e(cfg['id']),
-        'division': division_html(envs.load_division(envs.division()), up), 'division_id': e(envs.division()), 'up': e(up),
-    }.items():
-        page = page.replace('{{' + key + '}}', value)
-    path.write_text(page)
-
-
-PREVIEW_NOTE = ('<p class="preview">' + L('プレビュー: 計測中・公開前（results/）の結果も含む。公開するページは scripts/publish.py で published/ に移した結果だけから作る。',
-                                             'Preview: includes results still in results/ (measuring, not published). The published pages are built only from runs moved to published/ by scripts/publish.py.',
-                                             '预览：包含 results/ 中尚在测量、未发布的结果。发布的页面只由 scripts/publish.py 移到 published/ 的结果生成。') + '</p>')
+    for old in out.glob('*.csv'):
+        old.unlink()
+    for step in steps:   # one CSV per Tier: GitHub shows a CSV as a table only up to 512 KB
+        with (out / f'tier-{step}.csv').open('w', newline='') as f:
+            w = csv.writer(f)
+            w.writerow([k for k, _ in COLUMNS] + CSV_RESULT)
+            for r in rows:
+                if r['step'] != step:
+                    continue
+                res = r.get('result') or {}
+                folder = next((x for x in r['evidence'] if x.endswith('summary.json')), '')
+                extra = {'status': r['status'], 'run_id': r.get('run_id', ''), 'evidence': folder.rsplit('/', 1)[0] + '/' if folder else ''}
+                w.writerow([r[k] for k, _ in COLUMNS] + [extra[k] if k in extra else res.get(k, '') for k in CSV_RESULT])
 
 
 def write_plan(rows, env_id):
@@ -650,34 +780,34 @@ def write_plan(rows, env_id):
             w.writerow([r[k] for k, _ in COLUMNS])
 
 
-def write_index(summaries, out_root):
-    """CASES.html: the environments, each with its plan's size and progress, linking to cases/<division>/<env>.html."""
-    e = html.escape
-    head = (f'<tr><th>{L("環境", "environment", "环境")}</th><th>id</th><th class="num">{L("ケース", "cases", "用例")}</th>'
-            f'<th class="num">{L("見積 h", "est. h", "预估 h")}</th><th class="num">{L("完了", "done", "完成")}</th>'
-            f'<th class="num">{L("失敗", "failed", "失败")}</th><th>{L("最新の RUN_ID", "latest RUN_ID", "最新 RUN_ID")}</th></tr>')
-    body = ''.join(
-        f'<tr><td><a href="cases/{e(envs.division())}/{e(x["id"])}.html">{e(x["label"])}</a>{" ★" if x["here"] else ""}</td><td><code>{e(x["id"])}</code></td>'
-        f'<td class="num">{x["cases"]:,}</td><td class="num">{x["hours"]:.0f}</td><td class="num">{x["done"]:,}</td>'
-        f'<td class="num">{x["failed"]:,}</td><td>{e(x["run"] or "–")}</td></tr>' for x in summaries)
-    page = Path(__file__).with_name('cases_index_template.html').read_text()
-    up = os.path.relpath(ROOT, out_root) + '/' if out_root != ROOT else ''
-    for key, value in {'mode_note': '' if out_root == ROOT else PREVIEW_NOTE, 'rows': head + body,
-                       'division': division_html(envs.load_division(envs.division()), up), 'i18n_head': HEAD, 'lang_switch': SWITCH, 'i18n_script': SCRIPT,
-                       'generated': e(__import__('datetime').datetime.now().astimezone().strftime('%Y-%m-%d %H:%M %Z'))}.items():
-        page = page.replace('{{' + key + '}}', value)
-    out_root.mkdir(parents=True, exist_ok=True)
-    (out_root / 'CASES.html').write_text(page)
+def write_index(summaries, out_root, published_only):
+    """cases/README*.md: the environments, each with its plan's size and progress, linking to its case list."""
+    out = out_root / 'cases'
+    out.mkdir(parents=True, exist_ok=True)
+    division = envs.load_division(envs.division())
+    for lang, suffix in LANG_FILES.items():
+        L = one(lang)
+        text = [langs_line('README'), f'# {L("Strata ベンチ ケース一覧", "Strata bench cases", "Strata 基准测试 用例一览")}\n']
+        if not published_only:
+            text.append(PREVIEW_NOTE[lang])
+        text.append(L('ベンチを回すハードウェア構成（GPU と RAM の組み合わせ）ごとに、計画と結果を分けて持つ。環境の名前を開くと、その環境の全ケースの一覧。',
+                      'The plan and the results are kept per hardware set-up (a GPU and an amount of RAM). Open an environment for all its cases.',
+                      '按运行基准测试的硬件配置（GPU 与 RAM 的组合）分别保存计划和结果。点开环境名称即可查看该环境的全部用例。') + '\n')
+        text.append(f'**{L("部門", "Division", "部门")}: {division["label"][lang]}** — {division["summary"][lang]}\n')
+        text.append(f'| {L("環境", "environment", "环境")} | id | {L("ケース", "cases", "用例")} | {L("見積 h", "est. h", "预估 h")} | '
+                    f'{L("完了", "done", "完成")} | {L("失敗", "failed", "失败")} |\n| --- | --- | ---: | ---: | ---: | ---: |')
+        text += [f'| [{x["label"]}]({envs.division()}/{x["id"]}/README{suffix}.md) | `{x["id"]}` | {x["cases"]:,} | {x["hours"]:.0f} | '
+                 f'{x["done"]:,} | {x["failed"]:,} |' for x in summaries]
+        (out / f'README{suffix}.md').write_text('\n'.join(text) + '\n')
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--env', default='', help='only this environment (default: every one in envs/)')
     ap.add_argument('--published', action='store_true',
-                    help='only the runs in published/, written to CASES.html and cases/ (default: also results/, to preview/)')
+                    help='only the runs in published/, written to cases/ (default: also results/, to preview/cases/)')
     a = ap.parse_args()
     out_root = ROOT if a.published else envs.PREVIEW
-    here = envs.detect()[0]
     summaries = []
     for env_id in envs.ids():
         cfg = envs.load(env_id)
@@ -685,25 +815,24 @@ def main():
         attach_results(rows, env_id, a.published)
         est = estimate(rows)
         hours = sum(s['total_h'] for s in est.values())
-        runs = sorted({r['run_id'] for r in rows if r.get('run_id')})
-        summaries.append({'id': env_id, 'label': envs.label(cfg), 'here': env_id == here, 'cases': len(rows), 'hours': hours,
+        summaries.append({'id': env_id, 'label': envs.label(cfg), 'cases': len(rows), 'hours': hours,
                           'done': sum(r['status'] == 'done' for r in rows),
-                          'failed': sum(r['status'] in ('failed', 'unreadable') for r in rows), 'run': runs[-1] if runs else None})
+                          'failed': sum(r['status'] in ('failed', 'unreadable') for r in rows)})
         if a.env and env_id != a.env:
             continue
         write_plan(rows, env_id)
-        write_html(rows, out_root / 'cases' / envs.division() / f'{env_id}.html', cfg, a.published)
+        write_md(rows, out_root / 'cases' / envs.division() / env_id, cfg, a.published)
         missing = untranslated([r[k] for r in rows for k, _ in COLUMNS if k not in UNTRANSLATED_COLS]
                                + [x for m in MODELS for x in m[3:]])
         if missing:
-            print(f'cases/{envs.division()}/{env_id}.html: {len(missing)} string(s) without a translation in scripts/i18n.py TR (shown in Japanese):')
+            print(f'cases/{envs.division()}/{env_id}/: {len(missing)} string(s) without a translation in scripts/i18n.py TR (shown in Japanese):')
             for s in missing:
                 print('  ' + s)
         print(f'{env_id}: {len(rows)} cases, {sum(r["requests"] for r in rows)} measured requests, ~{hours:.0f} h estimated')
         for step, s in est.items():
             print(f'  Tier {step}: {s["total_h"]} h (requests {s["request_s"] / 3600:.1f} h, launches {s["launch_s"] / 3600:.1f} h)')
-    write_index(summaries, out_root)
-    print(f'pages: {os.path.relpath(out_root / "CASES.html", ROOT)} ({"published/ only" if a.published else "results/ and published/"})')
+    write_index(summaries, out_root, a.published)
+    print(f'case lists: {os.path.relpath(out_root / "cases", ROOT)}/ ({"published/ only" if a.published else "results/ and published/"})')
 
 
 if __name__ == '__main__':

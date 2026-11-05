@@ -156,7 +156,7 @@ th.sort:hover::after, th.sort:focus-visible::after { content: " ⇅"; color: var
 <h1><span class="L ja">Strata ベンチ 結果</span><span class="L en">Strata bench results</span><span class="L zh">Strata 基准测试 结果</span></h1>
 <div id="preview" class="banner" hidden></div>
 {{division}}
-<p class="sub"><span class="L ja">Strata で18モデルを同じ条件で測った結果。ハードウェア構成（GPU と RAM の組み合わせ）ごとに「環境」として分け、下のボタンで切り替える。2つ以上の環境に結果があると「環境の比較」が出る。ケースごとの条件と生データは <a href="CASES.html">CASES.html</a>、全ケースの数値は <a href="{{csv}}">summary.csv</a>。</span><span class="L en">18 models measured with Strata under the same conditions, kept apart per hardware set-up (a GPU and an amount of RAM: an “environment”); switch with the buttons below. With results in two or more environments, “Across environments” compares them. Each case's conditions and raw data: <a href="CASES.html">CASES.html</a>; every case's numbers: <a href="{{csv}}">summary.csv</a>. </span><span class="L zh">用 Strata 以相同条件测量 18 个模型的结果，按硬件配置（GPU 与 RAM 的组合，即“环境”）分开，用下方按钮切换。两个以上环境有结果时会显示“环境比较”。各用例的条件与原始数据见 <a href="CASES.html">CASES.html</a>，全部用例的数值见 <a href="{{csv}}">summary.csv</a>。</span></p>
+<p class="sub"><span class="L ja">Strata で18モデルを同じ条件で測った結果。ハードウェア構成（GPU と RAM の組み合わせ）ごとに「環境」として分け、下のボタンで切り替える。2つ以上の環境に結果があると「環境の比較」が出る。ケースごとの条件と生データは<a href="{{cases}}">ケース一覧</a>、全ケースの数値は <a href="{{csv}}">summary.csv</a>。</span><span class="L en">18 models measured with Strata under the same conditions, kept apart per hardware set-up (a GPU and an amount of RAM: an “environment”); switch with the buttons below. With results in two or more environments, “Across environments” compares them. Each case's conditions and raw data: <a href="{{cases}}">the case lists</a>; every case's numbers: <a href="{{csv}}">summary.csv</a>. </span><span class="L zh">用 Strata 以相同条件测量 18 个模型的结果，按硬件配置（GPU 与 RAM 的组合，即“环境”）分开，用下方按钮切换。两个以上环境有结果时会显示“环境比较”。各用例的条件与原始数据见<a href="{{cases}}">用例一览</a>，全部用例的数值见 <a href="{{csv}}">summary.csv</a>。</span></p>
 <p class="sub how">{{how}}</p>
 <p class="gen"><span class="L ja">生成: {{generated}}（<code>scripts/build_results.py</code>）</span><span class="L en">Generated {{generated}} (<code>scripts/build_results.py</code>)</span><span class="L zh">生成于 {{generated}}（<code>scripts/build_results.py</code>）</span></p>
 <div class="envsw-row"><span class="L ja">環境</span><span class="L en">Environment</span><span class="L zh">环境</span><div id="envsw" class="envsw" role="group" aria-label="environment"></div></div>
@@ -674,8 +674,11 @@ function tiles() {
 
 function runs() {
   const box = $('runs'); box.replaceChildren();
-  const pv = $('preview'); pv.hidden = D.published; pv.replaceChildren();
-  if (!D.published) h('span', {}, pv, L('プレビュー: 計測中・公開前（results/）の結果も含む。公開するページは scripts/publish.py で published/ に移した結果だけから作る。',
+  const pv = $('preview'); pv.hidden = D.published && !D.snapshot; pv.replaceChildren();
+  if (D.snapshot) h('span', {}, pv, L(`RUN_ID ${D.snapshot.run_id}（${D.snapshot.env}）の計測完了 ${D.snapshot.finished} 時点の結果。それまでに計測した RUN だけを含む。`,
+    `The results as of RUN_ID ${D.snapshot.run_id} (${D.snapshot.env}), finished ${D.snapshot.finished}: only the runs measured by then.`,
+    `截至 RUN_ID ${D.snapshot.run_id}（${D.snapshot.env}）测量完成（${D.snapshot.finished}）时的结果，只包含此前测量的 RUN。`));
+  else if (!D.published) h('span', {}, pv, L('プレビュー: 計測中・公開前（results/）の結果も含む。公開するページは scripts/publish.py で published/ に移した結果だけから作る。',
     'Preview: includes results still in results/ (measuring, not published). The published pages are built only from runs moved to published/ by scripts/publish.py.',
     '预览：包含 results/ 中尚在测量、未发布的结果。发布的页面只由 scripts/publish.py 移到 published/ 的结果生成。'));
   if (!E.runs.length) { box.textContent = L('まだ結果がありません。計測が済んだら scripts/build_results.py を実行し直すと、ここに結果が入ります。',
@@ -1106,8 +1109,8 @@ function sTable() {
   h('p', { class: 'foot' }, c, L('↑ は大きいほど良い列、↓ は小さいほど良い列（容量は良し悪しではない）。decode は上の絞り込み（temperature・文章）に従い、文章別の decode は temperature だけに従う。セルの棒は、その列の最大値に対する値の大きさで、良し悪しの向きにかかわらず値が大きいほど長い（TTFT は長いほど棒が長い）。',
     '↑ marks a column where higher is better, ↓ one where lower is better (size is neither). Decode follows the filters above (temperature, text); decode per text follows the temperature only. The bar in a cell is its value against the largest in the column, longer for a larger value whichever way is better (for TTFT, a longer bar is a longer wait).',
     '↑ 表示越大越好的列，↓ 表示越小越好的列（容量无好坏之分）。decode 随上方筛选（temperature、文章），各文章的 decode 只随 temperature。单元格中的条表示该值相对于该列最大值的大小，无论好坏方向，值越大条越长（TTFT 条越长等待越久）。'));
-  h('p', { class: 'foot' }, c, L(`全ケースの数値（seed ごとの範囲、cap 到達、電力・メモリを含む）は ${D.csv} と CASES.html に。`,
-    `Every case's numbers (per-seed ranges, cap reached, power and memory) are in ${D.csv} and CASES.html.`, `全部用例的数值（含各 seed 的范围、是否触及 cap、功耗和内存）见 ${D.csv} 和 CASES.html。`));
+  h('p', { class: 'foot' }, c, L(`全ケースの数値（seed ごとの範囲、cap 到達、電力・メモリを含む）は ${D.csv} とケース一覧に。`,
+    `Every case's numbers (per-seed ranges, cap reached, power and memory) are in ${D.csv} and the case lists.`, `全部用例的数值（含各 seed 的范围、是否触及 cap、功耗和内存）见 ${D.csv} 和用例一览。`));
 }
 
 function sCompare() {

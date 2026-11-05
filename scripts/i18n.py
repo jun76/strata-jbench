@@ -1,8 +1,9 @@
-"""Japanese / English / Chinese for CASES.html and RESULTS.html.
+"""Japanese / English / Chinese for the charts (RESULTS) and the case lists (cases/).
 
 The plan (build_cases.py) and the results keep their Japanese text as the data; the pages show it in the reader's
-language. TR translates those data strings, L() writes one piece of page text in all three languages, and
-HEAD / SWITCH / SCRIPT are the language switcher both pages share (the choice: ?lang=, then the last one picked,
+language. TR translates those data strings, L() writes one piece of page text in all three languages (one(lang): the
+same for one language, as the case lists have a Markdown file per language), and HEAD / SWITCH / SCRIPT are the
+charts' language switcher (the choice: ?lang=, then the last one picked,
 then the browser's language). Without JavaScript the page shows Japanese.
 
 A data string missing from TR is shown in Japanese; untranslated() lists them, and both build scripts print them.
@@ -147,6 +148,12 @@ def L(ja, en, zh, escape=True):
     """One piece of page text in all three languages; CSS shows the reader's."""
     e = html.escape if escape else (lambda s: s)
     return f'<span class="L ja">{e(ja)}</span><span class="L en">{e(en)}</span><span class="L zh">{e(zh)}</span>'
+
+
+def one(lang):
+    """L for one language (the Markdown case lists: a file per language), with the same arguments."""
+    i = {'ja': 0, 'en': 1, 'zh': 2}[lang]
+    return lambda ja, en, zh, escape=True: (ja, en, zh)[i]
 
 
 def division_html(div, up=''):

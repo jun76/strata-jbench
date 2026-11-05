@@ -4,7 +4,7 @@
 Each environment is a folder envs/<id>/ with env.json (see envs/README.md). The results are also split by division
 (divisions/<division>/division.json: how the models are driven, "plain" = the engine's API with no agent harness):
 the plan of an environment is plan/<division>/<id>/, its results results/<division>/<id>/<run id>/ and its case list
-cases/<division>/<id>.html. Which environment a run belongs to is never typed by hand
+cases/<division>/<id>/. Which environment a run belongs to is never typed by hand
 in the middle of a measurement: it is the environment whose "match" fits the hardware found now (GPU name and RAM),
 and the runner and preflight refuse to measure under an environment that does not match.
 
@@ -112,11 +112,52 @@ def plan_dir(env_id, div=None):
 
 
 # Runs are measured into results/ (ignored by Git). A run that is final is moved to published/ (tracked) by
-# scripts/publish.py. The pages built from published/ alone are the ones committed (CASES.html, cases/, RESULTS.html);
-# a build that also reads results/ writes its pages to preview/ (ignored), so a running benchmark never touches a tracked file.
+# scripts/publish.py. What is built from published/ alone is committed: the case lists (cases/, Markdown and CSV, read
+# on GitHub) and, per published run, the charts as they were when it was published (snapshots/<division>/<env>/<run id>/,
+# served by GitHub Pages). A build that also reads results/ writes to preview/ (ignored), so a running benchmark never
+# touches a tracked file.
 WORK = ROOT / 'results'
 PUBLISHED = ROOT / 'published'
 PREVIEW = ROOT / 'preview'
+SNAPSHOTS = ROOT / 'snapshots'
+# A snapshot's builds see only the published runs that finished by then (set by scripts/build_results.py --snapshot).
+UNTIL = None
+
+
+def finished(run):
+    """When the run's queue last finished (ISO time from queue.log), or '' if it never did."""
+    q = run / 'queue.log'
+    ends = re.findall(r'^(\d{4}-\d\d-\d\dT\S+) queue finished', q.read_text(errors='replace'), re.M) if q.exists() else []
+    return ends[-1] if ends else ''
+
+
+def finished_ts(run):
+    from datetime import datetime
+    end = finished(run)
+    return datetime.fromisoformat(end).timestamp() if end else 0
+
+
+def snapshot_dir(env_id, run_id, div=None):
+    """Where the charts as of a published run are kept (snapshots/<division>/<env>/<run id>/index.html)."""
+    return SNAPSHOTS / division(div) / env_id / run_id
+
+
+def tag(env_id, run_id, div=None):
+    """The Git tag on the commit that published a run: the case lists as they were then."""
+    return f'run/{division(div)}/{env_id}/{run_id}'
+
+
+def github():
+    """(repository URL, GitHub Pages URL) from the origin remote, or (None, None) when it is not on GitHub."""
+    try:
+        url = subprocess.run(['git', 'remote', 'get-url', 'origin'], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+    except OSError:
+        return None, None
+    m = re.match(r'^(?:https://github\.com/|git@github\.com:)([^/]+)/(.+?)(?:\.git)?$', url)
+    if not m:
+        return None, None
+    owner, repo = m.groups()
+    return f'https://github.com/{owner}/{repo}', f'https://{owner.lower()}.github.io/{repo}'
 
 
 def results_dir(env_id, div=None):
@@ -135,11 +176,14 @@ def published_dir(env_id, run_id, div=None):
 
 def run_dirs(env_id, published_only=False, div=None):
     """Every run of the environment the pages may show, sorted by run id: published/ and (unless published_only)
-    results/, test- runs left out. A run id in both is read from published/."""
+    results/, test- runs left out. A run id in both is read from published/. With UNTIL set, only published runs that
+    finished by then."""
     found = {}
     for root in ([WORK] if not published_only else []) + [PUBLISHED]:
         for d in (root / division(div) / env_id).glob('*/'):
             if d.is_dir() and not d.name.startswith('test-'):
+                if UNTIL is not None and (root != PUBLISHED or not finished(d) or finished_ts(d) > UNTIL):
+                    continue
                 found[d.name] = d
     return [found[k] for k in sorted(found)]
 

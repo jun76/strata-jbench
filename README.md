@@ -24,41 +24,36 @@
 
 ## 結果を見る
 
-| ページ | 中身 |
+計測が終わるたびに、この表の一番上に行が足されます。新しい 3 件を表に出し、それより前は表の下に折りたたんでいます。各行の「見る」から次の 3 つを開けます。
+
+| リンク | 中身 |
 | --- | --- |
-| [RESULTS.html](RESULTS.html) | グラフでまとめた結果。モデル別の速さ、入力の長さと待ち時間、standard-v1、thinking の有無、コンテキスト長の確保コスト、長文の読解（〜1M token）、起動オプション、計測時の温度・電力・メモリ、モデル別の一覧 |
-| [CASES.html](CASES.html) | 環境ごとの全ケースの一覧。ケースごとの条件、結果、送ったリクエストと返ってきた応答へのリンク |
-| [published/summary.csv](published/summary.csv) | 全ケースの数値（`division` 列で部門、`env` 列で環境を区別） |
+| グラフ | その RUN の計測が終わった時点の結果をまとめたページ（GitHub Pages）。モデル別の速さ、入力の長さと待ち時間、standard-v1、thinking の有無、コンテキスト長の確保コスト、長文の読解（〜1M token）、起動オプション、計測時の温度・電力・メモリ、モデル別の一覧。全ケースの数値（`summary.csv`）もここから。右上で日本語・English・中文と、ライト・ダークを切り替えられます |
+| ケース一覧 | 同じ時点の、環境ごとの全ケース（GitHub 上の Markdown と CSV）。Tier ごとの表に、ケースの条件・結果・記録へのリンク |
+| エビデンス | その RUN の記録そのもの（送ったリクエスト、返ってきた応答、集計、起動の記録など。中身は「データの置き場所」） |
 
-ページは静的な HTML です。GitHub のファイル表示ではソースしか見えないので、リポジトリを clone してブラウザで開いてください
-（GitHub Pages で公開している場合は、そのページから見られます）。
-ページの右上で、日本語・English・中文と、ライト・ダークを切り替えられます。
-
-## 確定した結果
-
-確定した結果が増えるたびに、この表に行が足されます（`scripts/publish.py` が `published/` から書き直します）。新しい 3 件を表に出し、それより前は表の下に折りたたんでいます。
-同じ環境で同じケースが複数の RUN_ID にあるときは、ページは名前が後ろに並ぶ RUN_ID の結果を使います。
+グラフとケース一覧には、その RUN までに計測した RUN の結果がまとめて載ります。同じ環境で同じケースが複数の RUN_ID にあるときは、名前が後ろに並ぶ RUN_ID の結果を使います。
 
 <!-- published-runs:start (scripts/publish.py writes this list) -->
 | 計測完了 | 部門 | 環境 | RUN_ID | Tier | ケース（done / 全体） | 内容 | 見る |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-11-04 22:51 | プレーン（ハーネスなし） | GeForce RTX 5090 · 128 GB RAM | [`2026-11-04-long`](published/plain/rtx5090-128g/2026-11-04-long/) | 4b, 4c, 4d | 112 / 112 | Tier 4b・4c・4d（長文の読解 32K〜1M と YaRN の点検）。2026-11-03-main では長文の fixture が未作成で省いていたので、青空文庫と Project Gutenberg の日英10作品から長文を作って追加で測った | [グラフ](RESULTS.html?env=rtx5090-128g) · [ケース一覧](cases/plain/rtx5090-128g.html) |
-| 2026-11-04 18:20 | プレーン（ハーネスなし） | GeForce RTX 5090 · 128 GB RAM | [`2026-11-04-q8-t3`](published/plain/rtx5090-128g/2026-11-04-q8-t3/) | 3 | 9 / 9 | unsloth Q8_0 の Tier 3（thinking の有無とゲーム作成）。当初の計画では Q8_0 を Tier 3 から外していたので、計画に足して追加で測った | [グラフ](RESULTS.html?env=rtx5090-128g) · [ケース一覧](cases/plain/rtx5090-128g.html) |
-| 2026-11-04 15:25 | プレーン（ハーネスなし） | GeForce RTX 5090 · 128 GB RAM | [`2026-11-04-iq3s-mtp`](published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/) | 0, 1, 2, 3, 4a, 5 | 159 / 159 | qwen IQ3_S の測り直し（2026-11-03-main では MTP の draft layer が読み込まれていなかった）。DFlash2 のケースも含めて同じ Tier を流し直した | [グラフ](RESULTS.html?env=rtx5090-128g) · [ケース一覧](cases/plain/rtx5090-128g.html) |
+| 2026-11-04 22:51 | プレーン（ハーネスなし） | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-long` | 4b, 4c, 4d | 112 / 112 | Tier 4b・4c・4d（長文の読解 32K〜1M と YaRN の点検）。2026-11-03-main では長文の fixture が未作成で省いていたので、青空文庫と Project Gutenberg の日英10作品から長文を作って追加で測った | [グラフ](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-long/?env=rtx5090-128g) · [ケース一覧](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-long/cases/plain/rtx5090-128g/README.md) · [エビデンス](published/plain/rtx5090-128g/2026-11-04-long/) |
+| 2026-11-04 18:20 | プレーン（ハーネスなし） | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-q8-t3` | 3 | 9 / 9 | unsloth Q8_0 の Tier 3（thinking の有無とゲーム作成）。当初の計画では Q8_0 を Tier 3 から外していたので、計画に足して追加で測った | [グラフ](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-q8-t3/?env=rtx5090-128g) · [ケース一覧](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-q8-t3/cases/plain/rtx5090-128g/README.md) · [エビデンス](published/plain/rtx5090-128g/2026-11-04-q8-t3/) |
+| 2026-11-04 15:25 | プレーン（ハーネスなし） | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-iq3s-mtp` | 0, 1, 2, 3, 4a, 5 | 159 / 159 | qwen IQ3_S の測り直し（2026-11-03-main では MTP の draft layer が読み込まれていなかった）。DFlash2 のケースも含めて同じ Tier を流し直した | [グラフ](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-iq3s-mtp/?env=rtx5090-128g) · [ケース一覧](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/plain/rtx5090-128g/README.md) · [エビデンス](published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/) |
 
 <details>
 <summary>それより前の RUN（1 件）</summary>
 
 | 計測完了 | 部門 | 環境 | RUN_ID | Tier | ケース（done / 全体） | 内容 | 見る |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-11-04 10:41 | プレーン（ハーネスなし） | GeForce RTX 5090 · 128 GB RAM | [`2026-11-03-main`](published/plain/rtx5090-128g/2026-11-03-main/) | 0, 1, 2, 3, 4a, 5 | 1231 / 1231 | 最初の通し計測（Tier 0・1・2・4a・3・5、18モデル）。このうち qwen IQ3_S は MTP が効いていなかったので、ページには 2026-11-04-iq3s-mtp の測り直しを使う | [グラフ](RESULTS.html?env=rtx5090-128g) · [ケース一覧](cases/plain/rtx5090-128g.html) |
+| 2026-11-04 10:41 | プレーン（ハーネスなし） | GeForce RTX 5090 · 128 GB RAM | `2026-11-03-main` | 0, 1, 2, 3, 4a, 5 | 1231 / 1231 | 最初の通し計測（Tier 0・1・2・4a・3・5、18モデル）。このうち qwen IQ3_S は MTP が効いていなかったので、ページには 2026-11-04-iq3s-mtp の測り直しを使う | [グラフ](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-03-main/?env=rtx5090-128g) · [ケース一覧](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-03-main/cases/plain/rtx5090-128g/README.md) · [エビデンス](published/plain/rtx5090-128g/2026-11-03-main/) |
 
 </details>
 <!-- published-runs:end -->
 
 ## 何を測ったか
 
-プレーン部門の計測は段階（Tier）に分けています。ケースの定義は [scripts/build_cases.py](scripts/build_cases.py) にあり、各ケースの条件は CASES.html で見られます。
+プレーン部門の計測は段階（Tier）に分けています。ケースの定義は [scripts/build_cases.py](scripts/build_cases.py) にあり、各ケースの条件は上の表の「ケース一覧」で見られます。
 
 | Tier | 何を見るか | 対象 |
 | --- | --- | --- |
@@ -69,7 +64,7 @@
 | 4 | コンテキスト長の確保コスト（4a）と、実際の長文の処理（4b〜4d、〜1M token） | 4a は全モデル、4b〜4d は代表モデル |
 | 5 | 起動オプションを1つずつ変えたときの変化（自動 tune を含む） | 代表3モデル |
 
-どの確定版にどの Tier が入っているかは、上の表の「Tier」の列にあります。
+どの RUN にどの Tier が入っているかは、上の表の「Tier」の列にあります。
 
 ### 測り方
 
@@ -86,13 +81,13 @@
 
 ### 計測環境
 
-ハードウェア構成（GPU と RAM の組み合わせ）ごとに「環境」として分けています。環境が違う結果は混ぜず、RESULTS.html の上のボタンで切り替えます。
+ハードウェア構成（GPU と RAM の組み合わせ）ごとに「環境」として分けています。環境が違う結果は混ぜず、グラフのページの上のボタンで切り替えます。
 2つ以上の環境に結果があると、同じモデル・同じ条件で並べた「環境の比較」が出ます。
-各環境の構成（GPU、CPU、メモリ、ドライバ、Strata の版など）は RESULTS.html と CASES.html の冒頭にあり、定義は [envs/](envs/) にあります。
+各環境の構成（GPU、CPU、メモリ、ドライバ、Strata の版など）はグラフのページとケース一覧の冒頭にあり、定義は [envs/](envs/) にあります。
 
 ## データの置き場所
 
-確定した結果は `published/<部門>/<環境>/<RUN_ID>/` にあります（いまは `published/plain/…` だけ）。
+計測の記録は `published/<部門>/<環境>/<RUN_ID>/` にあります（いまは `published/plain/…` だけ）。
 
 | 何 | どこ |
 | --- | --- |
@@ -101,7 +96,7 @@
 | standard-v1 の出力 | `standard/` |
 | 温度・電力の推移 | `stats/thermal.csv`（5秒ごと） |
 | マシンの構成 | `machine.json` |
-| 測ったモデルの版 | `models.json`（モデルごとの Hugging Face のリポジトリとコミット、ファイルごとのサイズと SHA-256、計測開始時に手元のファイルがその SHA-256 だったか）。同じ名前のモデルでも配布元が更新すると中身が変わるため、どの版を測ったかはこれで分かります。ケース一覧のモデル一覧と RESULTS の RUN_ID の行からもリンクしています |
+| 測ったモデルの版 | `models.json`（モデルごとの Hugging Face のリポジトリとコミット、ファイルごとのサイズと SHA-256、計測開始時に手元のファイルがその SHA-256 だったか）。同じ名前のモデルでも配布元が更新すると中身が変わるため、どの版を測ったかはこれで分かります。ケース一覧のモデル一覧と、グラフのページの RUN_ID の行からもリンクしています |
 | キューとランナーのログ | `queue.log`、`runner.log` |
 | その RUN の説明 | `NOTE.md`（上の表の「内容」） |
 | 記録どうしの突き合わせ | `verify.json`（エンジンの timings とクライアント側の計時の差、起動の設定がエンジンに入ったか） |
@@ -120,7 +115,7 @@
 | `results/` | `scripts/bench_runner.py` ほか | 計測中の結果。`published/` に移すまでここにあります |
 | `results/…/<RUN_ID>/raw/` | `scripts/bench_runner.py` | ストリームの生データ（SSE と思考の全文）。`published/` へは移しません |
 | `results/…/<RUN_ID>/stats/snapshots.jsonl.gz`、`last.json` | `scripts/stats_watch.py` | **計測中の PC 全体のスナップショット**。セッション開始・起動・ケース終了・失敗・Tier の切り替わりと 5 分ごとに、動いている全プロセス（PID、ユーザー名、コマンドライン全体、CPU・メモリ・ディスク IO）、GPU を使っているプロセス、CPU・メモリ・PSI・温度を記録します。並走する処理が計測を乱していないか後で確かめるためのもので、他のプログラムのコマンドライン（引数に書いたパスや値を含む）が残るため、`published/` へは移しません |
-| `preview/` | `scripts/build_cases.py`、`scripts/build_results.py` | `results/` も読んで作る確認用のページ |
+| `preview/` | `scripts/build_cases.py`、`scripts/build_results.py` | `results/` も読んで作る確認用のグラフとケース一覧 |
 | `run-status/` | `scripts/start_pipeline.sh`、`scripts/healthcheck.py`、`scripts/preflight.py` | 無人実行の状態（`STATUS.md`、`ALERTS.log`、`current-run.json`、`preflight.json`） |
 | `downloads/` | `scripts/download_models.py`、`scripts/overnight.py` | モデル取得の状態とログ（`manifest.json` に SHA-256） |
 | `work/` | `scripts/overnight.py`（NVFP4-QAD の変換） | NVFP4-QAD 変換用の作業フォルダ。長文コーパスの元データ（`work/corpus/raw/`、手で取得）もここに置き、`scripts/long_corpus.py` が読みます |
@@ -151,7 +146,7 @@ RUN_ID=<run id> STEPS="0 1 2 3 4a 4b 4c 4d 5" scripts/start_pipeline.sh       # 
 ## ライセンス
 
 - **コード**（スクリプト、ページのテンプレート、ページ自体のコード）: [MIT License](LICENSE)
-- **計測データ**（`published/`・`published/summary.csv`・`configs/tuned/`、ページ上の数値とグラフ）: [CC BY 4.0](LICENSE-DATA.md)。
+- **計測データ**（`published/`・`snapshots/`・`cases/`・`configs/tuned/`、ページ上の数値とグラフ）: [CC BY 4.0](LICENSE-DATA.md)。
   引用するときは「strata-jbench」とこのリポジトリへのリンク、環境と RUN_ID（例: `rtx5090-128g / 2026-11-03-main`）を添えてください。
 - **長文の素材**（`prompts/long-corpus.txt` の10作品の本文）: パブリックドメイン。出典と底本は [prompts/long-sources.json](prompts/long-sources.json)。
 - モデル・モデル名・Strata は、それぞれの作者のライセンスに従います。

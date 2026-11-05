@@ -40,7 +40,7 @@ agent features, DeepSeek Harness or opencode) are planned and not measured yet.*
 | 計画 | `plan/<部門>/<環境>/` |
 | 結果（作業用） | `results/<部門>/<環境>/<RUN_ID>/` |
 | 結果（確定・公開） | `published/<部門>/<環境>/<RUN_ID>/` |
-| ケース一覧 | `cases/<部門>/<環境>.html` |
+| ケース一覧 | `cases/<部門>/<環境>/` |
 
 計測する部門は環境変数 `BENCH_DIVISION` で選びます（省略すると `plain`）。
 いまのランナーはエンジンを直接呼ぶ `plain` だけに対応していて、ほかの部門を指定すると計測を始めません。

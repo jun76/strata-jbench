@@ -23,40 +23,36 @@
 
 ## 查看结果
 
-| 页面 | 内容 |
+每次测量结束，本表最上方就会增加一行。表中显示最新的 3 个，更早的折叠在表的下方。每行的“查看”可打开以下 3 项：
+
+| 链接 | 内容 |
 | --- | --- |
-| [RESULTS.html](RESULTS.html) | 用图表汇总的结果：各模型速度、输入长度与等待时间、standard-v1、有无 thinking、预留上下文长度的代价、长文阅读（至 1M token）、启动选项、测量时的温度・功耗・内存、各模型一览 |
-| [CASES.html](CASES.html) | 各环境的全部用例：每个用例的条件、结果，以及所发请求和所得回答的链接 |
-| [published/summary.csv](published/summary.csv) | 全部用例的数值（`division` 列区分部门，`env` 列区分环境） |
+| 图表 | 该 RUN 测量结束时的结果汇总页面（GitHub Pages）：各模型速度、输入长度与等待时间、standard-v1、有无 thinking、预留上下文长度的代价、长文阅读（至 1M token）、启动选项、测量时的温度・功耗・内存、各模型一览。全部用例的数值（`summary.csv`）也从这里链接。右上角可切换日本語・English・中文，以及浅色・深色 |
+| 用例一览 | 同一时点各环境的全部用例（GitHub 上的 Markdown 与 CSV）：每个 Tier 一张表，含用例的条件、结果和记录的链接 |
+| 证据 | 该 RUN 的记录本身（所发请求、所得回答、汇总、启动记录等；见“数据位置”） |
 
-页面是静态 HTML。GitHub 的文件视图只显示源码，请 clone 仓库后在浏览器中打开（如已配置 GitHub Pages，也可从那里查看）。
-页面右上角可切换日本語・English・中文，以及浅色・深色。
-
-## 已确定的结果
-
-每当有结果确定，本表就会增加一行（`scripts/publish.py` 根据 `published/` 重写）。表中显示最新的 3 个，更早的折叠在表的下方。
-同一环境中同一用例出现在多个 RUN_ID 时，页面使用名称排在最后的 RUN_ID 的结果。
+图表和用例一览汇总了截至该 RUN 测量的所有 RUN 的结果。同一环境中同一用例出现在多个 RUN_ID 时，使用名称排在最后的 RUN_ID 的结果。
 
 <!-- published-runs:start (scripts/publish.py writes this list) -->
 | 测量完成 | 部门 | 环境 | RUN_ID | Tier | 用例（done / 全部） | 内容 | 查看 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-11-04 22:51 | 纯模型（无 harness） | GeForce RTX 5090 · 128 GB RAM | [`2026-11-04-long`](published/plain/rtx5090-128g/2026-11-04-long/) | 4b, 4c, 4d | 112 / 112 | Tier 4b・4c・4d（32K〜1M 的长文阅读与 YaRN 检查）。2026-11-03-main 因长文 fixture 尚未制作而省略，之后用青空文库与 Project Gutenberg 的日英 10 部作品制作长文补测 | [图表](RESULTS.html?env=rtx5090-128g) · [用例一览](cases/plain/rtx5090-128g.html) |
-| 2026-11-04 18:20 | 纯模型（无 harness） | GeForce RTX 5090 · 128 GB RAM | [`2026-11-04-q8-t3`](published/plain/rtx5090-128g/2026-11-04-q8-t3/) | 3 | 9 / 9 | unsloth Q8_0 的 Tier 3（有无 thinking 与游戏制作）。最初的计划把 Q8_0 排除在 Tier 3 之外，因此加入计划后补测 | [图表](RESULTS.html?env=rtx5090-128g) · [用例一览](cases/plain/rtx5090-128g.html) |
-| 2026-11-04 15:25 | 纯模型（无 harness） | GeForce RTX 5090 · 128 GB RAM | [`2026-11-04-iq3s-mtp`](published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/) | 0, 1, 2, 3, 4a, 5 | 159 / 159 | qwen IQ3_S 的重测（2026-11-03-main 中 MTP 的 draft layer 未加载）。包括 DFlash2 用例在内重跑了相同的 Tier | [图表](RESULTS.html?env=rtx5090-128g) · [用例一览](cases/plain/rtx5090-128g.html) |
+| 2026-11-04 22:51 | 纯模型（无 harness） | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-long` | 4b, 4c, 4d | 112 / 112 | Tier 4b・4c・4d（32K〜1M 的长文阅读与 YaRN 检查）。2026-11-03-main 因长文 fixture 尚未制作而省略，之后用青空文库与 Project Gutenberg 的日英 10 部作品制作长文补测 | [图表](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-long/?env=rtx5090-128g) · [用例一览](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-long/cases/plain/rtx5090-128g/README.zh.md) · [证据](published/plain/rtx5090-128g/2026-11-04-long/) |
+| 2026-11-04 18:20 | 纯模型（无 harness） | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-q8-t3` | 3 | 9 / 9 | unsloth Q8_0 的 Tier 3（有无 thinking 与游戏制作）。最初的计划把 Q8_0 排除在 Tier 3 之外，因此加入计划后补测 | [图表](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-q8-t3/?env=rtx5090-128g) · [用例一览](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-q8-t3/cases/plain/rtx5090-128g/README.zh.md) · [证据](published/plain/rtx5090-128g/2026-11-04-q8-t3/) |
+| 2026-11-04 15:25 | 纯模型（无 harness） | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-iq3s-mtp` | 0, 1, 2, 3, 4a, 5 | 159 / 159 | qwen IQ3_S 的重测（2026-11-03-main 中 MTP 的 draft layer 未加载）。包括 DFlash2 用例在内重跑了相同的 Tier | [图表](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-iq3s-mtp/?env=rtx5090-128g) · [用例一览](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/plain/rtx5090-128g/README.zh.md) · [证据](published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/) |
 
 <details>
 <summary>更早的 RUN（1 个）</summary>
 
 | 测量完成 | 部门 | 环境 | RUN_ID | Tier | 用例（done / 全部） | 内容 | 查看 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-11-04 10:41 | 纯模型（无 harness） | GeForce RTX 5090 · 128 GB RAM | [`2026-11-03-main`](published/plain/rtx5090-128g/2026-11-03-main/) | 0, 1, 2, 3, 4a, 5 | 1231 / 1231 | 第一次完整测量（Tier 0・1・2・4a・3・5，18 个模型）。其中 qwen IQ3_S 未启用 MTP，页面使用重测的 2026-11-04-iq3s-mtp | [图表](RESULTS.html?env=rtx5090-128g) · [用例一览](cases/plain/rtx5090-128g.html) |
+| 2026-11-04 10:41 | 纯模型（无 harness） | GeForce RTX 5090 · 128 GB RAM | `2026-11-03-main` | 0, 1, 2, 3, 4a, 5 | 1231 / 1231 | 第一次完整测量（Tier 0・1・2・4a・3・5，18 个模型）。其中 qwen IQ3_S 未启用 MTP，页面使用重测的 2026-11-04-iq3s-mtp | [图表](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-03-main/?env=rtx5090-128g) · [用例一览](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-03-main/cases/plain/rtx5090-128g/README.zh.md) · [证据](published/plain/rtx5090-128g/2026-11-03-main/) |
 
 </details>
 <!-- published-runs:end -->
 
 ## 测量了什么
 
-纯模型部门的测量分为若干层级（Tier）。用例定义在 [scripts/build_cases.py](scripts/build_cases.py)，各用例的条件可在 CASES.html 查看。
+纯模型部门的测量分为若干层级（Tier）。用例定义在 [scripts/build_cases.py](scripts/build_cases.py)，各用例的条件可在上表的“用例一览”中查看。
 
 | Tier | 看什么 | 对象 |
 | --- | --- | --- |
@@ -67,7 +63,7 @@
 | 4 | 预留上下文长度的代价（4a）与实际长文处理（4b〜4d，至 1M token） | 4a 为全部模型，4b〜4d 为代表模型 |
 | 5 | 逐个改变启动选项时的变化（含自动 tune） | 3 个代表模型 |
 
-各个已确定的结果包含哪些 Tier，见上表的“Tier”列。
+各个 RUN 包含哪些 Tier，见上表的“Tier”列。
 
 ### 测量方法
 
@@ -83,13 +79,13 @@
 
 ### 测量环境
 
-按硬件配置（GPU 与 RAM 的组合，即“环境”）分开。不同环境的结果不会混在一起，用 RESULTS.html 上方的按钮切换。
+按硬件配置（GPU 与 RAM 的组合，即“环境”）分开。不同环境的结果不会混在一起，用图表页面上方的按钮切换。
 两个以上环境有结果时，会出现以相同模型・相同条件并排的“环境比较”。
-各环境的配置（GPU、CPU、内存、驱动、Strata 版本等）见 RESULTS.html 与 CASES.html 开头，定义在 [envs/](envs/)。
+各环境的配置（GPU、CPU、内存、驱动、Strata 版本等）见图表页面与用例一览的开头，定义在 [envs/](envs/)。
 
 ## 数据位置
 
-已确定的结果在 `published/<部门>/<环境>/<RUN_ID>/`（目前只有 `published/plain/…`）。
+测量记录在 `published/<部门>/<环境>/<RUN_ID>/`（目前只有 `published/plain/…`）。
 
 | 内容 | 位置 |
 | --- | --- |
@@ -97,7 +93,7 @@
 | 每次启动的记录 | `sessions/<session>/start-N/`（`strata launch` 的输出、引擎日志、/settings・/config・/props、telemetry.csv） |
 | standard-v1 的输出 | `standard/` |
 | 温度・功耗的变化 | `stats/thermal.csv`（每 5 秒） |
-| 测量的模型版本 | `models.json`（各模型的 Hugging Face 仓库与提交，各文件的大小与 SHA-256，以及测量开始时本地文件是否为该 SHA-256）。同名模型在发布者更新后内容会变，由此可知测量的是哪个版本。用例一览的模型一览和 RESULTS 中各 RUN_ID 的行也链接到它 |
+| 测量的模型版本 | `models.json`（各模型的 Hugging Face 仓库与提交，各文件的大小与 SHA-256，以及测量开始时本地文件是否为该 SHA-256）。同名模型在发布者更新后内容会变，由此可知测量的是哪个版本。用例一览的模型一览和图表页面中各 RUN_ID 的行也链接到它 |
 | 队列与 runner 的日志 | `queue.log`、`runner.log` |
 | 该 RUN 的说明 | `NOTE.md`（上表的“内容”） |
 | 记录之间的核对 | `verify.json`（引擎 timings 与客户端计时的差、启动设置是否进入引擎） |
@@ -115,7 +111,7 @@
 | `results/` | `scripts/bench_runner.py` 等 | 测量中的结果，移到 `published/` 之前放在这里 |
 | `results/…/<RUN_ID>/raw/` | `scripts/bench_runner.py` | 流的原始数据（SSE 与思考全文），不移到 `published/` |
 | `results/…/<RUN_ID>/stats/snapshots.jsonl.gz`、`last.json` | `scripts/stats_watch.py` | **测量期间整台 PC 的快照**。在会话开始、启动、用例结束、失败、Tier 切换时以及每 5 分钟，记录所有运行中的进程（PID、用户名、完整命令行、CPU・内存・磁盘 IO）、使用 GPU 的进程，以及 CPU・内存・PSI・温度。用于事后确认并行的处理是否干扰了测量。由于会留下其他程序的命令行（包括作为参数写入的路径和值），不移到 `published/` |
-| `preview/` | `scripts/build_cases.py`、`scripts/build_results.py` | 同时读取 `results/` 生成的检查用页面 |
+| `preview/` | `scripts/build_cases.py`、`scripts/build_results.py` | 同时读取 `results/` 生成的检查用图表与用例一览 |
 | `run-status/` | `scripts/start_pipeline.sh`、`scripts/healthcheck.py`、`scripts/preflight.py` | 无人值守运行的状态（`STATUS.md`、`ALERTS.log`、`current-run.json`、`preflight.json`） |
 | `downloads/` | `scripts/download_models.py`、`scripts/overnight.py` | 模型下载的状态与日志（`manifest.json` 含 SHA-256） |
 | `work/` | `scripts/overnight.py`（NVFP4-QAD 转换） | NVFP4-QAD 转换用的工作文件夹。长文语料的原始数据（`work/corpus/raw/`，手动获取）也放在这里，由 `scripts/long_corpus.py` 读取 |
@@ -145,7 +141,7 @@ RUN_ID=<run id> STEPS="0 1 2 3 4a 4b 4c 4d 5" scripts/start_pipeline.sh       # 
 ## 许可证
 
 - **代码**（脚本、页面模板、页面本身的代码）：[MIT License](LICENSE)
-- **测量数据**（`published/`、`published/summary.csv`、`configs/tuned/`，以及页面上的数值与图表）：[CC BY 4.0](LICENSE-DATA.md)。
+- **测量数据**（`published/`、`snapshots/`、`cases/`、`configs/tuned/`，以及页面上的数值与图表）：[CC BY 4.0](LICENSE-DATA.md)。
   引用时请注明“strata-jbench”并附上本仓库链接，以及环境与 RUN_ID（例如 `rtx5090-128g / 2026-11-03-main`）。
 - **长文素材**（`prompts/long-corpus.txt` 中 10 部作品的正文）：公有领域。来源与底本见 [prompts/long-sources.json](prompts/long-sources.json)。
 - 模型、模型名称与 Strata 遵循各自作者的许可证。

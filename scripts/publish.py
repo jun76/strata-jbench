@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """Make a finished run final: move it from results/<division>/<env>/<run id>/ (ignored by Git) to published/<division>/<env>/<run id>/
-(tracked), then rebuild the committed pages from published/ alone (CASES.html, cases/, RESULTS.html, published/summary.csv).
+(tracked), rebuild the case lists from published/ alone (cases/), and write the charts as of this run
+(snapshots/<division>/<env>/<run id>/, served by GitHub Pages; never rewritten afterwards).
 
     python3 -I scripts/publish.py <env> <run id> --dry-run    # what would move, and its size (division: $BENCH_DIVISION, default plain)
     python3 -I scripts/publish.py <env> <run id> --note "what this run is"
-    python3 -I scripts/publish.py --readme                    # only rebuild the READMEs' list of published runs
+    python3 -I scripts/publish.py --readme                    # only rebuild the READMEs' list of runs
+    python3 -I scripts/publish.py --snapshots                 # write the snapshot of every published run that has none
 
-Each publish also rewrites the list of published runs in README.md, README.en.md and README.zh.md (between their published-runs markers), from published/
-alone; --note is the run's one line there (kept as published/<division>/<env>/<run id>/NOTE.md; --note-en / --note-zh as NOTE.en.md / NOTE.zh.md, the Japanese one where they are missing).
+Each publish also rewrites the list of runs in README.md, README.en.md and README.zh.md (between their published-runs
+markers), from published/ alone, newest first; each row links the run's snapshot on GitHub Pages, its case lists on
+GitHub at the run's tag (envs.tag: run/<division>/<env>/<run id>, put on the commit that publishes it) and its files in
+published/. --note is the run's one line there (kept as published/<division>/<env>/<run id>/NOTE.md; --note-en /
+--note-zh as NOTE.en.md / NOTE.zh.md, the Japanese one where they are missing).
 
 What stays behind in results/<division>/<env>/<run id>/, never published: raw/ (the SSE streams and thinking text) and the
 machine snapshots (stats/snapshots.jsonl.gz, stats/last.json: every program's command line on the PC).
@@ -75,8 +80,9 @@ READMES = {'ja': ROOT / 'README.md', 'en': ROOT / 'README.en.md', 'zh': ROOT / '
 HEAD = {'ja': ['計測完了', '部門', '環境', 'RUN_ID', 'Tier', 'ケース（done / 全体）', '内容', '見る'],
         'en': ['Finished', 'Division', 'Environment', 'RUN_ID', 'Tier', 'Cases (done / all)', 'Content', 'See'],
         'zh': ['测量完成', '部门', '环境', 'RUN_ID', 'Tier', '用例（done / 全部）', '内容', '查看']}
-LINKS = {'ja': ('グラフ', 'ケース一覧'), 'en': ('Charts', 'Cases'), 'zh': ('图表', '用例一览')}
-NONE = {'ja': 'まだ確定した結果はありません', 'en': 'No published runs yet', 'zh': '尚无已确定的结果'}
+LINKS = {'ja': ('グラフ', 'ケース一覧', 'エビデンス'), 'en': ('Charts', 'Cases', 'Evidence'), 'zh': ('图表', '用例一览', '证据')}
+NONE = {'ja': 'まだ結果はありません', 'en': 'No results yet', 'zh': '尚无结果'}
+SUFFIX = {'ja': '', 'en': '.en', 'zh': '.zh'}
 # The latest SHOWN runs stay in view; older ones go into a <details> block (GitHub cannot scroll a table in a box)
 SHOWN = 3
 OLDER = {'ja': 'それより前の RUN（{n} 件）', 'en': 'Earlier runs ({n})', 'zh': '更早的 RUN（{n} 个）'}
@@ -94,11 +100,10 @@ def run_rows():
         steps = {c.name.split('-', 1)[0][1:] for c in d.iterdir() if c.is_dir()}
         done = sum(json.loads(s.read_text()).get('status') == 'done' for s in d.glob('*/summary.json'))
         total = len(list(d.glob('*/summary.json')))
-        q = (run / 'queue.log').read_text(errors='replace') if (run / 'queue.log').exists() else ''
-        ends = re.findall(r'^(\d{4}-\d\d-\d\dT\S+) queue finished', q, re.M)   # the last finish, to the second
+        end = envs.finished(run)   # the last finish, to the second
         notes = {lang: (run / name).read_text().strip() for lang, name in (('ja', 'NOTE.md'), ('en', 'NOTE.en.md'), ('zh', 'NOTE.zh.md'))
                  if (run / name).exists()}
-        rows.append({'div': div, 'div_label': envs.load_division(div)['label'], 'env': env_id, 'label': label, 'run': run.name, 'finished': ends[-1] if ends else '', 'date': ends[-1][:16].replace('T', ' ') if ends else '?', 'notes': notes,
+        rows.append({'div': div, 'div_label': envs.load_division(div)['label'], 'env': env_id, 'label': label, 'run': run.name, 'finished': end, 'date': end[:16].replace('T', ' ') if end else '?', 'notes': notes,
                      'tiers': ', '.join(t for t in TIER_ORDER if t in steps), 'cases': f'{done} / {total}'})
     return sorted(rows, key=lambda r: (datetime.fromisoformat(r['finished']).timestamp() if r['finished'] else 0, r['run']), reverse=True)
 
@@ -106,6 +111,7 @@ def run_rows():
 def update_readme():
     """Rewrite the list of published runs (between MARK) in each README, from published/."""
     rows = run_rows()
+    repo, pages = envs.github()
     for lang, path in READMES.items():
         if not path.exists():
             continue
@@ -113,13 +119,17 @@ def update_readme():
         if MARK[0] not in text or MARK[1] not in text:
             raise SystemExit(f'{path.name} has no {MARK[0]} … {MARK[1]} block')
         table = ['| ' + ' | '.join(HEAD[lang]) + ' |', '| ' + ' | '.join(['---'] * len(HEAD[lang])) + ' |']
-        charts, cases = LINKS[lang]
+        charts, cases, files = LINKS[lang]
 
         def row(r):
             note = r['notes'].get(lang) or r['notes'].get('ja') or '–'
-            return (f'| {r["date"]} | {r["div_label"][lang]} | {r["label"]} | [`{r["run"]}`](published/{r["div"]}/{r["env"]}/{r["run"]}/) | '
+            snap = f'snapshots/{r["div"]}/{r["env"]}/{r["run"]}/?env={r["env"]}'
+            lists = f'cases/{r["div"]}/{r["env"]}/README{SUFFIX[lang]}.md'
+            tag = envs.tag(r['env'], r['run'], r['div'])
+            return (f'| {r["date"]} | {r["div_label"][lang]} | {r["label"]} | `{r["run"]}` | '
                     f'{r["tiers"]} | {r["cases"]} | {note} | '
-                    f'[{charts}](RESULTS.html?env={r["env"]}) · [{cases}](cases/{r["div"]}/{r["env"]}.html) |')
+                    f'[{charts}]({f"{pages}/{snap}" if pages else snap}) · [{cases}]({f"{repo}/blob/{tag}/{lists}" if repo else lists}) · '
+                    f'[{files}](published/{r["div"]}/{r["env"]}/{r["run"]}/) |')
         lines = table + [row(r) for r in rows[:SHOWN]]
         if not rows:
             lines.append('| ' + ' | '.join(['–'] * 6 + [NONE[lang], '–']) + ' |')
@@ -130,6 +140,29 @@ def update_readme():
         head, rest = text.split(MARK[0], 1)
         path.write_text(head + MARK[0] + '\n' + '\n'.join(lines) + '\n' + MARK[1] + rest.split(MARK[1], 1)[1])
         print(f'{path.name}: {len(rows)} published run(s) listed')
+    write_pages_index()
+
+
+def write_pages_index():
+    """index.html, the GitHub Pages site's root: there is no page of its own there (each run's charts are under
+    snapshots/), so it sends the reader to the repository, whose README lists the runs."""
+    repo = envs.github()[0]
+    if repo:
+        (ROOT / 'index.html').write_text(
+            f'<!doctype html>\n<meta charset="utf-8">\n<title>strata-jbench</title>\n'
+            f'<meta http-equiv="refresh" content="0; url={repo}#readme">\n<a href="{repo}#readme">{repo}</a>\n')
+
+
+def write_snapshots():
+    """The charts as of each published run that has no snapshot yet (scripts/build_results.py --snapshot). A snapshot
+    is never rewritten: it shows the run as it was published."""
+    for run in sorted(envs.PUBLISHED.glob('*/*/*/cases'), key=lambda d: envs.finished_ts(d.parent)):
+        run = run.parent
+        div, env_id = run.parents[1].name, run.parent.name
+        if (envs.snapshot_dir(env_id, run.name, div) / 'index.html').exists():
+            continue
+        subprocess.run([sys.executable, '-I', str(ROOT / 'scripts' / 'build_results.py'), '--snapshot', f'{env_id}/{run.name}'],
+                       check=True, cwd=ROOT, env={**os.environ, 'BENCH_DIVISION': div})
 
 
 def main():
@@ -141,11 +174,14 @@ def main():
     ap.add_argument('--note', default='', help="the run's one line in README.md's list (published/<division>/<env>/<run id>/NOTE.md)")
     ap.add_argument('--note-en', default='', help='the same line in English (NOTE.en.md, README.en.md)')
     ap.add_argument('--note-zh', default='', help='the same line in Chinese (NOTE.zh.md, README.zh.md)')
-    ap.add_argument('--readme', action='store_true', help="only rebuild the READMEs' list of published runs")
+    ap.add_argument('--readme', action='store_true', help="only rebuild the READMEs' list of runs")
+    ap.add_argument('--snapshots', action='store_true', help='write the snapshot of every published run that has none')
     ap.add_argument('--scrub', action='store_true', help='write ~ and <host> into what is in published/ already')
     a = ap.parse_args()
     if a.readme:
         return update_readme()
+    if a.snapshots:
+        return write_snapshots()
     if a.scrub:
         return scrub_published()
     if not (a.env and a.run_id):
@@ -183,11 +219,14 @@ def main():
     for text, name in ((a.note, 'NOTE.md'), (a.note_en, 'NOTE.en.md'), (a.note_zh, 'NOTE.zh.md')):
         if text:
             (dst / name).write_text(text.strip() + '\n')
-    for script in ('build_cases.py', 'build_results.py'):
-        subprocess.run([sys.executable, '-I', str(ROOT / 'scripts' / script), '--published'], check=True, cwd=ROOT)
+    subprocess.run([sys.executable, '-I', str(ROOT / 'scripts' / 'build_cases.py'), '--published'], check=True, cwd=ROOT)
+    write_snapshots()
     update_readme()
     subprocess.run([sys.executable, '-I', str(ROOT / 'scripts' / 'tuned_configs.py')], check=True, cwd=ROOT)
-    print(f'published. Commit {os.path.relpath(dst, ROOT)}/ with CASES.html, cases/, RESULTS.html, published/summary.csv, README*.md and configs/tuned/')
+    tag = envs.tag(a.env, a.run_id)
+    print(f'published. Commit {os.path.relpath(dst, ROOT)}/ with cases/, snapshots/, README*.md, index.html and configs/tuned/, then '
+          f'tag that commit: git tag -a {tag} -m "{a.run_id}" (the README links the case lists at this tag; '
+          'push with --follow-tags)')
 
 
 if __name__ == '__main__':

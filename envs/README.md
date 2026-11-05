@@ -7,10 +7,10 @@
 | 環境ごとに分かれるもの | 場所 |
 | --- | --- |
 | 計画（ケースの一覧） | `plan/<division>/<env>/cases.jsonl`・`cases.csv` |
-| ケース一覧のページ | `cases/<division>/<env>.html`（入口は `CASES.html`） |
+| ケース一覧 | `cases/<division>/<env>/`（Markdown と CSV、入口は `cases/README.md`） |
 | 結果 | `results/<division>/<env>/<RUN_ID>/`（作業用、Git 管理外）→ 確定したら `published/<division>/<env>/<RUN_ID>/`（`scripts/publish.py`） |
 
-`RESULTS.html`（公開用は `published/` から、確認用は `preview/RESULTS.html`）は全環境を1ページに持ち、環境を切り替えて見る。2つ以上の環境に結果があると、同じモデル・同じ条件で並べた「環境の比較」が出る。
+グラフのページ（RUN を公開するたびにその時点のものを `snapshots/<division>/<env>/<RUN_ID>/` に、確認用は `preview/RESULTS.html`）は全環境を1ページに持ち、環境を切り替えて見る。2つ以上の環境に結果があると、同じモデル・同じ条件で並べた「環境の比較」が出る。
 
 ## 環境の決まり方
 

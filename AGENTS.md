@@ -2,15 +2,16 @@
 
 A repository for measuring several models with Strata (a local LLM inference engine) and publishing the results so
 that anyone can run them again.
-The plan is [docs/SCOUTING.md](docs/SCOUTING.md) (internal notes, not in Git); every case per environment is reachable
-from [CASES.html](CASES.html) (built by `scripts/build_cases.py` → `plan/<division>/<env>/cases.jsonl`), and the charts
-are [RESULTS.html](RESULTS.html) (`scripts/build_results.py`).
+The plan is [docs/SCOUTING.md](docs/SCOUTING.md) (internal notes, not in Git); every case per environment is in the
+case lists, [cases/](cases/README.md) (Markdown and CSV read on GitHub, built by `scripts/build_cases.py`, which also
+writes `plan/<division>/<env>/cases.jsonl`), and the charts are one page per published run under `snapshots/`, served
+by GitHub Pages (`scripts/build_results.py`).
 
 This document sets the procedure for long-running work such as fetching models and running the benchmark.
 
 **Environment:** the hardware set-up the benchmark runs on (a GPU and an amount of RAM; swapping the card or adding
 RAM makes another environment). `envs/<env>/env.json` is one environment; its plan is in `plan/<division>/<env>/`, its
-results in `results/<division>/<env>/<RUN_ID>/`, its case list in `cases/<division>/<env>.html`.
+results in `results/<division>/<env>/<RUN_ID>/`, its case list in `cases/<division>/<env>/`.
 The environment is never typed by hand: `scripts/envs.py` picks the env.json that matches the hardware found now (GPU
 name and RAM). With no matching environment, or with one named that does not match, preflight and the runner do not
 start measuring. Fields and how to write one: [envs/README.md](envs/README.md).
@@ -22,9 +23,13 @@ planned and cannot be measured while their `status` is `planned` (picked with `B
 Plans, results and case lists are kept in a folder per division.
 
 **Working and published:** measurements are written to `results/` (not in Git), and only the RUN_IDs made final are
-moved to `published/` (in Git) by `scripts/publish.py`. The committed pages (`CASES.html`, `cases/`, `RESULTS.html`,
-`published/summary.csv`) are built from `published/` alone (`--published`). Pages built while measuring, or to check,
-also read `results/` and are written to `preview/` (not in Git), so a running benchmark never changes what Git tracks.
+moved to `published/` (in Git) by `scripts/publish.py`. What is committed is built from `published/` alone: the case
+lists (`cases/`, `build_cases.py --published`) and, per published run, the charts as they were when it was published
+(`snapshots/<division>/<env>/<RUN_ID>/index.html` and `summary.csv`, `build_results.py --snapshot`; never rewritten).
+Lists and charts built while measuring, or to check, also read `results/` and are written to `preview/` (not in Git),
+so a running benchmark never changes what Git tracks.
+The distinction between working and final is for the procedure only: the READMEs present every run in `published/`
+as simply a result (no "final" or "published" wording in their results section), newest first.
 
 ## 1. Principles
 
@@ -68,7 +73,7 @@ the NVFP4 ready-made packs need Strata's setup once with `--no-start` to write t
    user to disable it (`sudo systemctl disable --now gpu-power-limit.service`) or change the value (it is a system
    setting, so the agent does not do it).
 4. `python3 -I scripts/build_cases.py` writes that environment's plan (`plan/<division>/<env>/`) and case list
-   (`cases/<division>/<env>.html`); check the number of cases and the estimate. The model size classes used for the
+   (`cases/<division>/<env>/`); check the number of cases and the estimate. The model size classes used for the
    estimate (small / edge / large against RAM + VRAM) come from that environment's VRAM and RAM (they are not shown on
    the pages).
 5. Strata's launch settings (`~/.local/share/strata/install/`) were written by setup for the GPU of that time. After a
@@ -80,10 +85,11 @@ the NVFP4 ready-made packs need Strata's setup once with `--no-start` to write t
 ### 2.1 When the plan changes
 1. Edit `scripts/build_cases.py` (the only place cases are defined; differences between environments go in env.json).
 2. Run `python3 -I scripts/build_cases.py` and check the number of cases and the estimated hours per environment.
-   `CASES.html`, `cases/<division>/<env>.html` and `plan/<division>/<env>/cases.jsonl` are updated.
-   CASES.html and RESULTS.html switch between Japanese, English and Chinese. When a case definition gains a Japanese
+   `preview/cases/` and `plan/<division>/<env>/cases.jsonl` are updated (`--published` for the committed `cases/`).
+   The case lists have a Markdown file per language (`README.md`, `README.en.md`, `README.zh.md`, `tier-<Tier>.md`
+   and so on) and the charts switch between Japanese, English and Chinese. When a case definition gains a Japanese
    string, add its English and Chinese to `TR` in `scripts/i18n.py` (strings without a translation are listed when the
-   script runs, and shown in Japanese on the page).
+   script runs, and shown in Japanese).
 3. If a new fixture is needed, change `scripts/build_fixtures.py` and run it with the Python that ships with Strata (see
    the docstring at the top of the file).
    The long document of Tiers 4b–4d comes from ten works of Aozora Bunko and Project Gutenberg (five Japanese, five
@@ -106,7 +112,7 @@ the NVFP4 ready-made packs need Strata's setup once with `--no-start` to write t
      beforehand what to do.
    - That the hourly watch task will be registered at the start (step 3 of 2.3) and deleted at the end (2.6).
 2. After changing the runner or a fixture, run the affected cases under a RUN_ID starting with `test-` (`test-` results
-   appear neither in the case lists nor in RESULTS.html):
+   appear neither in the case lists nor in the charts):
    `python3 scripts/bench_runner.py --run-id test-xxx --steps 1 --ids <case id>,...`
 3. `python3 scripts/preflight.py --phase all --steps "0,1,2,3,4a,4b,4c,4d,5"` (`--phase acquire` before every model is
    on disk). If anything is NG, fix it and run it again. The result is `run-status/preflight.json`.
@@ -157,13 +163,13 @@ After fixing a code or environment problem, run one affected case under a `test-
 
 ### 2.5 Checking the results
 1. Read `run-status/STATUS.md` and `run-status/ALERTS.log` (STATUS.md's first line gives the environment and RUN_ID).
-2. `python3 -I scripts/build_cases.py` puts the results into the case list (`preview/cases/<division>/<env>.html`), and
+2. `python3 -I scripts/build_cases.py` puts the results into the case list (`preview/cases/<division>/<env>/`), and
    `python3 -I scripts/build_results.py` into the charts, `preview/RESULTS.html`, and `preview/summary.csv` (every
    environment, with an `env` column); the queue runs both after each Tier. `preview/` reads both `results/` and
-   `published/` and is for checking; its pages say "Preview" at the top.
-   RESULTS.html switches environments with the buttons at the top, and with results in two or more environments,
+   `published/` and is for checking; it says "Preview" at the top.
+   The charts switch environments with the buttons at the top, and with results in two or more environments,
    "Across environments" appears (`?env=<env>` opens a given environment).
-   When the same case is in several RUN_IDs of one environment, both pages use the RUN_ID whose name sorts last. To
+   When the same case is in several RUN_IDs of one environment, both use the RUN_ID whose name sorts last. To
    measure again under changed conditions, delete the old RUN_ID's results or use a RUN_ID that sorts later (`test-`
    RUN_IDs are never shown). Another environment is another case.
 
@@ -180,9 +186,11 @@ The watch task keeps firing every hour after the queue ends, so remove it as soo
 1. The user decides which RUN_ID becomes final (so that results meant to be thrown away are never published).
 2. `python3 -I scripts/publish.py <env> <RUN_ID> --dry-run` shows how many files would move, and their size.
 3. `python3 -I scripts/publish.py <env> <RUN_ID> --note "<one line on the run>"` moves it to
-   `published/<division>/<env>/<RUN_ID>/` and rebuilds the published pages and the "published runs" table of the
-   READMEs (Japanese `README.md`, English `README.en.md`, Chinese `README.zh.md`; the table is rewritten from
-   `published/` every time). The line is kept in `NOTE.md`, and its English and Chinese, given with `--note-en` and
+   `published/<division>/<env>/<RUN_ID>/`, rebuilds the case lists (`cases/`), writes the run's snapshot of the charts
+   (`snapshots/<division>/<env>/<RUN_ID>/`: the published runs that finished by then, every environment) and rewrites
+   the table of runs in the READMEs' "results" section (Japanese `README.md`, English `README.en.md`, Chinese
+   `README.zh.md`; rewritten from `published/` every time, newest first). Each row links the snapshot on GitHub Pages,
+   the case lists on GitHub at the run's tag, and the run's folder in `published/`. The line is kept in `NOTE.md`, and its English and Chinese, given with `--note-en` and
    `--note-zh`, in `NOTE.en.md` and `NOTE.zh.md` (the Japanese one is used where they are missing). After editing them
    later, `--readme` rebuilds only the tables. For a re-run, say in the line what was fixed and measured again.
    - `raw/` (SSE and the full thinking text) and the machine snapshots (`stats/snapshots.jsonl.gz`, with every
@@ -193,8 +201,17 @@ The watch task keeps firing every hour after the queue ends, so remove it as soo
      `scripts/tuned_configs.py`).
    - A RUN_ID whose queue did not finish is refused (`--force` to make final a RUN_ID stopped on purpose). `test-`
      RUN_IDs cannot be made final.
-4. Commit `published/`, `CASES.html`, `cases/`, `RESULTS.html`, `README*.md`, `configs/tuned/`, `plan/` and the scripts
-   changed. Push only after the user has agreed (section 3).
+   - `--snapshots` writes the snapshot of any published run that has none (the snapshots of runs published before
+     snapshots existed were made this way on 2026-11-05, with the scripts of that day). A snapshot is never rewritten;
+     to change one, delete it and run `--snapshots` (ask first: it changes a published page).
+4. Commit `published/`, `cases/`, `snapshots/`, `README*.md`, `index.html`, `configs/tuned/`, `plan/` and the scripts
+   changed. Then tag that commit with the run's tag, `git tag -a run/<division>/<env>/<RUN_ID> -m <RUN_ID>`: the
+   README and the snapshot link the case lists (and `models.json`, the divisions) at that tag, so they show the files
+   as they were when the run was published. Push only after the user has agreed (section 3), with
+   `git push --follow-tags` (an annotated tag goes with it; without the tag those links are broken).
+5. GitHub Pages serves the repository's default branch from its root (Settings → Pages → Deploy from a branch,
+   `master`, `/ (root)`; `.nojekyll` keeps files as they are). Its root `index.html` (written by `publish.py`) sends
+   readers to the repository's README. Pages is free only for a public repository.
 
 ## 3. Ask first
 
@@ -216,15 +233,15 @@ policy, report the cause and a proposal, and stop.
 | Divisions | `divisions/<division>/division.json` (only a division whose `status` is `active` can be measured; see [divisions/README.md](divisions/README.md)) |
 | Environments | `envs/<env>/env.json` (written by hand; fields in [envs/README.md](envs/README.md); matching and templates in `scripts/envs.py`) |
 | The plan | `plan/<division>/<env>/cases.jsonl` and `cases.csv` (written per environment by `scripts/build_cases.py`; the runner reads them) |
-| Case lists | `CASES.html` (the environments) → `cases/<division>/<env>.html` (every case of the environment, with links to results and evidence); published, from `published/` alone |
-| Charts | `RESULTS.html` (every environment, switched and compared), `published/summary.csv` (every case of every environment, with an `env` column); published |
-| Pages to check | `preview/` (CASES.html, cases/, RESULTS.html, summary.csv, built with `results/` too; not in Git) |
+| Case lists | `cases/README*.md` (the environments) → `cases/<division>/<env>/README*.md` (the Tiers, models and shared conditions) → `tier-<Tier>*.md` (every case, with its result and a link to its record) and `tier-<Tier>.csv` (every parameter; a CSV per Tier because GitHub shows a CSV as a table only up to 512 KB); committed, from `published/` alone |
+| Charts | `snapshots/<division>/<env>/<RUN_ID>/index.html` (every environment, switched and compared, as of that run) and `summary.csv` (every case of every environment, with an `env` column); committed, served by GitHub Pages |
+| Pages to check | `preview/` (cases/, RESULTS.html, summary.csv, built with `results/` too; not in Git) |
 | Results (working) | `results/<division>/<env>/<RUN_ID>/cases/<case id>/` (summary.json, requests.jsonl, responses/, artifact/, raw/); all of `results/` is outside Git |
 | Results (final, published) | `published/<division>/<env>/<RUN_ID>/` (moved by `scripts/publish.py`; no raw/ and no machine snapshots) |
 | Session records | `results/<division>/<env>/<RUN_ID>/sessions/<session>/start-N/` (launch output, /settings, /config, /props, telemetry.csv, engine.log) |
 | Queue records | `results/<division>/<env>/<RUN_ID>/queue.log` and `queue.pid`; the runner's record is `runner.log` there |
 | Run status | `run-status/` (not in Git) |
-| The machine | `results/<division>/<env>/<RUN_ID>/machine.json` (written first by the runner; `env` is the "Measured on" box at the top of CASES and RESULTS, `env_id` the environment; made by `scripts/machine_info.py`; RAM type, speed and modules need root, so they are read from env.json's `memory`) |
+| The machine | `results/<division>/<env>/<RUN_ID>/machine.json` (written first by the runner; `env` is the "Test system" box at the top of the case lists and the charts, `env_id` the environment; made by `scripts/machine_info.py`; RAM type, speed and modules need root, so they are read from env.json's `memory`) |
 | Internal notes | `docs/` (the plan's background and research notes; not in Git, not published) |
 | The records checked against each other | `results/<division>/<env>/<RUN_ID>/verify.json` (`scripts/verify_run.py`, run last by the queue: the engine's timings against the client's SSE timing, whether the launch choices reached the engine's arguments, the presets the tuner saved) |
 | Model versions | `results/<division>/<env>/<RUN_ID>/models.json` (written by the runner at each start, `scripts/model_files.py`: per model the repository and commit, per file the SHA-256 and whether the file on disk carries it; published). A model keeps its name across its publisher's updates, so this says which version a run measured; the case list marks a model measured in two versions within one environment |

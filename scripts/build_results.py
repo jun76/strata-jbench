@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""RESULTS.html: the results as charts, per test environment and compared between them (and summary.csv, one row per
-measured case and environment).
+"""The results as charts, per test environment and compared between them (and summary.csv, one row per measured case
+and environment).
 
-With --published it reads published/ only and writes RESULTS.html and published/summary.csv (the committed pages);
-without, it also reads results/ (runs still being measured, ignored by Git) and writes preview/RESULTS.html and
-preview/summary.csv.
+With --snapshot <env>/<run id> it is the page as of that published run: it reads only the published runs that finished
+by then (every environment) and writes snapshots/<division>/<env>/<run id>/index.html and summary.csv, which GitHub
+Pages serves; scripts/publish.py writes one per run, and they are never rewritten. Its links into the repository (the
+case lists, models.json, the divisions) go to GitHub at the tag of that publish (envs.tag). Without, it also reads
+results/ (runs still being measured, ignored by Git) and writes preview/RESULTS.html and preview/summary.csv.
 
 For every environment (envs/<id>/env.json) it reads that environment's case plan (scripts/build_cases.py) and every
 results/<division>/<env>/<run-id>/cases/<case id>/summary.json, with the same rule as the case pages: test- run ids are left out,
@@ -13,7 +15,7 @@ the machine's heat and power while it ran (stats/thermal.csv from scripts/stats_
 times), and per run the conditions (machine.json: GPU power limit, CPU, Strata).
 
     python3 -I scripts/build_results.py
-    python3 -I scripts/build_results.py --published
+    python3 -I scripts/build_results.py --snapshot rtx5090-128g/2026-11-04-long
     python3 -I scripts/build_results.py --run-id 2026-11-03-main
 """
 import os
@@ -224,26 +226,48 @@ def collect(run_id, published_only=False):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--run-id', default='', help='only this run (default: the newest result of every case)')
-    ap.add_argument('--published', action='store_true',
-                    help='only the runs in published/, written to RESULTS.html (default: also results/, to preview/)')
+    ap.add_argument('--snapshot', metavar='ENV/RUN_ID',
+                    help='the charts as of a published run: the published runs that finished by then, written to '
+                         'snapshots/<division>/<env>/<run id>/ (default: results/ and published/, to preview/)')
     a = ap.parse_args()
-    data = collect(a.run_id, a.published)
-    page_path = ROOT / 'RESULTS.html' if a.published else envs.PREVIEW / 'RESULTS.html'
-    csv_path = envs.PUBLISHED / 'summary.csv' if a.published else envs.PREVIEW / 'summary.csv'
+    snap = None
+    if a.snapshot:
+        env_id, run = a.snapshot.split('/', 1)
+        pub = envs.published_dir(env_id, run)
+        if not envs.finished(pub):
+            raise SystemExit(f'{pub.relative_to(ROOT)}: not published, or its queue never finished')
+        envs.UNTIL = envs.finished_ts(pub)
+        snap = {'env': env_id, 'run_id': run, 'division': envs.division(),
+                'finished': envs.finished(pub)[:16].replace('T', ' ')}
+    data = collect(a.run_id, bool(snap))
+    if snap:
+        out = envs.snapshot_dir(snap['env'], snap['run_id'])
+        page_path, csv_path = out / 'index.html', out / 'summary.csv'
+        # Links into the repository go to GitHub at the tag the publish leaves, so they show the files as they were then
+        repo = envs.github()[0]
+        if not repo:
+            raise SystemExit('the origin remote is not a GitHub repository: the snapshot cannot link to its files')
+        base = f'{repo}/blob/{envs.tag(snap["env"], snap["run_id"])}/'
+        data['here'] = None
+    else:
+        page_path, csv_path = envs.PREVIEW / 'RESULTS.html', envs.PREVIEW / 'summary.csv'
+        base = os.path.relpath(ROOT, page_path.parent) + '/'
+    data['snapshot'] = snap
     data['csv'] = os.path.relpath(csv_path, page_path.parent)
     for e in data['envs']:   # each run's models.json (which version of each model), linked from the page
         for r in e['runs']:
             if r.get('models_json'):
-                r['models_json'] = os.path.relpath(ROOT / r['models_json'], page_path.parent)
-    data['published'] = a.published
+                r['models_json'] = base + r['models_json']
+    cases_link = base + 'cases/README.md' if snap else os.path.relpath(envs.PREVIEW / 'cases/README.md', page_path.parent)
+    data['published'] = bool(snap)
     page = Path(__file__).with_name('results_template.html').read_text()
     blob = json.dumps(data, ensure_ascii=False).replace('</', '<\\/')
     page = page.replace('{{data}}', blob).replace('{{generated}}', html.escape(data['generated']))
     boxes = ''.join(f'<div class="envwrap" data-env="{html.escape(e["id"])}">'
-                    f'{machine_info.env_box(ROOT, envs.load(e["id"]), a.published, how=False)}</div>' for e in data['envs'])
+                    f'{machine_info.env_box(ROOT, envs.load(e["id"]), bool(snap), how=False)}</div>' for e in data['envs'])
     page = page.replace('{{env}}', boxes).replace('{{how}}', machine_info.how_html()).replace('{{csv}}', html.escape(data['csv']))
-    up = os.path.relpath(ROOT, page_path.parent) + '/' if page_path.parent != ROOT else ''
-    page = page.replace('{{division}}', i18n.division_html(envs.load_division(data['division']), up))
+    page = page.replace('{{cases}}', html.escape(cases_link))
+    page = page.replace('{{division}}', i18n.division_html(envs.load_division(data['division']), base))
     page = page.replace('{{i18n_head}}', i18n.HEAD).replace('{{i18n_script}}', i18n.SCRIPT).replace('{{lang_switch}}', i18n.SWITCH)
     page_path.parent.mkdir(parents=True, exist_ok=True)
     page_path.write_text(page)

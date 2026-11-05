@@ -6,8 +6,8 @@ The measurement data of strata-jbench is licensed under the
 
 Copyright (c) 2026 jun76
 
-**What it covers:** the published runs in `published/` (including `published/summary.csv`), `configs/tuned/`, and the
-numbers and charts on the result pages (`RESULTS.html`, `CASES.html`, `cases/`).
+**What it covers:** the runs in `published/`, `configs/tuned/`, and the numbers and charts on the result pages (the
+charts in `snapshots/`, each with its `summary.csv`, and the case lists in `cases/`).
 
 **Attribution:** please credit "strata-jbench" with a link to this repository, name the environment and the run
 (for example `rtx5090-128g / 2026-11-03-main`), and say whether you changed anything.

@@ -106,9 +106,9 @@ def latest_env(root, env_id, published_only=False):
     return None, None
 
 
-def env_box(root, cfg, published_only=False, how=True):
-    """The environment box for one environment: its newest run's record; before any run, this machine now if it is that
-    environment, else what env.json says."""
+def env_for(root, cfg, published_only=False):
+    """One environment's machine: its newest run's record; before any run, this machine now if it is that environment,
+    else what env.json says. Returns (env, the run id it was recorded for or None)."""
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import envs
     env, run_id = latest_env(root, cfg['id'], published_only)
@@ -118,11 +118,27 @@ def env_box(root, cfg, published_only=False, how=True):
         hw = cfg.get('hardware') or {}
         env = {'gpu': (cfg.get('match') or {}).get('gpu'), 'gpu_vram_mib': (hw.get('gpu_vram_gib') or 0) * 1024 or None,
                'ram_gib': hw.get('ram_gib'), 'ram_modules': cfg.get('memory'), 'gpu_power_limit_w': cfg.get('gpu_power_limit_w')}
-    return env_html(env, run_id, cfg, how)
+    return env, run_id
 
 
-def ram_text(env, installed):
-    from i18n import L
+def env_box(root, cfg, published_only=False, how=True):
+    """The environment box for one environment (env_for)."""
+    return env_html(*env_for(root, cfg, published_only), cfg, how)
+
+
+def env_md(root, cfg, lang, published_only=False):
+    """The same as a Markdown table in one language (the case lists, read on GitHub)."""
+    from i18n import one
+    L = one(lang)
+    env, run_id = env_for(root, cfg, published_only)
+    rows, src = env_rows(env, run_id, cfg, L)
+    return ('| | |\n| --- | --- |\n' + ''.join(f'| {k} | {v} |\n' for k, v in rows if v)
+            + f'\n{how_html(L)}\n\n{src}\n')
+
+
+def ram_text(env, installed, L=None):
+    if L is None:
+        from i18n import L
     if not installed:
         return '?'
     m = env.get('ram_modules') or {}
@@ -138,9 +154,10 @@ def ram_text(env, installed):
              f'{installed:.0f} GB（操作系统可见 {env["ram_gib"]} GiB）')
 
 
-def how_html():
-    """How the measurements are taken (the desktop app is not used), in all three languages."""
-    from i18n import L
+def how_html(L=None):
+    """How the measurements are taken (the desktop app is not used), in all three languages (L: i18n.one(lang) for one)."""
+    if L is None:
+        from i18n import L
     return L('Strata のデスクトップアプリは使っていない。CLI の <code>strata launch --no-tui</code> でエンジンを専用ポート（18600）に起動し、'
             'OpenAI 互換の HTTP API（<code>POST /v1/chat/completions</code>、ストリーミング）を <code>scripts/bench_runner.py</code> から直接呼んで測る。'
             'Tier 2 だけは Strata 同梱のベンチ <code>strata bench run --suite standard-v1</code> を同じエンジンに向けて実行する。',
@@ -153,10 +170,24 @@ def how_html():
 
 
 def env_html(env, run_id, cfg=None, how=True):
-    """The "where this was measured" box at the top of CASES.html and RESULTS.html, in all three languages; how=False
+    """The "where this was measured" box at the top of RESULTS.html, in all three languages; how=False
     leaves out the paragraph on how it is measured (RESULTS.html shows it with its introduction)."""
-    import html
     from i18n import L
+    rows, src = env_rows(env, run_id, cfg, L)
+    return ('<style>.envbox { margin: 14px 0 0; padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); '
+            'border-radius: 8px; font-size: 13px; } .envbox h2 { font-size: 14px; margin: 0 0 6px; padding: 0; } '
+            '.envbox dl { display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px; margin: 0; } '
+            '.envbox dt { color: var(--muted); } .envbox dd { margin: 0; min-width: 0; overflow-wrap: anywhere; } '
+            '.envbox .how { margin: 8px 0 0; } .envbox .src { color: var(--muted); font-size: 12px; margin: 6px 0 0; } '
+            '@media (max-width: 640px) { .envbox dl { grid-template-columns: 1fr; } .envbox dd { margin-bottom: 4px; } }</style>'
+            f'<section class="envbox" id="env"><h2>{L("実行環境", "Test system", "运行环境")}</h2><dl>'
+            + ''.join(f'<dt>{k}</dt><dd>{v}</dd>' for k, v in rows if v)
+            + '</dl>' + (f'<p class="how">{how_html()}</p>' if how else '') + f'<p class="src">{src}</p></section>')
+
+
+def env_rows(env, run_id, cfg, L):
+    """The box's (label, value) rows and its source line; L picks the language(s) (i18n.L, or i18n.one(lang))."""
+    import html
     e = lambda v: html.escape(str(v)) if v not in (None, '') else '?'  # noqa: E731
     board = (env.get('board') or '').replace('Micro-Star International Co., Ltd.', 'MSI')
     cpu = re.sub(r'\((R|TM)\)', '', env.get('cpu') or '').replace('  ', ' ')
@@ -172,7 +203,7 @@ def env_html(env, run_id, cfg=None, how=True):
                                   f'{env.get("cpu_cores")} cores / {env.get("cpu_threads")} threads, up to {ghz}',
                                   f'{env.get("cpu_cores")} 核 / {env.get("cpu_threads")} 线程，最高 {ghz}')
                 + f' · governor {e(env.get("cpu_governor"))}'),
-        (L('メモリ', 'Memory', '内存'), ram_text(env, ram_installed)),
+        (L('メモリ', 'Memory', '内存'), ram_text(env, ram_installed, L)),
         (L('マザーボード', 'Motherboard', '主板'), e(board)),
         (L('モデルの置き場所', 'Model storage', '模型存放'), f'{e(env.get("models_drive"))} ({e(env.get("models_drive_bus"))})'),
         ('OS', f'{e(env.get("os"))} (Linux {e(env.get("kernel"))})'),
@@ -183,15 +214,7 @@ def env_html(env, run_id, cfg=None, how=True):
                             '尚无测量记录：来自 env.json 和本机当前配置'))
     if cfg:
         src = L('環境', 'environment', '环境') + f' <code>{html.escape(cfg["id"])}</code> · ' + src
-    return ('<style>.envbox { margin: 14px 0 0; padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); '
-            'border-radius: 8px; font-size: 13px; } .envbox h2 { font-size: 14px; margin: 0 0 6px; padding: 0; } '
-            '.envbox dl { display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px; margin: 0; } '
-            '.envbox dt { color: var(--muted); } .envbox dd { margin: 0; min-width: 0; overflow-wrap: anywhere; } '
-            '.envbox .how { margin: 8px 0 0; } .envbox .src { color: var(--muted); font-size: 12px; margin: 6px 0 0; } '
-            '@media (max-width: 640px) { .envbox dl { grid-template-columns: 1fr; } .envbox dd { margin-bottom: 4px; } }</style>'
-            f'<section class="envbox" id="env"><h2>{L("実行環境", "Test system", "运行环境")}</h2><dl>'
-            + ''.join(f'<dt>{k}</dt><dd>{v}</dd>' for k, v in rows if v)
-            + '</dl>' + (f'<p class="how">{how_html()}</p>' if how else '') + f'<p class="src">{src}</p></section>')
+    return rows, src
 
 
 def main():

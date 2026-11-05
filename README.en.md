@@ -26,34 +26,29 @@ the harness adds: a system prompt, tool definitions, long histories sent again.
 
 ## The results
 
-| Page | What it has |
+A row is added at the top of this table every time a run finishes. The latest three are shown; earlier ones are folded below the table. "See" in each row opens:
+
+| Link | What it has |
 | --- | --- |
-| [RESULTS.html](RESULTS.html) | The results as charts: speed by model, input length and waiting, standard-v1, with and without thinking, the cost of reserving context, long documents (to 1M tokens), launch options, temperature, power and memory during the runs, and a table of all models |
-| [CASES.html](CASES.html) | Every case per environment: its conditions, its result, and links to the requests sent and the answers received |
-| [published/summary.csv](published/summary.csv) | Every case's numbers (the `division` column gives the division, `env` the environment) |
+| Charts | The results as of the end of that run (GitHub Pages): speed by model, input length and waiting, standard-v1, with and without thinking, the cost of reserving context, long documents (to 1M tokens), launch options, temperature, power and memory during the runs, and a table of all models. Every case's numbers (`summary.csv`) are linked from there. The top right switches between 日本語, English and 中文, and between light and dark |
+| Cases | Every case per environment at the same point (Markdown and CSV on GitHub): a table per Tier with each case's conditions, result and a link to its record |
+| Evidence | The run's own records (the requests sent, the answers received, the summaries, the launch records; see "Where the data is") |
 
-The pages are static HTML. GitHub's file view shows only their source, so clone the repository and open them in a
-browser (or from GitHub Pages, if it is set up). The top right of each page switches between 日本語, English and 中文,
-and between light and dark.
-
-## Published runs
-
-A row is added here for every run made final (`scripts/publish.py` rewrites the table from `published/`). The latest three are shown; earlier ones are folded below the table. When the
-same case is in several runs of one environment, the pages use the run whose name sorts last.
+The charts and the case lists show the results of every run measured up to that one. When the same case is in several runs of one environment, they use the run whose name sorts last.
 
 <!-- published-runs:start (scripts/publish.py writes this list) -->
 | Finished | Division | Environment | RUN_ID | Tier | Cases (done / all) | Content | See |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-11-04 22:51 | Plain (no harness) | GeForce RTX 5090 · 128 GB RAM | [`2026-11-04-long`](published/plain/rtx5090-128g/2026-11-04-long/) | 4b, 4c, 4d | 112 / 112 | Tiers 4b, 4c and 4d (long documents, 32K to 1M, and a YaRN check). 2026-11-03-main skipped them because the long fixtures did not exist yet; a long document was made from ten Japanese and English works of Aozora Bunko and Project Gutenberg and measured | [Charts](RESULTS.html?env=rtx5090-128g) · [Cases](cases/plain/rtx5090-128g.html) |
-| 2026-11-04 18:20 | Plain (no harness) | GeForce RTX 5090 · 128 GB RAM | [`2026-11-04-q8-t3`](published/plain/rtx5090-128g/2026-11-04-q8-t3/) | 3 | 9 / 9 | Tier 3 for unsloth Q8_0 (with and without thinking, and the game task). The first plan left Q8_0 out of Tier 3, so it was added and measured | [Charts](RESULTS.html?env=rtx5090-128g) · [Cases](cases/plain/rtx5090-128g.html) |
-| 2026-11-04 15:25 | Plain (no harness) | GeForce RTX 5090 · 128 GB RAM | [`2026-11-04-iq3s-mtp`](published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/) | 0, 1, 2, 3, 4a, 5 | 159 / 159 | qwen IQ3_S measured again (in 2026-11-03-main its MTP draft layer was not loaded); the same Tiers, DFlash2 cases included | [Charts](RESULTS.html?env=rtx5090-128g) · [Cases](cases/plain/rtx5090-128g.html) |
+| 2026-11-04 22:51 | Plain (no harness) | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-long` | 4b, 4c, 4d | 112 / 112 | Tiers 4b, 4c and 4d (long documents, 32K to 1M, and a YaRN check). 2026-11-03-main skipped them because the long fixtures did not exist yet; a long document was made from ten Japanese and English works of Aozora Bunko and Project Gutenberg and measured | [Charts](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-long/?env=rtx5090-128g) · [Cases](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-long/cases/plain/rtx5090-128g/README.en.md) · [Evidence](published/plain/rtx5090-128g/2026-11-04-long/) |
+| 2026-11-04 18:20 | Plain (no harness) | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-q8-t3` | 3 | 9 / 9 | Tier 3 for unsloth Q8_0 (with and without thinking, and the game task). The first plan left Q8_0 out of Tier 3, so it was added and measured | [Charts](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-q8-t3/?env=rtx5090-128g) · [Cases](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-q8-t3/cases/plain/rtx5090-128g/README.en.md) · [Evidence](published/plain/rtx5090-128g/2026-11-04-q8-t3/) |
+| 2026-11-04 15:25 | Plain (no harness) | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-iq3s-mtp` | 0, 1, 2, 3, 4a, 5 | 159 / 159 | qwen IQ3_S measured again (in 2026-11-03-main its MTP draft layer was not loaded); the same Tiers, DFlash2 cases included | [Charts](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-iq3s-mtp/?env=rtx5090-128g) · [Cases](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/plain/rtx5090-128g/README.en.md) · [Evidence](published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/) |
 
 <details>
 <summary>Earlier runs (1)</summary>
 
 | Finished | Division | Environment | RUN_ID | Tier | Cases (done / all) | Content | See |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-11-04 10:41 | Plain (no harness) | GeForce RTX 5090 · 128 GB RAM | [`2026-11-03-main`](published/plain/rtx5090-128g/2026-11-03-main/) | 0, 1, 2, 3, 4a, 5 | 1231 / 1231 | The first full run (Tiers 0, 1, 2, 4a, 3, 5; 18 models). qwen IQ3_S ran without MTP here, so the pages use its re-run, 2026-11-04-iq3s-mtp | [Charts](RESULTS.html?env=rtx5090-128g) · [Cases](cases/plain/rtx5090-128g.html) |
+| 2026-11-04 10:41 | Plain (no harness) | GeForce RTX 5090 · 128 GB RAM | `2026-11-03-main` | 0, 1, 2, 3, 4a, 5 | 1231 / 1231 | The first full run (Tiers 0, 1, 2, 4a, 3, 5; 18 models). qwen IQ3_S ran without MTP here, so the pages use its re-run, 2026-11-04-iq3s-mtp | [Charts](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-03-main/?env=rtx5090-128g) · [Cases](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-03-main/cases/plain/rtx5090-128g/README.en.md) · [Evidence](published/plain/rtx5090-128g/2026-11-03-main/) |
 
 </details>
 <!-- published-runs:end -->
@@ -61,7 +56,7 @@ same case is in several runs of one environment, the pages use the run whose nam
 ## What is measured
 
 The plain division is measured in Tiers. The cases are defined in [scripts/build_cases.py](scripts/build_cases.py);
-CASES.html shows each case's conditions.
+"Cases" in the table above shows each case's conditions.
 
 | Tier | What it looks at | Models |
 | --- | --- | --- |
@@ -72,7 +67,7 @@ CASES.html shows each case's conditions.
 | 4 | The cost of reserving context (4a) and reading real long documents (4b–4d, to 1M tokens) | 4a all, 4b–4d representative ones |
 | 5 | Changing one launch option at a time (automatic tuning included) | 3 representative ones |
 
-The "Tier" column of the table above says which Tiers each published run has.
+The "Tier" column of the table above says which Tiers each run has.
 
 ### How it is measured
 
@@ -94,14 +89,14 @@ The "Tier" column of the table above says which Tiers each published run has.
 ### Environments
 
 Results are kept apart per hardware set-up (a GPU and an amount of RAM: an "environment"). Results of different
-environments are never mixed; the buttons at the top of RESULTS.html switch between them, and with results in two or
+environments are never mixed; the buttons at the top of the charts switch between them, and with results in two or
 more environments, "Across environments" compares the same models under the same conditions. Each environment's
-set-up (GPU, CPU, memory, driver, Strata version) is at the top of RESULTS.html and CASES.html, and defined in
+set-up (GPU, CPU, memory, driver, Strata version) is at the top of the charts and of the case lists, and defined in
 [envs/](envs/).
 
 ## Where the data is
 
-Published runs are in `published/<division>/<environment>/<RUN_ID>/` (only `published/plain/…` so far).
+The records of the runs are in `published/<division>/<environment>/<RUN_ID>/` (only `published/plain/…` so far).
 
 | What | Where |
 | --- | --- |
@@ -109,7 +104,7 @@ Published runs are in `published/<division>/<environment>/<RUN_ID>/` (only `publ
 | Per launch | `sessions/<session>/start-N/` (`strata launch` output, the engine log, /settings, /config, /props, telemetry.csv) |
 | standard-v1 output | `standard/` |
 | Temperature and power over time | `stats/thermal.csv` (every 5 s) |
-| The model versions measured | `models.json` (per model, the Hugging Face repository and commit; per file, its size and SHA-256, and whether the file on disk had that SHA-256 when the run started). A model keeps its name when its publisher updates it, so this is what says which version was measured. Linked from the case list's model table and from each RUN_ID line on RESULTS |
+| The model versions measured | `models.json` (per model, the Hugging Face repository and commit; per file, its size and SHA-256, and whether the file on disk had that SHA-256 when the run started). A model keeps its name when its publisher updates it, so this is what says which version was measured. Linked from the case list's model table and from each RUN_ID line of the charts |
 | Queue and runner logs | `queue.log`, `runner.log` |
 | What the run is | `NOTE.md` (the "Content" of the table above) |
 | The records checked against each other | `verify.json` (the engine's timings against the client's, and whether the launch settings reached the engine) |
@@ -128,7 +123,7 @@ and nothing in them is sent anywhere (the only network traffic is downloading th
 | `results/` | `scripts/bench_runner.py` and others | Runs being measured; they stay here until moved to `published/` |
 | `results/…/<RUN_ID>/raw/` | `scripts/bench_runner.py` | The raw streams (SSE and the full thinking text); never moved to `published/` |
 | `results/…/<RUN_ID>/stats/snapshots.jsonl.gz`, `last.json` | `scripts/stats_watch.py` | **Snapshots of the whole PC during a run.** At each session start, launch, case end, failure and Tier change, and every 5 minutes: every running process (PID, user name, full command line, CPU, memory, disk IO), the processes using the GPU, and CPU, memory, PSI and temperatures. They are for checking afterwards that nothing running beside the benchmark disturbed it. They keep other programs' command lines (with any paths or values given as arguments), so they are never moved to `published/` |
-| `preview/` | `scripts/build_cases.py`, `scripts/build_results.py` | Pages for checking, built with `results/` too |
+| `preview/` | `scripts/build_cases.py`, `scripts/build_results.py` | Charts and case lists for checking, built with `results/` too |
 | `run-status/` | `scripts/start_pipeline.sh`, `scripts/healthcheck.py`, `scripts/preflight.py` | The state of an unattended run (`STATUS.md`, `ALERTS.log`, `current-run.json`, `preflight.json`) |
 | `downloads/` | `scripts/download_models.py`, `scripts/overnight.py` | Download state and logs (`manifest.json` with SHA-256) |
 | `work/` | `scripts/overnight.py` (the NVFP4-QAD conversion) | The working folder for the NVFP4-QAD conversion. The long corpus's sources (`work/corpus/raw/`, fetched by hand) are kept here too, and `scripts/long_corpus.py` reads them |
@@ -161,7 +156,7 @@ RUN_ID=<run id> STEPS="0 1 2 3 4a 4b 4c 4d 5" scripts/start_pipeline.sh       # 
 ## License
 
 - **Code** (scripts, page templates, the pages' own code): [MIT License](LICENSE)
-- **Measurement data** (`published/`, `published/summary.csv`, `configs/tuned/`, the numbers and charts on the pages):
+- **Measurement data** (`published/`, `snapshots/`, `cases/`, `configs/tuned/`, the numbers and charts on the pages):
   [CC BY 4.0](LICENSE-DATA.md). When citing, credit "strata-jbench" with a link to this repository and name the
   environment and RUN_ID (for example `rtx5090-128g / 2026-11-03-main`).
 - **The long document's texts** (the ten works in `prompts/long-corpus.txt`): public domain; sources and editions in
