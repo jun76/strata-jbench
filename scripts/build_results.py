@@ -129,7 +129,8 @@ def machine(run):
     strata = re.sub(r';\s*python .*\)', ')', m.get('strata') or '')                 # without the install path
     return {'run_id': run.name, 'power_limit_w': float(limit.group(1)) if limit else None,
             'gpu': gpu.group(1).strip() if gpu else None, 'cpu': cpu.group(1).strip() if cpu else None,
-            'strata': strata, 'created_at': m.get('created_at')}
+            'strata': strata, 'created_at': m.get('created_at'),
+            'models_json': str((run / 'models.json').relative_to(ROOT)) if (run / 'models.json').exists() else None}
 
 
 def spread(per_request, key):
@@ -230,6 +231,10 @@ def main():
     page_path = ROOT / 'RESULTS.html' if a.published else envs.PREVIEW / 'RESULTS.html'
     csv_path = envs.PUBLISHED / 'summary.csv' if a.published else envs.PREVIEW / 'summary.csv'
     data['csv'] = os.path.relpath(csv_path, page_path.parent)
+    for e in data['envs']:   # each run's models.json (which version of each model), linked from the page
+        for r in e['runs']:
+            if r.get('models_json'):
+                r['models_json'] = os.path.relpath(ROOT / r['models_json'], page_path.parent)
     data['published'] = a.published
     page = Path(__file__).with_name('results_template.html').read_text()
     blob = json.dumps(data, ensure_ascii=False).replace('</', '<\\/')

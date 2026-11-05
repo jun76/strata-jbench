@@ -109,7 +109,7 @@ Published runs are in `published/<division>/<environment>/<RUN_ID>/` (only `publ
 | Per launch | `sessions/<session>/start-N/` (`strata launch` output, the engine log, /settings, /config, /props, telemetry.csv) |
 | standard-v1 output | `standard/` |
 | Temperature and power over time | `stats/thermal.csv` (every 5 s) |
-| The machine | `machine.json` |
+| The model versions measured | `models.json` (per model, the Hugging Face repository and commit; per file, its size and SHA-256, and whether the file on disk had that SHA-256 when the run started). A model keeps its name when its publisher updates it, so this is what says which version was measured. Linked from the case list's model table and from each RUN_ID line on RESULTS |
 | Queue and runner logs | `queue.log`, `runner.log` |
 | What the run is | `NOTE.md` (the "Content" of the table above) |
 | The records checked against each other | `verify.json` (the engine's timings against the client's, and whether the launch settings reached the engine) |

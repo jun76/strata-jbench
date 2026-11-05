@@ -515,10 +515,45 @@ def result_text(r):
     return ' / '.join(f'{label} {html.escape(str(m[k]))}' for k, label in labels if m.get(k) is not None)
 
 
+def model_versions(rows, env_id, published_only, up):
+    """Per model, the repository and commit its results were measured with, from each RUN_ID's models.json
+    (scripts/model_files.py): one line per version, with the RUN_IDs that used it. Two versions of one model in one
+    environment are marked, since the pages then mix them."""
+    e = html.escape
+    dirs = {d.name: d for d in envs.run_dirs(env_id, published_only)}
+    used = {}
+    for r in rows:
+        if r.get('run_id') in dirs:
+            used.setdefault((r['family'], r['model']), set()).add(r['run_id'])
+    records = {}
+    for run in {x for v in used.values() for x in v}:
+        p = dirs[run] / 'models.json'
+        records[run] = {(m['family'], m['model']): m for m in json.loads(p.read_text())['models']} if p.exists() else {}
+    out = {}
+    for key, runs in used.items():
+        seen = {}
+        for run in sorted(runs):   # a version: its (repository, commit) pairs and, unless verified, the state on disk
+            m = records[run].get(key)
+            v = (tuple((s['repo'], s['revision']) for s in m['sources']), m['state']) if m else None
+            seen.setdefault(v, []).append(run)
+        lines = []
+        for v, rs in seen.items():
+            links = ' + '.join(f'<a href="https://huggingface.co/{e(repo)}/tree/{e(rev)}">{e(repo)} @ <code>{e(rev[:7])}</code></a>'
+                               for repo, rev in v[0]) if v else L('記録なし', 'not recorded', '无记录')
+            state = f' <span class="badge s-failed">{e(v[1])}</span>' if v and v[1] != 'verified' else ''
+            runs_ = ', '.join(f'<a href="{up}{e(str((dirs[x] / "models.json").relative_to(ROOT)))}">{e(x)}</a>'
+                              if (dirs[x] / 'models.json').exists() else e(x) for x in rs)
+            lines.append(f'{links}{state} <span class="muted">({runs_})</span>')
+        warn = (f'<div><span class="badge s-failed">{L("版が混在", "versions mixed", "版本混杂")}</span></div>' if len(seen) > 1 else '')
+        out[key] = warn + '<br>'.join(lines)
+    return out
+
+
 def write_html(rows, path, cfg, published_only=False):
     """cases/<division>/<env>.html (or preview/cases/<division>/<env>.html): links to the result files are relative to where the page is."""
     e = html.escape
     up = os.path.relpath(ROOT, path.parent) + '/'
+    versions = model_versions(rows, cfg['id'], published_only, up)
     est = estimate(rows)
     sessions = {}
     for r in rows:
@@ -547,8 +582,10 @@ def write_html(rows, path, cfg, published_only=False):
              f'<th class="num">{L("見積 h", "est. h", "预估 h")}</th><th class="num">{L("完了", "done", "完成")}</th></tr>'
              + ''.join(tier_rows))
 
-    models = (f'<tr><th>family</th><th>model</th><th class="num">GB</th><th>{L("種別", "kind", "类别")}</th></tr>'
-              + ''.join(f'<tr><td>{f}</td><td>{m}</td><td class="num">{gb}</td><td>{T(role)}</td></tr>'
+    models = (f'<tr><th>family</th><th>model</th><th class="num">GB</th><th>{L("種別", "kind", "类别")}</th>'
+              f'<th>{L("測った版（リポジトリ @ コミット、RUN_ID の models.json）", "version measured (repository @ commit, the RUN_ID's models.json)", "测量的版本（仓库 @ 提交，RUN_ID 的 models.json）")}</th></tr>'
+              + ''.join(f'<tr><td>{f}</td><td>{m}</td><td class="num">{gb}</td><td>{T(role)}</td>'
+                        f'<td class="wrap">{versions.get((f, m), "–")}</td></tr>'
                         for f, m, gb, role in env_models()))
 
     def heading(label):

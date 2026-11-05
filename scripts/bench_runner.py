@@ -41,6 +41,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import envs  # noqa: E402
 import machine_info  # noqa: E402
+import model_files  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 PROMPTS = ROOT / 'prompts'
@@ -841,6 +842,7 @@ def main():
             {**machine_info.collect(P_CORES, cfg.get('memory')), 'env_id': env_id, 'created_at': now()},
             indent=2, ensure_ascii=False) + '\n')
     log(run_dir, f'start env={env_id} steps={steps} cases={len(rows)} dry={a.dry_run}')
+    log(run_dir, f'models.json: {model_files.record(run_dir)}')
 
     for step in steps:
         step_rows = [r for r in rows if r['step'] == step]

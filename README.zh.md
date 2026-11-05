@@ -97,7 +97,7 @@
 | 每次启动的记录 | `sessions/<session>/start-N/`（`strata launch` 的输出、引擎日志、/settings・/config・/props、telemetry.csv） |
 | standard-v1 的输出 | `standard/` |
 | 温度・功耗的变化 | `stats/thermal.csv`（每 5 秒） |
-| 机器配置 | `machine.json` |
+| 测量的模型版本 | `models.json`（各模型的 Hugging Face 仓库与提交，各文件的大小与 SHA-256，以及测量开始时本地文件是否为该 SHA-256）。同名模型在发布者更新后内容会变，由此可知测量的是哪个版本。用例一览的模型一览和 RESULTS 中各 RUN_ID 的行也链接到它 |
 | 队列与 runner 的日志 | `queue.log`、`runner.log` |
 | 该 RUN 的说明 | `NOTE.md`（上表的“内容”） |
 | 记录之间的核对 | `verify.json`（引擎 timings 与客户端计时的差、启动设置是否进入引擎） |
