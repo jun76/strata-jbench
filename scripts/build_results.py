@@ -168,6 +168,7 @@ SAMPLE = {
     'think': ('3', ['T3-{ref}-math-1-high']),
     'ctx': ('4a', ['T4a-{ref}-ctxcost-1M']),
     'doc': ('4b', ['T4b-{ref}-long-32K-q-d10']),
+    'yarn': ('4d', ['T4d-{ref}-yarn-300K-ctx384K-yarn1.5-q-d10']),
     'opts': ('5', ['T5-{ref}-kv-q4_0-decode-prose-ja']),
 }
 SAMPLE_CHARS = 700          # how much of a prompt or an answer the page shows (head and tail of a longer one)

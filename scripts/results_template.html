@@ -176,7 +176,7 @@ th.sort:hover::after, th.sort:focus-visible::after { content: " ⇅"; color: var
 {{env}}
 <div id="runs" class="runs"></div>
 <nav class="toc">
-  <a href="#s-cmp" id="toc-cmp"><span class="L ja">環境の比較</span><span class="L en">Across environments</span><span class="L zh">环境比较</span></a><a href="#s-speed"><span class="L ja">モデル別の速度</span><span class="L en">Speed by model</span><span class="L zh">各模型速度</span></a><a href="#s-long"><span class="L ja">入力の長さ</span><span class="L en">Input length</span><span class="L zh">输入长度</span></a><a href="#s-std">standard-v1</a><a href="#s-think">thinking</a><a href="#s-ctx"><span class="L ja">コンテキスト長</span><span class="L en">Context length</span><span class="L zh">上下文长度</span></a><a href="#s-doc"><span class="L ja">長文</span><span class="L en">Long documents</span><span class="L zh">长文</span></a><a href="#s-opts"><span class="L ja">起動オプション</span><span class="L en">Launch options</span><span class="L zh">启动选项</span></a><a href="#s-env"><span class="L ja">計測時の環境</span><span class="L en">Conditions</span><span class="L zh">测量时的环境</span></a><a href="#s-table"><span class="L ja">一覧表</span><span class="L en">Table</span><span class="L zh">一览表</span></a>
+  <a href="#s-cmp" id="toc-cmp"><span class="L ja">環境の比較</span><span class="L en">Across environments</span><span class="L zh">环境比较</span></a><a href="#s-speed"><span class="L ja">モデル別の速度</span><span class="L en">Speed by model</span><span class="L zh">各模型速度</span></a><a href="#s-long"><span class="L ja">入力の長さ</span><span class="L en">Input length</span><span class="L zh">输入长度</span></a><a href="#s-std">standard-v1</a><a href="#s-think">thinking</a><a href="#s-ctx"><span class="L ja">コンテキスト長</span><span class="L en">Context length</span><span class="L zh">上下文长度</span></a><a href="#s-doc"><span class="L ja">長文</span><span class="L en">Long documents</span><span class="L zh">长文</span></a><a href="#s-yarn">YaRN</a><a href="#s-opts"><span class="L ja">起動オプション</span><span class="L en">Launch options</span><span class="L zh">启动选项</span></a><a href="#s-env"><span class="L ja">計測時の環境</span><span class="L en">Conditions</span><span class="L zh">测量时的环境</span></a><a href="#s-table"><span class="L ja">一覧表</span><span class="L en">Table</span><span class="L zh">一览表</span></a>
 </nav>
 
 <div class="filters" id="filters">
@@ -230,6 +230,11 @@ th.sort:hover::after, th.sort:focus-visible::after { content: " ⇅"; color: var
 <div class="sample" id="x-doc"></div>
 <div class="grid3"><div id="c-doc-ttft"></div><div id="c-doc-prefill"></div><div id="c-doc-decode"></div></div>
 <div id="c-doc-correct"></div>
+
+<h2 id="s-yarn"><span class="L ja">YaRN の影響（Tier 4d）</span><span class="L en">The effect of YaRN (Tier 4d)</span><span class="L zh">YaRN 的影响（Tier 4d）</span></h2>
+<p class="lead"><span class="L ja">学習時の長さ（256K）を超える容量では Strata が YaRN を使う（factor = 容量 ÷ 256K）。同じ文書・同じ問いで、設定だけを変えて比べる: 約 300K の文書を容量 384K で YaRN あり（×1.5）となし、約 200K の文書を容量 256K（YaRN なし）と 1M（×4、普段から 1M にしておくと損をするか）。</span><span class="L en">Above the trained length (256K) Strata uses YaRN (factor = context ÷ 256K). The same document and questions, only the setting changes: a ~300K document at 384K with YaRN (×1.5) and without, and a ~200K document at 256K (no YaRN) and at 1M (×4: does always reserving 1M cost anything?).</span><span class="L zh">超过训练长度（256K）的容量下 Strata 使用 YaRN（factor = 容量 ÷ 256K）。相同的文档和问题，只改设置：约 300K 的文档在 384K 下有 YaRN（×1.5）与无 YaRN，约 200K 的文档在 256K（无 YaRN）与 1M（×4，平时一直设为 1M 是否吃亏）下比较。</span></p>
+<div class="sample" id="x-yarn"></div>
+<div id="c-yarn"></div>
 
 <h2 id="s-opts"><span class="L ja">起動オプション（Tier 5）</span><span class="L en">Launch options (Tier 5)</span><span class="L zh">启动选项（Tier 5）</span></h2>
 <p class="lead"><span class="L ja">代表3モデルで起動オプションを1つずつ変え、既定（baseline）からの変化を見る。</span><span class="L en">One launch option changed at a time on 3 representative models, against the default (baseline).</span><span class="L zh">在 3 个代表模型上每次只改一个启动选项，观察相对默认（baseline）的变化。</span></p>
@@ -937,6 +942,36 @@ function sDoc() {
 }
 
 const CTX = ['128K', '256K', '1M'];
+// Tier 4d: one row per model and setting (from the case id: …-yarn-<document>-ctx<context>-<setting>-q-<question>); the
+// first question reads the whole document (its TTFT, prefill and decode), the answers count every question
+function sYarn() {
+  const k = card('c-yarn', L('設定ごとの待ち時間・速さ・正答', 'Waiting, speed and answers per setting', '各设置的等待时间、速度与正确数'),
+    L('TTFT・prefill・decode は文書を最初に読む問い（10% の位置）の値。正答は問い4つ × 3回。', 'TTFT, prefill and decode: the first question, which reads the whole document (the fact at 10%). Answers: 4 questions × 3 runs.', 'TTFT、prefill、decode 为首次读取整篇文档的问题（10% 处）的值。正确数为 4 个问题 × 3 次。'));
+  const RE = /-yarn-([^-]+)-ctx([^-]+)-(.+)-q-([^-]+)$/;
+  const groups = new Map();
+  for (const m of modelsShown()) for (const c of (byModel[m.key] || []).filter(c => c.step === '4d' && done(c))) {
+    const p = c.id.match(RE); if (!p) continue;
+    const [, doc, ctx, set] = p, key = `${m.key} ${doc} ${ctx} ${set}`;
+    const yarn = set === 'none' ? L('YaRN なし', 'no YaRN', '无 YaRN') : set.replace(/^yarn/, 'YaRN ×');
+    if (!groups.has(key)) groups.set(key, { key: m.key, label: `${modelsShown().length > 1 ? m.key + ' · ' : ''}${L('文書', 'document', '文档')} ${doc} · ${L('容量', 'context', '容量')} ${ctx} · ${yarn}`, cases: [] });
+    groups.get(key).cases.push(c);
+  }
+  const rows = [...groups.values()];
+  if (!rows.length) { empty(k, NO_RESULT('4d')); return; }
+  const first = r => r.cases.find(c => c.id.endsWith('-q-d10'));
+  const tally = r => { let ok = 0, all = 0; for (const c of r.cases) if (c.correct) { const [a, b] = c.correct.split('/').map(Number); ok += a; all += b; } return all ? [ok, all] : null; };
+  const cols = [
+    { label: 'TTFT', better: 'low', get: r => { const c = first(r); return c && c.ttft_ms != null ? { v: c.ttft_ms / 1000, text: fmtS(c.ttft_ms / 1000) } : null; } },
+    { label: 'prefill\ntok/s', get: r => { const c = first(r); return c && c.prefill_tps != null ? { v: c.prefill_tps, text: fmtTps(c.prefill_tps) } : null; } },
+    { label: 'decode\ntok/s', get: r => { const c = first(r); return c && c.decode_tps != null ? { v: c.decode_tps, text: fmtTps(c.decode_tps) } : null; } },
+    { label: L('正答', 'correct', '正确'), get: r => { const t = tally(r); return t ? { v: t[0] / t[1], text: `${t[0]}/${t[1]}`,
+      tip: r.cases.map(c => [c.correct || '–', c.id.split('-q-').pop()]) } : null; } },
+  ];
+  heat(k, rows, cols, (r, c) => c.get(r), { perColumn: true, minCell: 78, low: L('悪い', 'worse', '较差'), high: L('良い', 'better', '较好'),
+    aria: L('YaRN の設定ごとの結果', 'results per YaRN setting', '各 YaRN 设置的结果') });
+  table(k, ['', ...cols.map(c => c.label.replace('\n', ' '))], rows.map(r => [r.label, ...cols.map(c => { const x = c.get(r); return x ? x.text : '–'; })]), i => i > 0);
+}
+
 function sCtx() {
   const rows = rowsFor(modelsShown());
   const get = (key, ctx) => (byModel[key] || []).find(c => c.step === '4a' && c.context_label === ctx);
@@ -1251,7 +1286,7 @@ function filters() {
 }
 function draw() {
   hideTip();
-  tiles(); sCompare(); sDecode(); sPrefillTtft(); sTemp(); sSize(); sDrafter(); sLong(); sDoc(); sCtx(); sStd(); sThink(); sOpts(); sEnv(); sTable();
+  tiles(); sCompare(); sDecode(); sPrefillTtft(); sTemp(); sSize(); sDrafter(); sLong(); sDoc(); sYarn(); sCtx(); sStd(); sThink(); sOpts(); sEnv(); sTable();
 }
 envSwitch(); runs(); filters(); draw();
 // the sticky filters' height, for the headings' scroll margin
