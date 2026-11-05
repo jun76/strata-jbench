@@ -159,6 +159,79 @@ def restart_noise(found, kind):
     return round(100 * statistics.median(out), 2) if out else None
 
 
+# One case shown under each section of the page, so a reader sees what a Tier sends and gets back and where its record
+# is: the first of these the environment has (the reference model, done), else the section's first done case.
+SAMPLE = {
+    'speed': ('1', ['T1-{ref}-decode-prose-ja-t0.7']),
+    'long': ('1', ['T1-{ref}-prefill-32k']),
+    'std': ('2', ['T2-{ref}-std-prompt-4k']),
+    'think': ('3', ['T3-{ref}-math-1-high']),
+    'ctx': ('4a', ['T4a-{ref}-ctxcost-1M']),
+    'doc': ('4b', ['T4b-{ref}-long-32K-q-d10']),
+    'opts': ('5', ['T5-{ref}-kv-q4_0-decode-prose-ja']),
+}
+SAMPLE_CHARS = 700          # how much of a prompt or an answer the page shows (head and tail of a longer one)
+REQUEST_KEYS = ['max_tokens', 'temperature', 'seed', 'top_p', 'top_k', 'min_p', 'presence_penalty', 'repetition_penalty',
+                'reasoning_effort', 'chat_template_kwargs', 'reasoning_budget_tokens']
+
+
+def clip(text):
+    """A long text as its head and tail, with how much was left out between them."""
+    if text is None or len(text) <= SAMPLE_CHARS:
+        return text, 0
+    head, tail = SAMPLE_CHARS * 2 // 3, SAMPLE_CHARS // 3
+    return text[:head] + '\n…\n' + text[-tail:], len(text) - head - tail
+
+
+def sample(row, run, path, base):
+    """What the page shows of one case: its conditions, the first request (as sent, rebuilt from the fixture with the
+    nonce recorded) and its answer, the measured numbers and links to its record. base: the way to the repository."""
+    import bench_runner
+    case = path.parent
+    rel = str(case.relative_to(ROOT))
+    reqs = [json.loads(x) for x in (case / 'requests.jsonl').read_text().splitlines() if x.strip()] \
+        if (case / 'requests.jsonl').exists() else []
+    first = reqs[0] if reqs else {}
+    out = {'id': row['id'], 'step': row['step'], 'model': f'{row["family"]} {row["model"]}', 'run_id': run.name,
+           'context': row['context_label'], 'launch_opts': row['launch_opts'], 'config': row['config'],
+           'fixture': row['fixture'], 'effort': row['effort'], 'temperature': row['temperature'],
+           'output_cap': row['output_cap'], 'reps': row['reps'],
+           'folder': (base + rel + '/').replace('/blob/', '/tree/', 1), 'requests': base + rel + '/requests.jsonl'}
+    if row['step'] == '2':     # strata bench run: Strata's own frozen prompts, recorded as its results
+        out['bench'] = {k: first.get(k) for k in ('case_id', 'phase', 'max_output_tokens', 'status', 'finish_reason', 'tokens', 'timings', 'metrics')}
+        return out
+    if first.get('nonce'):
+        body = bench_runner.request_body(row, first.get('seed', 1), first['nonce'])
+        out['input'], out['input_left_out'] = clip(body['messages'][0]['content'])
+        out['request'] = {k: body[k] for k in REQUEST_KEYS if k in body}
+    resp = case / 'responses' / 'r1-s1.md'
+    if resp.exists():
+        out['output'], out['output_left_out'] = clip(resp.read_text(errors='replace'))
+        out['response'] = base + str(resp.relative_to(ROOT))
+    shot = next(iter(sorted(case.glob('artifact/seed-1/screenshot.png'))), None)
+    if shot:
+        out['screenshot'] = base + str(shot.relative_to(ROOT))
+    out['measured'] = {k: first.get(k) for k in ('ttft_ms', 'first_answer_ms', 'total_ms', 'finish_reason', 'reasoning_chars', 'content_chars')}
+    out['measured'].update({'prompt_tokens': (first.get('usage') or {}).get('prompt_tokens'),
+                            'completion_tokens': (first.get('usage') or {}).get('completion_tokens'),
+                            'decode_tps': (first.get('timings') or {}).get('predicted_per_second'),
+                            'prefill_tps': (first.get('timings') or {}).get('prompt_per_second'),
+                            'check': first.get('check')})
+    return out
+
+
+def samples(rows, found, base):
+    ref = '-'.join(build_cases.REF)
+    by_id = {r['id']: r for r in rows}
+    out = {}
+    for sec, (step, want) in SAMPLE.items():
+        ids = [w.format(ref=ref) for w in want] + [r['id'] for r in rows if r['step'] == step]
+        cid = next((i for i in ids if i in found and i in by_id and load(found[i][1]).get('status') == 'done'), None)
+        if cid:
+            out[sec] = sample(by_id[cid], *found[cid], base)
+    return out
+
+
 def collect_env(cfg, run_id, published_only):
     env_id = cfg['id']
     rows = build_cases.build(cfg)
@@ -208,6 +281,7 @@ def collect_env(cfg, run_id, published_only):
                                  for k, v in planned.items()},
            'dflash2_models': sorted({f'{r["family"]} {r["model"]}' for r in rows if r['config'] == 'drafter=DFlash2'}),
            'noise_pct': {k: restart_noise(found, k) for k in ('decode', 'prefill')}}
+    env['_rows'], env['_found'] = rows, found
     return env, cases
 
 
@@ -253,6 +327,8 @@ def main():
         page_path, csv_path = envs.PREVIEW / 'RESULTS.html', envs.PREVIEW / 'summary.csv'
         base = os.path.relpath(ROOT, page_path.parent) + '/'
     data['snapshot'] = snap
+    for e in data['envs']:
+        e['samples'] = samples(e.pop('_rows'), e.pop('_found'), base)
     data['csv'] = os.path.relpath(csv_path, page_path.parent)
     for e in data['envs']:   # each run's models.json (which version of each model), linked from the page
         for r in e['runs']:
