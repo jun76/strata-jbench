@@ -60,8 +60,10 @@ def acquire_state():
     if not alive(st.get('pid')):
         return {'phase': f'acquire/{phase}', 'state': 'FAILED',
                 'detail': f'scripts/overnight.py ended without READY (error: {st.get("error")}); see downloads/overnight.log'}
-    progress = {'qad': DL / 'qad-prepare.log'}.get(phase, DL / 'status.json')
-    a = age(progress)
+    # status.json is written per file (a 50 GB shard takes most of an hour); download.log gets the byte progress
+    files = [DL / 'qad-prepare.log'] if phase == 'qad' else [DL / 'status.json', DL / 'download.log']
+    ages = [(age(f), f) for f in files if age(f) is not None]
+    a, progress = min(ages, key=lambda t: t[0]) if ages else (None, files[0])
     if a is not None and a > STALE.get(phase, 1800):
         return {'phase': f'acquire/{phase}', 'state': 'STUCK', 'detail': f'{progress.name} unchanged for {a / 60:.0f} min'}
     status = load(DL / 'status.json')

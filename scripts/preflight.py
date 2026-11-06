@@ -130,6 +130,13 @@ def bench_checks(steps, env_id):
         limit = float(out.split()[0]) if rc == 0 and out.strip() else None
         check(f'GPU power limit is {want:g} W (env.json; gpu-power-limit.service)', limit is not None and abs(limit - want) < 1,
               f'{limit} W')
+    want = cfg.get('cpu_power_limit_w')
+    if want:
+        import machine_info
+        have = machine_info.cpu_power_limits() or {}
+        check(f'CPU power limits are PL1 {want["pl1"]} W / PL2 {want["pl2"]} W (env.json; BIOS or intel-rapl)',
+              all(have.get(k) is not None and abs(have[k] - want[k]) < 1 for k in ('pl1', 'pl2')),
+              f'PL1 {have.get("pl1")} W / PL2 {have.get("pl2")} W')
     rc, out = run(['nvidia-smi', '-i', card, '--query-gpu=memory.used', '--format=csv,noheader,nounits'])
     used = int(out.split()[0]) if rc == 0 and out.strip() else None
     check(f'GPU {card}: no other engine holds VRAM (< 4 GB used)', used is not None and used < 4000, f'{used} MiB')
@@ -137,8 +144,15 @@ def bench_checks(steps, env_id):
     check('no other Strata engine is running', rc != 0, out)
     chrome = shutil.which('google-chrome') or shutil.which('chromium')
     check('headless Chrome for game screenshots', chrome, 'not found')
+    # the packs a first launch builds (about 1.5 GB a model; a canonical Q2_0 pack on an AVX-512 CPU about 40 GB) plus the
+    # same 10 GB headroom as the downloader (results are well under 1 GB a run without raw/)
+    packs = Path.home() / '.local/share/strata/Strata-data/packs'
+    new = [m for _, m in models if not (packs / m.lower()).exists() and not any(packs.glob(f'*-{m.lower()}'))]
+    q2 = any(m == 'Q2_0' for m in new) and 'avx512f' in Path('/proc/cpuinfo').read_text()
+    need = 10e9 + 2e9 * len(new) + (40e9 if q2 else 0)
     free = shutil.disk_usage(ROOT).free
-    check('disk: 50 GB free for packs built at first launch and results', free > 50e9, f'{free / 1e9:.0f} GB')
+    check(f'disk: {need / 1e9:.0f} GB free (packs of {len(new)} models not launched yet + 10 GB)', free > need,
+          f'{free / 1e9:.0f} GB')
 
 
 def smoke(env_id):

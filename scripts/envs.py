@@ -43,6 +43,7 @@ def load(env_id):
     cfg.setdefault('drafters', ['mtp'])
     cfg.setdefault('models', None)            # None: every model of the plan
     cfg.setdefault('gpu_power_limit_w', None) # None: the card's default, not checked
+    cfg.setdefault('cpu_power_limit_w', None) # {'pl1': W, 'pl2': W}; None: the board's setting, not checked
     cfg.setdefault('assume', {})
     return cfg
 
@@ -242,6 +243,7 @@ def new(env_id, card=0):
         'gpu_index': card,
         'hardware': {'gpu_vram_gib': round((hw.get('gpu_vram_mib') or 0) / 1024, 1), 'ram_gib': hw.get('ram_gib')},
         'gpu_power_limit_w': None,
+        'cpu_power_limit_w': None,
         'drafters': ['mtp', 'dflash2'] if dflash2_here(card) else ['mtp'],
         'models': None,
         'memory': None,
@@ -250,7 +252,8 @@ def new(env_id, card=0):
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + '\n')
-    print(f'wrote {path.relative_to(ROOT)}; fill in "memory" (sudo dmidecode -t memory) and "gpu_power_limit_w" if you set one')
+    print(f'wrote {path.relative_to(ROOT)}; fill in "memory" (sudo dmidecode -t memory), and "gpu_power_limit_w" / "cpu_power_limit_w" if you '
+          'set them')
 
 
 def main():

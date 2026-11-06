@@ -35,6 +35,7 @@ python3 -I scripts/envs.py new rtx5070-64g   # いまのハードウェアから
 | `match.ram_gib` | MemTotal（GiB）。判定に使う | `new` が入れる |
 | `hardware.gpu_vram_gib`, `hardware.ram_gib` | 見積もりに使う（モデルの大きさを RAM + VRAM と比べた区分 small / edge / large） | `new` が入れる。まだ無い構成の計画を先に作るなら手で書く |
 | `gpu_power_limit_w` | 電力上限を設定して測るならその W。preflight が確かめる | `null` ならカードの既定で、確かめない |
+| `cpu_power_limit_w` | CPU の電力上限を決めて測るならその W（`{"pl1": 65, "pl2": 65}`）。preflight が Intel RAPL（`/sys/class/powercap/intel-rapl:0`）の値と比べ、machine.json と各ページの「CPU」に出る | `null` ならマザーボードの設定のままで、確かめない（値は machine.json に記録される）。設定は BIOS で（Linux から書くと再起動で戻る） |
 | `drafters` | 使える drafter。`dflash2` があると Tier 1 に DFlash2 の decode ケースが付く | `new` が `strata launch --plan` で確かめて入れる |
 | `models` | 測るモデル（`"qwen IQ3_S"` の形）。Tier 0・4・5 の代表モデルも、ここに無ければ外れる。ダウンロードするモデルもこれに従う（`scripts/setup_acquire.py`） | `null` なら `scripts/build_cases.py` の `MODELS` の全モデル（増えたモデルも入る）。測るモデルを決めて固定するなら列挙する |
 | `memory` | RAM の種類・速度・枚数（`sudo dmidecode -t memory` の結果を書き写す） | `{"type": "DDR5", "speed_mts": 5600, "configured_mts": 5600, "modules": [{"slot": "...", "size_gib": 64}], "channels": 2, "recorded_at": "YYYY-MM-DD"}` |
@@ -46,6 +47,6 @@ python3 -I scripts/envs.py new rtx5070-64g   # いまのハードウェアから
 [AGENTS.md](../AGENTS.md) の 2.0 を参照。要点:
 
 1. ハードウェアを替えて起動したら `scripts/envs.py new <env>`。
-2. `memory`（dmidecode）、`gpu_power_limit_w`、必要なら `models` と `assume` を埋める。
+2. `memory`（dmidecode）、`gpu_power_limit_w`、`cpu_power_limit_w`、必要なら `models` と `assume` を埋める。
 3. GPU の電力上限ユニット（500 W 決め打ち）を、別のカードでは無効化か書き換え。
 4. `python3 -I scripts/build_cases.py` → preflight → `test-` の RUN_ID で1ケース → 本番。

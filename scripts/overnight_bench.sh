@@ -25,6 +25,13 @@ until [ -f downloads/READY ]; do
   sleep 60
 done
 python3 -I scripts/build_cases.py >> "$LOG" 2>&1
+# Strata's run configs for the models fetched by scripts/download_models.py (launch --plan counts a model without one as a
+# download); it changes Strata's saved settings, agreed for this when the run was planned (AGENTS.md 2.2)
+echo "$(date -Is) run configs" >> "$LOG"
+if ! python3 -I scripts/install_configs.py --env "$BENCH_ENV" >> "$LOG" 2>&1; then
+  echo "$(date -Is) run configs failed; not starting" >> "$LOG"
+  exit 1
+fi
 echo "$(date -Is) preflight" >> "$LOG"
 if ! python3 scripts/preflight.py --phase bench --steps "$(echo $STEPS | tr ' ' ',')" >> "$LOG" 2>&1; then
   echo "$(date -Is) preflight failed; not starting (see run-status/preflight.json)" >> "$LOG"

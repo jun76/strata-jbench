@@ -69,6 +69,9 @@ the NVFP4 ready-made packs need Strata's setup once with `--no-start` to write t
    Then fill in by hand:
    - `memory`: the output of `sudo dmidecode -t memory` (type, speed, modules; it needs root, so ask the user to run it)
    - `gpu_power_limit_w`: the power limit, if one is set for measuring; `null` to measure at the card's default
+   - `cpu_power_limit_w`: the CPU's PL1 / PL2 (`{"pl1": 65, "pl2": 65}`), if set for measuring (in the BIOS; a
+     system setting, so the user does it); `null` to measure at the board's setting. Preflight compares it with Intel
+     RAPL, and machine.json records the limits in force either way
    - `models`: the list (in the form `"qwen IQ3_S"`) to measure only some models; `null` for every model of
      `scripts/build_cases.py` (including models added later). The downloads follow it too: `scripts/setup_acquire.py`
      lists only these models in `downloads/manifest.json`, and writes it again (removing `downloads/READY`) when it changes
@@ -134,8 +137,9 @@ the NVFP4 ready-made packs need Strata's setup once with `--no-start` to write t
    kept in `run-status/current-run.json` (the watch task reads it, so a new RUN_ID needs no change to the task).
    - `strata-jbench-acquire`: `scripts/setup_acquire.py` first, then `scripts/overnight.py` (fetch the models → convert NVFP4-QAD → delete the conversion source
      → fetch the last model). Not started when `downloads/READY` exists.
-   - `strata-jbench-queue`: `scripts/overnight_bench.sh` (wait for READY → preflight → `scripts/bench_runner.py` Tier by
-     Tier).
+   - `strata-jbench-queue`: `scripts/overnight_bench.sh` (wait for READY → Strata's run configs for the downloaded models,
+     `scripts/install_configs.py` → preflight → `scripts/bench_runner.py` Tier by Tier). The run configs change Strata's
+     saved settings (section 3): agree on it in 2.2.
    - `strata-jbench-health.timer`: `scripts/healthcheck.py` every 15 minutes.
    - `strata-jbench-stats`: `scripts/stats_watch.py` (follows runner.log and, at each session start, launch, case end,
      failure and Tier change, and every 5 minutes, takes a snapshot of the process list, CPU, memory, PSI, disk IO,

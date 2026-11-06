@@ -54,6 +54,20 @@ def gpu_names():
     return [n.strip() for n in run(['nvidia-smi', '--query-gpu=name', '--format=csv,noheader']).splitlines() if n.strip()]
 
 
+def cpu_power_limits():
+    """The CPU package's power limits now (Intel RAPL, readable without root): {'pl1': W, 'pl2': W}, or None."""
+    base = Path('/sys/class/powercap/intel-rapl:0')
+    out = {}
+    for key, name in (('pl1', 'long_term'), ('pl2', 'short_term')):
+        for c in base.glob('constraint_*_name'):
+            if read(c).strip() == name:
+                try:
+                    out[key] = round(int(read(c.with_name(c.name.replace('_name', '_power_limit_uw'))).strip()) / 1e6)
+                except ValueError:
+                    pass
+    return out or None
+
+
 def env_summary(lscpu_c, smi, memory, gpu_index=0):
     os_release = dict(re.findall(r'^(\w+)="?([^"\n]*)"?$', read('/etc/os-release'), re.M))
     mem_kb = int(re.search(r'MemTotal:\s+(\d+)', read('/proc/meminfo')).group(1))
@@ -76,6 +90,7 @@ def env_summary(lscpu_c, smi, memory, gpu_index=0):
         'cpu': field(lscpu_c, 'Model name'), 'cpu_cores': cores, 'cpu_threads': threads,
         'cpu_max_mhz': round(float(field(lscpu_c, 'CPU max MHz') or 0)) or None,
         'cpu_governor': read('/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor') or None,
+        'cpu_power_limits_w': cpu_power_limits(),
         'ram_gib': round(mem_kb / 1048576, 1),
         'ram_modules': {k: memory.get(k) for k in ('type', 'speed_mts', 'configured_mts', 'modules', 'channels', 'recorded_at')}
                        if memory else None,
@@ -125,7 +140,8 @@ def env_for(root, cfg, published_only=False):
     if not env:
         hw = cfg.get('hardware') or {}
         env = {'gpu': (cfg.get('match') or {}).get('gpu'), 'gpu_vram_mib': (hw.get('gpu_vram_gib') or 0) * 1024 or None,
-               'ram_gib': hw.get('ram_gib'), 'ram_modules': cfg.get('memory'), 'gpu_power_limit_w': cfg.get('gpu_power_limit_w')}
+               'ram_gib': hw.get('ram_gib'), 'ram_modules': cfg.get('memory'), 'gpu_power_limit_w': cfg.get('gpu_power_limit_w'),
+               'cpu_power_limits_w': cfg.get('cpu_power_limit_w')}
     return env, run_id
 
 
@@ -203,6 +219,8 @@ def env_rows(env, run_id, cfg, L):
     vram = f'{round(env["gpu_vram_mib"] / 1024)} GB' if env.get('gpu_vram_mib') else '?'
     lim, dflt = env.get('gpu_power_limit_w'), env.get('gpu_power_default_w')
     ghz = f'{env["cpu_max_mhz"] / 1000:.1f} GHz' if env.get('cpu_max_mhz') else '?'
+    pl = env.get('cpu_power_limits_w') or {}
+    pl = f' · PL1 {pl["pl1"]} W / PL2 {pl["pl2"]} W' if pl.get('pl1') and pl.get('pl2') else ''
     rows = [
         ('GPU', f'{e(env.get("gpu"))} ({vram}, {e(env.get("gpu_pcie"))}) · driver {e(env.get("gpu_driver"))} / CUDA {e(env.get("cuda"))} · '
                 + (L(f'電力上限 {lim:.0f} W（既定 {dflt:.0f} W）', f'power limit {lim:.0f} W (default {dflt:.0f} W)',
@@ -210,7 +228,7 @@ def env_rows(env, run_id, cfg, L):
         ('CPU', f'{e(cpu)} · ' + L(f'{env.get("cpu_cores")} コア / {env.get("cpu_threads")} スレッド、最大 {ghz}',
                                   f'{env.get("cpu_cores")} cores / {env.get("cpu_threads")} threads, up to {ghz}',
                                   f'{env.get("cpu_cores")} 核 / {env.get("cpu_threads")} 线程，最高 {ghz}')
-                + f' · governor {e(env.get("cpu_governor"))}'),
+                + f' · governor {e(env.get("cpu_governor"))}' + pl),
         (L('メモリ', 'Memory', '内存'), ram_text(env, ram_installed, L)),
         (L('マザーボード', 'Motherboard', '主板'), e(board)),
         (L('モデルの置き場所', 'Model storage', '模型存放'), f'{e(env.get("models_drive"))} ({e(env.get("models_drive_bus"))})'),
