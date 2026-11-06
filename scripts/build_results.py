@@ -291,8 +291,8 @@ def collect(run_id, published_only=False):
     out = {'generated': datetime.now().astimezone().strftime('%Y-%m-%d %H:%M %Z'), 'envs': [], 'cases': [], 'here': here,
            'tr': i18n.TR}
     out['division'] = envs.division()
-    for env_id in envs.ids():
-        env, cases = collect_env(envs.load(env_id), run_id, published_only)
+    for env_id in envs.page_ids(published_only):
+        env, cases = collect_env(envs.load(env_id, published_only), run_id, published_only)
         out['envs'].append(env)
         out['cases'] += [{'division': out['division'], **c} for c in cases]
     return out
@@ -341,7 +341,7 @@ def main():
     blob = json.dumps(data, ensure_ascii=False).replace('</', '<\\/')
     page = page.replace('{{data}}', blob).replace('{{generated}}', html.escape(data['generated']))
     boxes = ''.join(f'<div class="envwrap" data-env="{html.escape(e["id"])}">'
-                    f'{machine_info.env_box(ROOT, envs.load(e["id"]), bool(snap), how=False)}</div>' for e in data['envs'])
+                    f'{machine_info.env_box(ROOT, envs.load(e["id"], bool(snap)), bool(snap), how=False)}</div>' for e in data['envs'])
     page = page.replace('{{env}}', boxes).replace('{{how}}', machine_info.how_html()).replace('{{csv}}', html.escape(data['csv']))
     page = page.replace('{{cases}}', html.escape(cases_link))
     page = page.replace('{{division}}', i18n.division_html(envs.load_division(data['division']), base))

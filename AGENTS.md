@@ -4,7 +4,7 @@ A repository for measuring several models with Strata (a local LLM inference eng
 that anyone can run them again.
 The plan is [docs/SCOUTING.md](docs/SCOUTING.md) (internal notes, not in Git); every case per environment is in the
 case lists, [cases/](cases/README.md) (Markdown and CSV read on GitHub, built by `scripts/build_cases.py`, which also
-writes `plan/<division>/<env>/cases.jsonl`), and the charts are one page per published run under `snapshots/`, served
+writes `plan/<division>/<env>/cases.jsonl`, not in Git), and the charts are one page per published run under `snapshots/`, served
 by GitHub Pages (`scripts/build_results.py`).
 
 This document sets the procedure for long-running work such as fetching models and running the benchmark.
@@ -15,6 +15,10 @@ results in `results/<division>/<env>/<RUN_ID>/`, its case list in `cases/<divisi
 The environment is never typed by hand: `scripts/envs.py` picks the env.json that matches the hardware found now (GPU
 name and RAM). With no matching environment, or with one named that does not match, preflight and the runner do not
 start measuring. Fields and how to write one: [envs/README.md](envs/README.md).
+`envs/<env>/` and `plan/` are not in Git: each PC writes its own env.json (its models and power limits are the
+measurer's choices) and builds its plan from it. The runner keeps the env.json it measured with in the run's folder
+(`env.json`, written at each start), which is published with the run; the committed pages read the environment from
+the newest published run's copy. An env.json lost on a PC can be taken back from there.
 
 **Division:** how the models are driven. It is independent of the environment; `divisions/<division>/division.json` is
 one division ([divisions/README.md](divisions/README.md)). Everything measured so far is `plain` (no harness: the runner
@@ -211,8 +215,8 @@ The watch task keeps firing every hour after the queue ends, so remove it as soo
    - `--snapshots` writes the snapshot of any published run that has none (the snapshots of runs published before
      snapshots existed were made this way on 2026-11-05, with the scripts of that day). A snapshot is never rewritten;
      to change one, delete it and run `--snapshots` (ask first: it changes a published page).
-4. Commit `published/`, `cases/`, `snapshots/`, `README*.md`, `index.html`, `configs/tuned/`, `plan/` and the scripts
-   changed. Then tag that commit with the run's tag, `git tag -a run/<division>/<env>/<RUN_ID> -m <RUN_ID>`: the
+4. Commit `published/`, `cases/`, `snapshots/`, `README*.md`, `index.html`, `configs/tuned/` and the scripts
+   changed (not `envs/<env>/` or `plan/`: the run's own `env.json` goes with it in `published/`). Then tag that commit with the run's tag, `git tag -a run/<division>/<env>/<RUN_ID> -m <RUN_ID>`: the
    README and the snapshot link the case lists (and `models.json`, the divisions) at that tag, so they show the files
    as they were when the run was published. Push only after the user has agreed (section 3), with
    `git push --follow-tags` (an annotated tag goes with it; without the tag those links are broken).
@@ -238,8 +242,8 @@ policy, report the cause and a proposal, and stop.
 | Fetching state | `downloads/` (not in Git); `READY` marks that every model is on disk |
 | Fixed prompts | `prompts/` (SHA-256 in `MANIFEST.json`); the long document's source is `prompts/long-corpus.txt` and `long-sources.json` |
 | Divisions | `divisions/<division>/division.json` (only a division whose `status` is `active` can be measured; see [divisions/README.md](divisions/README.md)) |
-| Environments | `envs/<env>/env.json` (written by hand; fields in [envs/README.md](envs/README.md); matching and templates in `scripts/envs.py`) |
-| The plan | `plan/<division>/<env>/cases.jsonl` and `cases.csv` (written per environment by `scripts/build_cases.py`; the runner reads them) |
+| Environments | `envs/<env>/env.json` (written by hand on each PC, not in Git; fields in [envs/README.md](envs/README.md); matching and templates in `scripts/envs.py`); the copy a run measured with is `results/` or `published/<division>/<env>/<RUN_ID>/env.json` |
+| The plan | `plan/<division>/<env>/cases.jsonl` and `cases.csv` (written per environment by `scripts/build_cases.py`, also by the queue before preflight; the runner reads them; not in Git, and each case's definition is kept in its `summary.json`) |
 | Case lists | `cases/README*.md` (the environments) → `cases/<division>/<env>/README*.md` (the Tiers, models and shared conditions) → `tier-<Tier>*.md` (every case, with its result and a link to its record) and `tier-<Tier>.csv` (every parameter; a CSV per Tier because GitHub shows a CSV as a table only up to 512 KB); committed, from `published/` alone |
 | Charts | `snapshots/<division>/<env>/<RUN_ID>/index.html` (every environment, switched and compared, as of that run) and `summary.csv` (every case of every environment, with an `env` column); committed, served by GitHub Pages |
 | Pages to check | `preview/` (cases/, RESULTS.html, summary.csv, built with `results/` too; not in Git) |

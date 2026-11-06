@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Test environments: one per hardware set-up the benchmark runs on (a GPU and an amount of RAM on this PC, or another PC).
 
-Each environment is a folder envs/<id>/ with env.json (see envs/README.md). The results are also split by division
+Each environment is a folder envs/<id>/ with env.json (see envs/README.md), written on the PC that measures it and kept
+out of Git (its models and power limits are the measurer's choices); scripts/publish.py keeps a copy with every published
+run (published/<division>/<id>/<run id>/env.json), and the pages read that copy. The results are also split by division
 (divisions/<division>/division.json: how the models are driven, "plain" = the engine's API with no agent harness):
 the plan of an environment is plan/<division>/<id>/, its results results/<division>/<id>/<run id>/ and its case list
 cases/<division>/<id>/. Which environment a run belongs to is never typed by hand
@@ -31,13 +33,34 @@ RAM_TOLERANCE = 0.03      # MemTotal moves a little between kernels and firmware
 
 
 def ids():
+    """The environments of this PC (envs/<id>/env.json): the ones it can measure."""
     return sorted(p.parent.name for p in ENVS.glob('*/env.json'))
 
 
-def load(env_id):
-    path = ENVS / env_id / 'env.json'
-    if not path.exists():
-        raise SystemExit(f'no environment {env_id!r}: {path} is missing (scripts/envs.py new {env_id})')
+def published_env(env_id, div=None):
+    """The env.json kept with the environment's newest published run (as of UNTIL), or None."""
+    for run in reversed(run_dirs(env_id, published_only=True, div=div)):
+        if (run / 'env.json').exists():
+            return run / 'env.json'
+    return None
+
+
+def page_ids(published_only=False, div=None):
+    """The environments the pages show: those with a published run (their env.json kept with it) and, unless
+    published_only, this PC's envs/ too."""
+    found = {p.parent.parent.name for p in (PUBLISHED / division(div)).glob('*/*/env.json')}
+    found = {e for e in found if published_env(e, div)}
+    return sorted(found if published_only else found | set(ids()))
+
+
+def load(env_id, published_only=False):
+    """An environment's env.json: this PC's envs/<id>/env.json, else (and always with published_only, for the
+    committed pages) the copy kept with its newest published run."""
+    path = None if published_only else ENVS / env_id / 'env.json'
+    if not path or not path.exists():
+        path = published_env(env_id) or path
+    if not path or not path.exists():
+        raise SystemExit(f'no environment {env_id!r}: envs/{env_id}/env.json is missing (scripts/envs.py new {env_id})')
     cfg = json.loads(path.read_text())
     cfg['id'] = env_id
     cfg.setdefault('drafters', ['mtp'])

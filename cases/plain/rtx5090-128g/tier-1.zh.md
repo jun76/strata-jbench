@@ -2,7 +2,7 @@
 
 [← 用例一览](README.zh.md)
 
-# Tier 1: 18 个模型的基础速度（decode 5 种 × temperature 3 档，prefill 4K / 32K / 128K）；支持 DFlash2 的 11 个模型的 decode 也用 DFlash2 测量
+# Tier 1: 所有模型的基础速度（decode 5 种 × temperature 3 档，prefill 4K / 32K / 128K）；支持 DFlash2 的模型的 decode 也用 DFlash2 测量
 
 GeForce RTX 5090 · 128 GB RAM · 489 个用例 / 1,467 个请求。其他参数（输入内容、测量内容、备注、seed、timeout、启动会话）见 [tier-1.csv](tier-1.csv)。
 

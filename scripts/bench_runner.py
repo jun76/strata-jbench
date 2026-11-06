@@ -843,6 +843,9 @@ def main():
         (run_dir / 'machine.json').write_text(json.dumps(
             {**machine_info.collect(P_CORES, cfg.get('memory'), GPU), 'env_id': env_id, 'created_at': now()},
             indent=2, ensure_ascii=False) + '\n')
+    # the env.json this start measured with (envs/ is outside Git): published with the run, and the pages read it
+    if (envs.ENVS / env_id / 'env.json').exists():
+        shutil.copyfile(envs.ENVS / env_id / 'env.json', run_dir / 'env.json')
     log(run_dir, f'start env={env_id} steps={steps} cases={len(rows)} dry={a.dry_run}')
     log(run_dir, f'models.json: {model_files.record(run_dir)}')
 

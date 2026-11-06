@@ -11,7 +11,8 @@
 Each publish also rewrites the list of runs in README.md, README.en.md and README.zh.md (between their published-runs
 markers), from published/ alone, newest first; each row links the run's snapshot on GitHub Pages, its case lists on
 GitHub at the run's tag (envs.tag: run/<division>/<env>/<run id>, put on the commit that publishes it) and its files in
-published/. --note is the run's one line there (kept as published/<division>/<env>/<run id>/NOTE.md; --note-en /
+published/. The run's env.json (kept by the runner at each start; envs/ is outside Git) goes with it, and the
+pages read the environment from there. --note is the run's one line there (kept as published/<division>/<env>/<run id>/NOTE.md; --note-en /
 --note-zh as NOTE.en.md / NOTE.zh.md, the Japanese one where they are missing).
 
 What stays behind in results/<division>/<env>/<run id>/, never published: raw/ (the SSE streams and thinking text) and the
@@ -98,7 +99,7 @@ def run_rows():
     rows = []
     for d in sorted(envs.PUBLISHED.glob('*/*/*/cases')):
         run, env_id, div = d.parent, d.parent.parent.name, d.parents[2].name
-        label = envs.load(env_id).get('label', env_id)
+        label = envs.load(env_id, published_only=True).get('label', env_id)
         steps = {c.name.split('-', 1)[0][1:] for c in d.iterdir() if c.is_dir()}
         done = sum(json.loads(s.read_text()).get('status') == 'done' for s in d.glob('*/summary.json'))
         total = len(list(d.glob('*/summary.json')))
@@ -202,6 +203,12 @@ def main():
     finished = queue.exists() and 'queue finished' in queue.read_text(errors='replace')
     if not finished and not a.force:
         raise SystemExit(f'the queue of {a.run_id} has not finished ({queue.relative_to(ROOT)}); --force to publish it anyway')
+    if not (src / 'env.json').exists() and (envs.ENVS / a.env / 'env.json').exists() and not a.dry_run:
+        # a run started before the runner kept its env.json: this PC's one now (check that it is what the run measured)
+        shutil.copyfile(envs.ENVS / a.env / 'env.json', src / 'env.json')
+        print(f'{src.relative_to(ROOT)}/env.json: copied from envs/{a.env}/env.json (the run kept none)')
+    elif not (src / 'env.json').exists() and not a.dry_run:
+        raise SystemExit(f'{src.relative_to(ROOT)} has no env.json, and neither has envs/{a.env}/: the pages could not show its environment')
 
     files = [p for p in src.rglob('*') if p.is_file()]
     move = [p for p in files if not local_only(p.relative_to(src))]

@@ -39,9 +39,9 @@ environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-04-q8-t3
 | Tier | what | models | cases | requests | est. h | done |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
 | [0](tier-0.en.md) | validating the harness (IQ3_S × 3 launches, Gyro-S against the author's figures, unpacking the game result) | 2 | 25 | 183 | 0.4 | 25 |
-| [1](tier-1.en.md) | base speed of 18 models (5 decode kinds × 3 temperatures, prefill 4K / 32K / 128K); decode also with DFlash2 on the 11 models that have it | 18 | 489 | 1,467 | 2.5 | 489 |
+| [1](tier-1.en.md) | base speed of every model (5 decode kinds × 3 temperatures, prefill 4K / 32K / 128K); decode also with DFlash2 on the models that have it | 18 | 489 | 1,467 | 2.5 | 489 |
 | [2](tier-2.en.md) | the official standard-v1 (thinking xhigh, temperature 1.0), the whole suite 3 times | 18 | 270 | 810 | 3.0 | 270 |
-| [3](tier-3.en.md) | reasoning effort none / high × 4 tasks, the game at high only (18 models) | 18 | 162 | 486 | 3.0 | 162 |
+| [3](tier-3.en.md) | reasoning effort none / high × 4 tasks, the game at high only (every model) | 18 | 162 | 486 | 3.0 | 162 |
 | [4a](tier-4a.en.md) | the cost of reserving context (the same 4K input at 128K / 256K / 1M) | 18 | 54 | 162 | 1.4 | 54 |
 | [4b](tier-4b.en.md) | long inputs within the trained length (32K / 128K / 256K, 6 models) | 6 | 72 | 216 | 2.0 | 72 |
 | [4c](tier-4c.en.md) | long inputs in the extended range (512K / 1M, 3 models) | 3 | 24 | 72 | 6.3 | 24 |

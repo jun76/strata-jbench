@@ -39,9 +39,9 @@
 | Tier | 内容 | 模型 | 用例 | 请求 | 预估 h | 完成 |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
 | [0](tier-0.zh.md) | 验证测量工具（IQ3_S × 启动 3 次、用 Gyro-S 对照作者的数值、确认游戏成果的展开） | 2 | 25 | 183 | 0.4 | 25 |
-| [1](tier-1.zh.md) | 18 个模型的基础速度（decode 5 种 × temperature 3 档，prefill 4K / 32K / 128K）；支持 DFlash2 的 11 个模型的 decode 也用 DFlash2 测量 | 18 | 489 | 1,467 | 2.5 | 489 |
+| [1](tier-1.zh.md) | 所有模型的基础速度（decode 5 种 × temperature 3 档，prefill 4K / 32K / 128K）；支持 DFlash2 的模型的 decode 也用 DFlash2 测量 | 18 | 489 | 1,467 | 2.5 | 489 |
 | [2](tier-2.zh.md) | 官方 standard-v1（thinking xhigh，temperature 1.0），整个套件 3 次 | 18 | 270 | 810 | 3.0 | 270 |
-| [3](tier-3.zh.md) | 推理 effort none / high × 4 题，游戏制作仅 high（18 个模型） | 18 | 162 | 486 | 3.0 | 162 |
+| [3](tier-3.zh.md) | 推理 effort none / high × 4 题，游戏制作仅 high（所有模型） | 18 | 162 | 486 | 3.0 | 162 |
 | [4a](tier-4a.zh.md) | 预留上下文的代价（128K / 256K / 1M 下相同的 4K 输入） | 18 | 54 | 162 | 1.4 | 54 |
 | [4b](tier-4b.zh.md) | 训练长度内的长文本（32K / 128K / 256K，代表 6 个） | 6 | 72 | 216 | 2.0 | 72 |
 | [4c](tier-4c.zh.md) | 扩展范围的长文本（512K / 1M，代表 3 个） | 3 | 24 | 72 | 6.3 | 24 |

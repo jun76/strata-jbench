@@ -812,14 +812,14 @@ def write_index(summaries, out_root, published_only):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--env', default='', help='only this environment (default: every one in envs/)')
+    ap.add_argument('--env', default='', help='only this environment (default: every one the pages show)')
     ap.add_argument('--published', action='store_true',
                     help='only the runs in published/, written to cases/ (default: also results/, to preview/cases/)')
     a = ap.parse_args()
     out_root = ROOT if a.published else envs.PREVIEW
     summaries = []
-    for env_id in envs.ids():
-        cfg = envs.load(env_id)
+    for env_id in envs.page_ids(a.published):
+        cfg = envs.load(env_id, a.published)
         rows = build(cfg)
         attach_results(rows, env_id, a.published)
         est = estimate(rows)
@@ -829,7 +829,8 @@ def main():
                           'failed': sum(r['status'] in ('failed', 'unreadable') for r in rows)})
         if a.env and env_id != a.env:
             continue
-        write_plan(rows, env_id)
+        if not a.published and env_id in envs.ids():   # the plan this PC measures (plan/ is outside Git)
+            write_plan(rows, env_id)
         write_md(rows, out_root / 'cases' / envs.division() / env_id, cfg, a.published)
         missing = untranslated([r[k] for r in rows for k, _ in COLUMNS if k not in UNTRANSLATED_COLS]
                                + [x for m in MODELS for x in m[3:]])

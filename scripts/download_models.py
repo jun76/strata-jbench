@@ -137,6 +137,24 @@ def main():
                 req.add_header('Authorization', 'Bearer ' + token)
         return opener.open(req, timeout=timeout)
     s['download'].__globals__['_urlopen'] = authenticated_open
+
+    def hf_download(url, dst, what):
+        """The pinned file through the Hugging Face CLI (Xet, parallel; faster than setup.py's single stream), into a
+        staging folder beside the models (same disk, so the move is a rename) that keeps its partial files for a resume.
+        Files on other hosts go through setup.py's download."""
+        u = urlparse(url)
+        parts = u.path.strip('/').split('/')
+        if u.hostname != 'huggingface.co' or len(parts) < 5 or parts[2] != 'resolve':
+            return s['download'](url, dst, what)
+        if dst.exists() and s['done'](dst):
+            return
+        s['acquisition'].require(what)
+        repo, rev, name = '/'.join(parts[:2]), parts[3], '/'.join(parts[4:])
+        staging = args.models / '.hf-staging' / repo.replace('/', '--')
+        print(f'{now()} hf download {repo}@{rev[:12]} {name} ({what})', flush=True)
+        subprocess.run([sys.executable, '-m', 'huggingface_hub.cli.hf', 'download', repo, name, '--revision', rev,
+                        '--local-dir', str(staging)], check=True, env=dict(os.environ, HF_XET_HIGH_PERFORMANCE='1'))
+        os.replace(staging / name, dst)
     manifest_path = args.state / 'manifest.json'
     if args.action == 'prepare':
         manifest = build_manifest(s, args.source, args.models, args.choose)
@@ -184,12 +202,14 @@ def main():
                 else:
                     part = dst.with_name(dst.name + '.part')
                     allocated = part.stat().st_blocks * 512 if part.exists() else 0
+                    # the hf CLI's partial file (hf_download's staging folder; one file is fetched at a time, named by hash)
+                    allocated += sum(p.stat().st_blocks * 512 for p in (args.models / '.hf-staging').glob('**/*.incomplete'))
                     remaining = 0 if dst.exists() and s['done'](dst) else max(0, f['bytes'] - allocated)
                     if shutil.disk_usage(args.models).free < remaining + 10_000_000_000:  # 10 GB headroom (preflight.py checks the same)
                         status['state'] = 'paused_low_disk'
                         save()
                         return
-                    s['download'](f['url'], dst, f"{f['family']} {f['model']}: {dst.name}")
+                    hf_download(f['url'], dst, f"{f['family']} {f['model']}: {dst.name}")
                     s['verify_sha256'](dst, f['bytes'], f['sha256'])
                 checked[f['sha256']] = dst
                 status['files'][f['path']].update(state='verified', completed_at=now(), attempt=attempt)

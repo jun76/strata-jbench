@@ -2,13 +2,16 @@
 
 ベンチを回すハードウェア構成（GPU と RAM の組み合わせ）を「環境」と呼び、1つの環境を `envs/<env>/env.json` で表す。
 カードを替えたり RAM を増やしたりしたら、別の環境として足す。同じ PC でも、構成が違えば結果は混ぜない。
+env.json は測る PC ごとに書くもので、Git には入れない（`envs/<env>/` は `.gitignore`。測るモデルや電力上限は測る人が決める）。
+ランナーは計測を始めるたびに、その env.json を RUN のフォルダに `env.json` として残し、RUN を公開するとそれも `published/` に入る。
+コミットするページ（ケース一覧とグラフ）は、その環境で最後に公開した RUN の `env.json` を読む。
 環境とは別に、モデルをどう動かしたかの「部門」（[divisions/README.md](../divisions/README.md)、いまは `plain` だけ）があり、場所は部門の下に環境が並ぶ。
 
 | 環境ごとに分かれるもの | 場所 |
 | --- | --- |
-| 計画（ケースの一覧） | `plan/<division>/<env>/cases.jsonl`・`cases.csv` |
+| 計画（ケースの一覧） | `plan/<division>/<env>/cases.jsonl`・`cases.csv`（`scripts/build_cases.py` が作る。Git 管理外） |
 | ケース一覧 | `cases/<division>/<env>/`（Markdown と CSV、入口は `cases/README.md`） |
-| 結果 | `results/<division>/<env>/<RUN_ID>/`（作業用、Git 管理外）→ 確定したら `published/<division>/<env>/<RUN_ID>/`（`scripts/publish.py`） |
+| 結果 | `results/<division>/<env>/<RUN_ID>/`（作業用、Git 管理外）→ 確定したら `published/<division>/<env>/<RUN_ID>/`（`scripts/publish.py`）。測ったときの `env.json` も入る |
 
 グラフのページ（RUN を公開するたびにその時点のものを `snapshots/<division>/<env>/<RUN_ID>/` に、確認用は `preview/RESULTS.html`）は全環境を1ページに持ち、環境を切り替えて見る。2つ以上の環境に結果があると、同じモデル・同じ条件で並べた「環境の比較」が出る。
 
