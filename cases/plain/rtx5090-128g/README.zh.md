@@ -26,12 +26,12 @@
 
 ## 概要
 
-- 用例: 1,559
-- 正式测量请求: 5,121
-- 引擎启动: 171
+- 用例: 1,340
+- 正式测量请求: 4,458
+- 引擎启动: 131
 - 预估: 29 小时
 - 基准模型: qwen IQ3_S （env.json 的 ref，否则为 Strata 针对此 RAM + VRAM 推荐的模型）
-- 完成: 1,352
+- 完成: 1,133
 - 失败: 0
 
 
@@ -39,22 +39,22 @@
 
 | Tier | 内容 | 模型 | 用例 | 请求 | 预估 h | 完成 |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| [0](tier-0.zh.md) | 验证测量工具（基准模型 × 启动 3 次、用 Gyro-S 对照作者的数值、确认编程成果的展开） | 2 | 26 | 186 | 0.4 | 25 |
+| [0](tier-0.zh.md) | 验证测量工具（基准模型 × 启动 3 次、用 Gyro-S 对照作者的数值、确认编程成果的展开） | 2 | 25 | 183 | 0.4 | 24 |
 | [1](tier-1.zh.md) | 所有模型的基础速度（decode 5 种 × temperature 3 档，prefill 4K / 32K / 128K）；支持 DFlash2 的模型的 decode 也用 DFlash2 测量 | 18 | 489 | 1,467 | 2.5 | 489 |
 | [2](tier-2.zh.md) | 官方 standard-v1（thinking xhigh，temperature 1.0），整个套件 3 次 | 18 | 270 | 810 | 3.0 | 270 |
-| [3](tier-3.zh.md) | 推理 effort none / high × 4 题，编程（首里城）仅 high（所有模型） | 18 | 180 | 540 | 3.8 | 162 |
+| [3](tier-3.zh.md) | 推理 effort none / high × 4 题，编程（首里城）仅 high（所有模型） | 18 | 162 | 486 | 3.8 | 144 |
 | [4a](tier-4a.zh.md) | 预留上下文的代价（128K / 256K / 1M 下相同的 4K 输入） | 18 | 54 | 162 | 1.4 | 54 |
-| [4b](tier-4b.zh.md) | 训练长度内的长文本（32K / 128K / 256K；基准模型、各系列最大的模型、最小的模型） | 7 | 84 | 252 | 1.8 | 72 |
-| [4c](tier-4c.zh.md) | 扩展范围的长文本（512K / 1M；基准模型、最小与最大的模型） | 5 | 40 | 120 | 10.2 | 24 |
+| [4b](tier-4b.zh.md) | 训练长度内的长文本（32K / 128K / 256K；基准模型、各系列最大的模型、最小的模型） | 5 | 60 | 180 | 1.8 | 48 |
+| [4c](tier-4c.zh.md) | 扩展范围的长文本（512K / 1M；基准模型、最小与最大的模型） | 3 | 24 | 72 | 10.2 | 8 |
 | [4d](tier-4d.zh.md) | YaRN 的影响（基准模型，相同输入只改设置） | 1 | 16 | 48 | 1.1 | 16 |
-| [5](tier-5.zh.md) | 每次只改一个启动选项（基准模型、最大与最小的模型；含自动 tune） | 5 | 400 | 1,200 | 4.6 | 240 |
+| [5](tier-5.zh.md) | 每次只改一个启动选项（基准模型、最大与最小的模型；含自动 tune） | 3 | 240 | 720 | 4.6 | 80 |
 
 
 ## 模型
 
 | family | model | GB | 类别 | 测量的版本（仓库 @ 提交，RUN_ID 的 models.json） |
 | --- | --- | ---: | --- | --- |
-| qwen | Q2_0 | 67.3 | 原始权重量化（ISTA） | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json)) |
+| qwen | Q2_0 | 67.3 | 原始权重量化（ISTA） | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | qwen | IQ2_XS | 68.0 | 原始权重量化（ISTA） | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | qwen | IQ3_XXS | 75.8 | 原始权重量化（ISTA） | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | qwen | IQ3_S | 83.6 | 原始权重量化（ISTA） | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-04-iq3s-mtp](../../../published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json)) |
@@ -62,7 +62,7 @@
 | gyro | Gyro-S | 58.5 | 原始权重量化（trellis） | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | gyro | Gyro-M | 92.0 | 原始权重量化（trellis） | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json)) |
 | unsloth | UD-IQ4_XS | 93.7 | 原始权重量化（Unsloth，v3.1 之前的版本） | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
-| unsloth | UD-Q4_K_XL | 111.3 | 原始权重量化（Unsloth，v3.1 中未变） | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json)) |
+| unsloth | UD-Q4_K_XL | 111.3 | 原始权重量化（Unsloth，v3.1 中未变） | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | unsloth | UD-Q5_K_XL | 158.3 | 原始权重量化（Unsloth，v3.1 中未变） | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | unsloth | UD-Q6_K_XL | 169.2 | 原始权重量化（Unsloth，v3.1 中未变） | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | unsloth | Q8_0 | 188.2 | 原始权重量化（Unsloth，v3.1 中未变），质量参照点 | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json), [2026-11-04-q8-t3](../../../published/plain/rtx5090-128g/2026-11-04-q8-t3/models.json)) |
@@ -91,7 +91,7 @@
 
 <details><summary>编程用例的成果存放位置</summary>
 
-Tier 0、3 的编程任务是首里城的场景（英文提示，要求以 3D 体素艺术、用单个 HTML 文件回答；全文见 prompts/coding-shuri.json）。2026-11-07 之前的 run 是 Minecraft（“マイクラ風3D箱庭ゲーム作って”，日语，意为“做一个类似 Minecraft 的 3D 沙盒游戏”，不附加格式要求）。无论每个用例的输出形式如何，都按以下结构展开：
+Tier 0、3 的编程任务是首里城的场景（英文提示，要求以 3D 体素艺术、用单个 HTML 文件回答；全文见 prompts/coding-shuri.json）。无论每个用例的输出形式如何，都按以下结构展开：
 
 ```
 <run-id>/cases/<case id>/artifact/

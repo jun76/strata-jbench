@@ -154,9 +154,8 @@ the user's call); the pinned version goes into `tools/harness/` beside it. Nothi
    script runs, and shown in Japanese).
 3. If a new fixture is needed, change `scripts/build_fixtures.py` and run it with the Python that ships with Strata (see
    the docstring at the top of the file; `--only <fixture>` rewrites one chat fixture without counting the long ones again).
-   The game cases: plain's Tiers 0 and 3 ask for Shuri Castle as one HTML file (`coding-shuri`, since 2026-11-07); the
-   Minecraft prompt (`game-minecraft`) is the harness divisions' case. Plain's Minecraft cases measured before stay in
-   the lists and the charts as retired cases (never planned again).
+   The coding cases: plain's Tiers 0 and 3 ask for Shuri Castle in 3D voxel art as one HTML file (`coding-shuri`); the
+   Minecraft prompt (`game-minecraft`) is the harness divisions' case.
    The long document of Tiers 4b–4d comes from ten works of Aozora Bunko and Project Gutenberg (five Japanese, five
    English), cleaned by `scripts/long_corpus.py` into `prompts/long-corpus.txt`, Japanese and English chunks in turns.
    Sources, editions, SHA-256 and Aozora's colophons are in `prompts/long-sources.json`; the downloads are in
@@ -164,6 +163,11 @@ the user's call); the pinned version goes into `tools/harness/` beside it. Nothi
    10 / 50 / 90% ("the passwords of the east, central and west storehouses") and the questions; the runner assembles
    the document.
 4. Update the matching part of [docs/SCOUTING.md](docs/SCOUTING.md) too.
+5. No backward compatibility: the case lists and the charts show the plan as it is now. A case taken out of the plan,
+   or replaced by another (Minecraft by Shuri Castle in plain), leaves them, with the results earlier runs have for it;
+   those results stay readable in each run's own snapshot (`snapshots/<division>/<env>/<RUN_ID>/`, never rewritten)
+   and in `published/`. Do not keep old cases on the pages as "retired" ones, and do not write how a case used to be
+   in the lists or the pages (the history goes in docs/SCOUTING.md and the commit message).
 
 ### 2.2 Settings and checks before starting (do not start until these pass)
 1. **Go through the settings with the user.** Run `python3 -I scripts/bench.py config` and show the user every

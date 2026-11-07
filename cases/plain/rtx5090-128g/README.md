@@ -26,12 +26,12 @@ Strata のデスクトップアプリは使っていない。CLI の <code>strat
 
 ## 概要
 
-- ケース: 1,559
-- 本計測リクエスト: 5,121
-- エンジン起動: 171
+- ケース: 1,340
+- 本計測リクエスト: 4,458
+- エンジン起動: 131
 - 見積もり: 29 時間
 - 基準モデル: qwen IQ3_S （env.json の ref、なければ Strata がこの RAM + VRAM に勧めるモデル）
-- 完了: 1,352
+- 完了: 1,133
 - 失敗: 0
 
 
@@ -39,22 +39,22 @@ Strata のデスクトップアプリは使っていない。CLI の <code>strat
 
 | Tier | 内容 | モデル | ケース | リクエスト | 見積 h | 完了 |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| [0](tier-0.md) | 計測器の検証（基準モデル × 起動3回、Gyro-S で作者の値と照合、コーディングの成果物の展開確認） | 2 | 26 | 186 | 0.4 | 25 |
+| [0](tier-0.md) | 計測器の検証（基準モデル × 起動3回、Gyro-S で作者の値と照合、コーディングの成果物の展開確認） | 2 | 25 | 183 | 0.4 | 24 |
 | [1](tier-1.md) | 全モデルの基礎速度（decode 5種 × temperature 3水準、prefill 4K / 32K / 128K）。decode は DFlash2 対応のモデルで DFlash2 でも測る | 18 | 489 | 1,467 | 2.5 | 489 |
 | [2](tier-2.md) | 公式 standard-v1（thinking xhigh、temperature 1.0）をスイートごと3回 | 18 | 270 | 810 | 3.0 | 270 |
-| [3](tier-3.md) | 推論エフォート none / high × 4問、コーディング（首里城）は high のみ（全モデル） | 18 | 180 | 540 | 3.8 | 162 |
+| [3](tier-3.md) | 推論エフォート none / high × 4問、コーディング（首里城）は high のみ（全モデル） | 18 | 162 | 486 | 3.8 | 144 |
 | [4a](tier-4a.md) | 容量の確保コスト（128K / 256K / 1M に同じ 4K 入力） | 18 | 54 | 162 | 1.4 | 54 |
-| [4b](tier-4b.md) | 学習範囲の長文（32K / 128K / 256K。基準モデル、系列ごとに最大のモデル、最小のモデル） | 7 | 84 | 252 | 1.8 | 72 |
-| [4c](tier-4c.md) | 拡張範囲の長文（512K / 1M。基準モデル、最小と最大のモデル） | 5 | 40 | 120 | 10.2 | 24 |
+| [4b](tier-4b.md) | 学習範囲の長文（32K / 128K / 256K。基準モデル、系列ごとに最大のモデル、最小のモデル） | 5 | 60 | 180 | 1.8 | 48 |
+| [4c](tier-4c.md) | 拡張範囲の長文（512K / 1M。基準モデル、最小と最大のモデル） | 3 | 24 | 72 | 10.2 | 8 |
 | [4d](tier-4d.md) | YaRN の影響（基準モデル、同じ入力で設定だけ変える） | 1 | 16 | 48 | 1.1 | 16 |
-| [5](tier-5.md) | 起動オプションを1つずつ変える（基準モデル、最大と最小のモデル。自動 tune を含む） | 5 | 400 | 1,200 | 4.6 | 240 |
+| [5](tier-5.md) | 起動オプションを1つずつ変える（基準モデル、最大と最小のモデル。自動 tune を含む） | 3 | 240 | 720 | 4.6 | 80 |
 
 
 ## モデル
 
 | family | model | GB | 種別 | 測った版（リポジトリ @ コミット、RUN_ID の models.json） |
 | --- | --- | ---: | --- | --- |
-| qwen | Q2_0 | 67.3 | 元重みの量子化 (ISTA) | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json)) |
+| qwen | Q2_0 | 67.3 | 元重みの量子化 (ISTA) | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | qwen | IQ2_XS | 68.0 | 元重みの量子化 (ISTA) | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | qwen | IQ3_XXS | 75.8 | 元重みの量子化 (ISTA) | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | qwen | IQ3_S | 83.6 | 元重みの量子化 (ISTA) | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-04-iq3s-mtp](../../../published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json)) |
@@ -62,7 +62,7 @@ Strata のデスクトップアプリは使っていない。CLI の <code>strat
 | gyro | Gyro-S | 58.5 | 元重みの量子化 (trellis) | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | gyro | Gyro-M | 92.0 | 元重みの量子化 (trellis) | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json)) |
 | unsloth | UD-IQ4_XS | 93.7 | 元重みの量子化 (Unsloth、v3.1 前の版) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
-| unsloth | UD-Q4_K_XL | 111.3 | 元重みの量子化 (Unsloth、v3.1 でも同じ) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json)) |
+| unsloth | UD-Q4_K_XL | 111.3 | 元重みの量子化 (Unsloth、v3.1 でも同じ) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | unsloth | UD-Q5_K_XL | 158.3 | 元重みの量子化 (Unsloth、v3.1 でも同じ) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | unsloth | UD-Q6_K_XL | 169.2 | 元重みの量子化 (Unsloth、v3.1 でも同じ) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | unsloth | Q8_0 | 188.2 | 元重みの量子化 (Unsloth、v3.1 でも同じ)、品質の参照点 | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json), [2026-11-04-q8-t3](../../../published/plain/rtx5090-128g/2026-11-04-q8-t3/models.json)) |
@@ -91,7 +91,7 @@ Strata のデスクトップアプリは使っていない。CLI の <code>strat
 
 <details><summary>コーディングのケースの成果物の置き場所</summary>
 
-Tier 0・3 のコーディングは首里城の情景（英文のプロンプトで、3D ボクセルアートで、単一の HTML ファイルで答えるよう指定する。全文は prompts/coding-shuri.json）。2026-11-07 より前の run はマイクラ（「マイクラ風3D箱庭ゲーム作って」、形式の指示なし）。出力の形がケースごとに違っても、必ず次の形に展開する。
+Tier 0・3 のコーディングは首里城の情景（英文のプロンプトで、3D ボクセルアートで、単一の HTML ファイルで答えるよう指定する。全文は prompts/coding-shuri.json）。出力の形がケースごとに違っても、必ず次の形に展開する。
 
 ```
 <run-id>/cases/<case id>/artifact/

@@ -54,9 +54,6 @@ TR = {
     '90% の位置の事実': ('a fact at 90% of the document', '位于文档 90% 处的事实'),
     '離れた複数箇所の統合': ('combining several distant passages', '整合多处相隔较远的内容'),
     '4K の文章 + 続きを書く指示': ('a 4K text + an instruction to continue it', '4K 文章 + 续写指令'),
-    '「マイクラ風3D箱庭ゲーム作って」（実用的なコーディング）': (
-        '“マイクラ風3D箱庭ゲーム作って” (make a Minecraft-like 3D sandbox game; practical coding, sent in Japanese)',
-        '“マイクラ風3D箱庭ゲーム作って”（做一个类似 Minecraft 的 3D 沙盒游戏；实用编程，以日语原文发送）'),
     # input tokens, seeds, YaRN
     '短文': ('short', '短文'),
     '固定': ('fixed', '固定'),
@@ -169,12 +166,6 @@ TR = {
         '检查成果的展开和截图机制。thinking off：reasoning_effort "none" + chat_template_kwargs.enable_thinking false。'
         '成果展开到 artifact/（response.md、files/、manifest.json，静态 HTML 另有 screenshot.png）。'
         '是否为单个 HTML 文件及其形式（单个 HTML / 需要服务器 / 有无 README）记录在 manifest 中'),
-    '最初の計画の代表モデル（代表は 2026-11-07 から環境ごとに役割で選ぶ）。結果のある run だけ載せる': (
-        'a representative of the first plan (since 2026-11-07 the representatives are chosen per environment by role); listed only for the runs that have it',
-        '最初计划的代表模型（自 2026-11-07 起按环境依角色选择代表）；只列出有结果的 run'),
-    '2026-11-07 にハーネス部門へ移したケース（プレーンでは首里城に置き換え）。結果のある run だけ載せる': (
-        'moved to the harness divisions on 2026-11-07 (replaced by Shuri Castle in plain); listed only for the runs that have it',
-        '2026-11-07 移到 harness 部门的用例（纯模型部门改为首里城）；只列出有结果的 run'),
     '「マイクラ風3D箱庭ゲーム作って」（ハーネス越しの実用的なコーディング）': (
         '“マイクラ風3D箱庭ゲーム作って” (“make a Minecraft-like 3D sandbox game”; practical coding through the harness)',
         '“マイクラ風3D箱庭ゲーム作って”（“做一个类似 Minecraft 的 3D 沙盒游戏”；经由 harness 的实用编码）'),

@@ -26,12 +26,12 @@ environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-04-q8-t3
 
 ## Overview
 
-- cases: 1,559
-- measured requests: 5,121
-- engine launches: 171
+- cases: 1,340
+- measured requests: 4,458
+- engine launches: 131
 - estimate: 29 h
 - reference model: qwen IQ3_S (env.json "ref", else the model Strata recommends for this RAM + VRAM)
-- done: 1,352
+- done: 1,133
 - failed: 0
 
 
@@ -39,22 +39,22 @@ environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-04-q8-t3
 
 | Tier | what | models | cases | requests | est. h | done |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| [0](tier-0.en.md) | validating the harness (the reference model × 3 launches, Gyro-S against the author's figures, unpacking the coding result) | 2 | 26 | 186 | 0.4 | 25 |
+| [0](tier-0.en.md) | validating the harness (the reference model × 3 launches, Gyro-S against the author's figures, unpacking the coding result) | 2 | 25 | 183 | 0.4 | 24 |
 | [1](tier-1.en.md) | base speed of every model (5 decode kinds × 3 temperatures, prefill 4K / 32K / 128K); decode also with DFlash2 on the models that have it | 18 | 489 | 1,467 | 2.5 | 489 |
 | [2](tier-2.en.md) | the official standard-v1 (thinking xhigh, temperature 1.0), the whole suite 3 times | 18 | 270 | 810 | 3.0 | 270 |
-| [3](tier-3.en.md) | reasoning effort none / high × 4 tasks, the coding task (Shuri Castle) at high only (every model) | 18 | 180 | 540 | 3.8 | 162 |
+| [3](tier-3.en.md) | reasoning effort none / high × 4 tasks, the coding task (Shuri Castle) at high only (every model) | 18 | 162 | 486 | 3.8 | 144 |
 | [4a](tier-4a.en.md) | the cost of reserving context (the same 4K input at 128K / 256K / 1M) | 18 | 54 | 162 | 1.4 | 54 |
-| [4b](tier-4b.en.md) | long inputs within the trained length (32K / 128K / 256K; the reference model, the largest of each family, the smallest) | 7 | 84 | 252 | 1.8 | 72 |
-| [4c](tier-4c.en.md) | long inputs in the extended range (512K / 1M; the reference model, the smallest and the largest) | 5 | 40 | 120 | 10.2 | 24 |
+| [4b](tier-4b.en.md) | long inputs within the trained length (32K / 128K / 256K; the reference model, the largest of each family, the smallest) | 5 | 60 | 180 | 1.8 | 48 |
+| [4c](tier-4c.en.md) | long inputs in the extended range (512K / 1M; the reference model, the smallest and the largest) | 3 | 24 | 72 | 10.2 | 8 |
 | [4d](tier-4d.en.md) | the effect of YaRN (the reference model, same input, only the setting changes) | 1 | 16 | 48 | 1.1 | 16 |
-| [5](tier-5.en.md) | changing one launch option at a time (the reference model, the largest and the smallest; auto tune included) | 5 | 400 | 1,200 | 4.6 | 240 |
+| [5](tier-5.en.md) | changing one launch option at a time (the reference model, the largest and the smallest; auto tune included) | 3 | 240 | 720 | 4.6 | 80 |
 
 
 ## Models
 
 | family | model | GB | kind | version measured (repository @ commit, the RUN_ID's models.json) |
 | --- | --- | ---: | --- | --- |
-| qwen | Q2_0 | 67.3 | quantized from the original weights (ISTA) | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json)) |
+| qwen | Q2_0 | 67.3 | quantized from the original weights (ISTA) | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | qwen | IQ2_XS | 68.0 | quantized from the original weights (ISTA) | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | qwen | IQ3_XXS | 75.8 | quantized from the original weights (ISTA) | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | qwen | IQ3_S | 83.6 | quantized from the original weights (ISTA) | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-04-iq3s-mtp](../../../published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json)) |
@@ -62,7 +62,7 @@ environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-04-q8-t3
 | gyro | Gyro-S | 58.5 | quantized from the original weights (trellis) | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | gyro | Gyro-M | 92.0 | quantized from the original weights (trellis) | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json)) |
 | unsloth | UD-IQ4_XS | 93.7 | quantized from the original weights (Unsloth, the version before v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
-| unsloth | UD-Q4_K_XL | 111.3 | quantized from the original weights (Unsloth, unchanged in v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json)) |
+| unsloth | UD-Q4_K_XL | 111.3 | quantized from the original weights (Unsloth, unchanged in v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | unsloth | UD-Q5_K_XL | 158.3 | quantized from the original weights (Unsloth, unchanged in v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | unsloth | UD-Q6_K_XL | 169.2 | quantized from the original weights (Unsloth, unchanged in v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | unsloth | Q8_0 | 188.2 | quantized from the original weights (Unsloth, unchanged in v3.1), the quality reference | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json), [2026-11-04-q8-t3](../../../published/plain/rtx5090-128g/2026-11-04-q8-t3/models.json)) |
@@ -91,7 +91,7 @@ environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-04-q8-t3
 
 <details><summary>Where the coding cases' results go</summary>
 
-The coding task of Tiers 0 and 3 is a scene of Shuri Castle (an English prompt that asks for it in 3D voxel art, as one HTML file; the whole text is in prompts/coding-shuri.json). Runs before 2026-11-07 had the Minecraft prompt (“マイクラ風3D箱庭ゲーム作って”, Japanese for “make a Minecraft-like 3D sandbox game”, with no format instructions). Whatever shape each answer takes, it is always unpacked like this:
+The coding task of Tiers 0 and 3 is a scene of Shuri Castle (an English prompt that asks for it in 3D voxel art, as one HTML file; the whole text is in prompts/coding-shuri.json). Whatever shape each answer takes, it is always unpacked like this:
 
 ```
 <run-id>/cases/<case id>/artifact/

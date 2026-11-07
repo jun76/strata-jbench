@@ -8,4 +8,4 @@ The plan and the results are kept per hardware set-up (a GPU and an amount of RA
 
 | environment | id | cases | est. h | done | failed |
 | --- | --- | ---: | ---: | ---: | ---: |
-| [GeForce RTX 5090 · 128 GB RAM](plain/rtx5090-128g/README.en.md) | `rtx5090-128g` | 1,559 | 29 | 1,352 | 0 |
+| [GeForce RTX 5090 · 128 GB RAM](plain/rtx5090-128g/README.en.md) | `rtx5090-128g` | 1,340 | 29 | 1,133 | 0 |
