@@ -95,9 +95,10 @@ TR = {
     'decode tok/s, DFlash2 採用率': ('decode tok/s, DFlash2 acceptance rate', 'decode tok/s、DFlash2 接受率'),
     # notes
     'drafter なし': ('no drafter', '不使用 drafter'),
-    '0.2.10 から Auto はこのモデルで DFlash2 を選ぶ（ほかのケースは MTP に固定）。drafter（1.2 GB）は計測前に取得しておく': (
-        'since 0.2.10 Auto picks DFlash2 for this model (every other case pins MTP). The drafter (1.2 GB) is fetched before measuring',
-        '自 0.2.10 起 Auto 会为此模型选择 DFlash2（其他用例固定为 MTP）。drafter（1.2 GB）在测量前下载'),
+    '0.2.10 から Auto はこのモデルで DFlash2 を選ぶ（ほかのケースは MTP に固定）。drafter（1.2 GB。0.2.12 から一部のモデルは Strata が調整した 0.34 GB も）は計測前に取得しておく': (
+        'since 0.2.10 Auto picks DFlash2 for this model (every other case pins MTP). The drafter (1.2 GB, and since 0.2.12 '
+        'Strata\'s tuned 0.34 GB one for some models) is fetched before measuring',
+        '自 0.2.10 起 Auto 会为此模型选择 DFlash2（其他用例固定为 MTP）。drafter（1.2 GB；自 0.2.12 起部分模型另有 Strata 调优的 0.34 GB）在测量前下载'),
     '同じセッション内の比較基準': ('the baseline within the same session', '同一会话内的比较基准'),
     '品質が変わる側。Tier 6 では採用しない': ('changes quality; not adopted in Tier 6', '会改变质量；Tier 6 不采用'),
     'デスクトップアプリの保存値': ('the value saved by the desktop app', '桌面应用保存的值'),
@@ -145,16 +146,17 @@ TR = {
         '成果展开到 artifact/（response.md、files/、manifest.json，静态 HTML 另有 screenshot.png）。'
         '形式（单个 HTML / 需要服务器 / 有无 README）记录在 manifest 中'),
     # the coding task since 2026-11-07: Shuri Castle in plain, Minecraft in the harness divisions
-    '首里城の情景を単一の HTML ファイルで（実用的なコーディング）': (
-        'a scene of Shuri Castle as one HTML file (practical coding)', '用单个 HTML 文件呈现首里城的场景（实用编码）'),
-    'thinking on: reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true、reasoning_budget_tokens 16,384'
+    '首里城の情景を 3D ボクセルアートの単一の HTML ファイルで（実用的なコーディング）': (
+        'a scene of Shuri Castle in 3D voxel art as one HTML file (practical coding)',
+        '用单个 HTML 文件以 3D 体素艺术呈现首里城的场景（实用编码）'),
+    'thinking on: reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true、reasoning_budget_tokens 32,768'
     '（明示。コーディングは cap の半分: 3/4 だと回答のコードが途中で切れたため）。成果物は artifact/ に展開'
     '（response.md、files/、manifest.json、静的 HTML なら screenshot.png）。単一の HTML ファイルか、形式（単体 HTML / 要サーバー / README の有無）は manifest に記録': (
-        'thinking on: reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true, reasoning_budget_tokens 16,384 '
+        'thinking on: reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true, reasoning_budget_tokens 32,768 '
         '(explicit; half the cap for the coding task, since at 3/4 the answer\'s code was cut off). The result is unpacked into '
         'artifact/ (response.md, files/, manifest.json, and screenshot.png for static HTML). Whether it is one HTML file, and its '
         'form (single HTML / needs a server / has a README), are recorded in the manifest',
-        'thinking on：reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true，reasoning_budget_tokens 16,384'
+        'thinking on：reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true，reasoning_budget_tokens 32,768'
         '（显式指定；编程任务取 cap 的一半，因为 3/4 时回答中的代码会被截断）。成果展开到 artifact/（response.md、files/、'
         'manifest.json，静态 HTML 另有 screenshot.png）。是否为单个 HTML 文件及其形式（单个 HTML / 需要服务器 / 有无 README）记录在 manifest 中'),
     '成果物の展開・スクリーンショットの仕組みを確かめる。thinking off: reasoning_effort "none" + '

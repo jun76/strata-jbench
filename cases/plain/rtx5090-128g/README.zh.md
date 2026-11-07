@@ -29,7 +29,7 @@
 - 用例: 1,559
 - 正式测量请求: 5,121
 - 引擎启动: 171
-- 预估: 28 小时
+- 预估: 29 小时
 - 基准模型: qwen IQ3_S （env.json 的 ref，否则为 Strata 针对此 RAM + VRAM 推荐的模型）
 - 完成: 1,352
 - 失败: 0
@@ -42,7 +42,7 @@
 | [0](tier-0.zh.md) | 验证测量工具（基准模型 × 启动 3 次、用 Gyro-S 对照作者的数值、确认编程成果的展开） | 2 | 26 | 186 | 0.4 | 25 |
 | [1](tier-1.zh.md) | 所有模型的基础速度（decode 5 种 × temperature 3 档，prefill 4K / 32K / 128K）；支持 DFlash2 的模型的 decode 也用 DFlash2 测量 | 18 | 489 | 1,467 | 2.5 | 489 |
 | [2](tier-2.zh.md) | 官方 standard-v1（thinking xhigh，temperature 1.0），整个套件 3 次 | 18 | 270 | 810 | 3.0 | 270 |
-| [3](tier-3.zh.md) | 推理 effort none / high × 4 题，编程（首里城）仅 high（所有模型） | 18 | 180 | 540 | 3.0 | 162 |
+| [3](tier-3.zh.md) | 推理 effort none / high × 4 题，编程（首里城）仅 high（所有模型） | 18 | 180 | 540 | 3.8 | 162 |
 | [4a](tier-4a.zh.md) | 预留上下文的代价（128K / 256K / 1M 下相同的 4K 输入） | 18 | 54 | 162 | 1.4 | 54 |
 | [4b](tier-4b.zh.md) | 训练长度内的长文本（32K / 128K / 256K；基准模型、各系列最大的模型、最小的模型） | 7 | 84 | 252 | 1.8 | 72 |
 | [4c](tier-4c.zh.md) | 扩展范围的长文本（512K / 1M；基准模型、最小与最大的模型） | 5 | 40 | 120 | 10.2 | 24 |
@@ -91,7 +91,7 @@
 
 <details><summary>编程用例的成果存放位置</summary>
 
-Tier 0、3 的编程任务是首里城的场景（英文提示，要求用单个 HTML 文件回答；全文见 prompts/coding-shuri.json）。2026-11-07 之前的 run 是 Minecraft（“マイクラ風3D箱庭ゲーム作って”，日语，意为“做一个类似 Minecraft 的 3D 沙盒游戏”，不附加格式要求）。无论每个用例的输出形式如何，都按以下结构展开：
+Tier 0、3 的编程任务是首里城的场景（英文提示，要求以 3D 体素艺术、用单个 HTML 文件回答；全文见 prompts/coding-shuri.json）。2026-11-07 之前的 run 是 Minecraft（“マイクラ風3D箱庭ゲーム作って”，日语，意为“做一个类似 Minecraft 的 3D 沙盒游戏”，不附加格式要求）。无论每个用例的输出形式如何，都按以下结构展开：
 
 ```
 <run-id>/cases/<case id>/artifact/
@@ -161,9 +161,9 @@ Tier 0、3 的编程任务是首里城的场景（英文提示，要求用单个
     "none": 0,
     "low": 3000,
     "medium": 6000,
-    "high": 10000
+    "high": 18000
   },
-  "game_answer_tokens": 14500,
+  "game_answer_tokens": 16000,
   "task_answer_tokens": 550,
   "long_answer_tokens": 150,
   "sanity_output_tokens": 150,

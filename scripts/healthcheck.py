@@ -118,7 +118,7 @@ def bench_state(run_dir, env_id):
     lines = queue_log.read_text(errors='replace').strip().splitlines()
     starts = [i for i, ln in enumerate(lines) if ' queue start ' in ln]
     lines = lines[starts[-1]:] if starts else lines       # this queue only, not an earlier start of the same run id
-    last = lines[-1:] or ['']
+    last = [ln for ln in lines if ' notify: ' not in ln][-1:] or ['']   # the supervisor logs its notifications after the end
     pid = pid_file.read_text().strip() if pid_file.exists() else None
     summaries = [load(p) for p in run_dir.glob('cases/*/summary.json')]
     counts = {}

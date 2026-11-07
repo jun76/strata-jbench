@@ -97,8 +97,11 @@ def health():
 
 
 def notify(text):
+    # critical: GNOME keeps it until dismissed, so an end that comes while nobody is at the desk is still there;
+    # logged with the result, since a notification that never showed leaves no other trace
     if STATE['cfg']['notify']:
-        subprocess.run(['notify-send', 'strata-jbench', text], capture_output=True)
+        r = subprocess.run(['notify-send', '--urgency=critical', 'strata-jbench', text], capture_output=True, text=True)
+        log(f'notify: {text}' + (f' (notify-send exit {r.returncode}: {r.stderr.strip()})' if r.returncode else ''))
 
 
 def on_term(signum, frame):

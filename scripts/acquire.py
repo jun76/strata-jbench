@@ -11,7 +11,7 @@ and $BENCH_ENV override them): what is needed is what the cases chosen use, from
 (plan/<division>/<env>/cases.jsonl, scripts/build_cases.py).
 Where each thing is looked for:
   models     Strata's models folder (downloads/manifest.json, pinned by Strata's setup.py: scripts/setup_acquire.py)
-  dflash2    strata drafting plan (the drafter Strata fetches with strata drafting fetch)
+  dflash2    strata drafting plan, per model of the DFlash2 cases (the drafter Strata fetches with strata drafting fetch)
   harness    tools/harness/<division>/<version>/, then the harness's default place, at the pinned version only
              (divisions/<division>/division.json "pin"; scripts/harnesses.py)
 
@@ -38,6 +38,7 @@ sys.path.insert(0, str(ROOT / 'scripts'))
 import config  # noqa: E402
 import envs  # noqa: E402
 import harnesses  # noqa: E402
+import install_configs  # noqa: E402
 import overnight  # noqa: E402
 
 
@@ -75,7 +76,7 @@ def needed(env_id, div):
         raise SystemExit(f'{plan.relative_to(ROOT)} is missing: python3 -I scripts/build_cases.py (with BENCH_DIVISION={div})')
     rows = config.select([json.loads(x) for x in plan.read_text().splitlines() if x.strip()], config.load())
     models = list(dict.fromkeys((r['family'], r['model']) for r in rows))
-    return models, any('--drafting dflash2' in r['launch_opts'] for r in rows)
+    return models, list(dict.fromkeys((r['family'], r['model']) for r in rows if '--drafting dflash2' in r['launch_opts']))
 
 
 def model_items(models):
@@ -100,15 +101,29 @@ def model_items(models):
     return items
 
 
-def dflash2_item():
-    r = subprocess.run(['strata', 'drafting', 'plan', '--family', 'qwen', '--mode', 'dflash2', '--output', 'json'],
-                       capture_output=True, text=True, timeout=120, cwd='/tmp')
-    try:
-        j = json.loads(r.stdout[r.stdout.index('{'):])
-    except ValueError:
-        return {'item': 'dflash2', 'what': 'DFlash2 drafter', 'state': 'unknown', 'detail': (r.stdout + r.stderr)[-200:]}
-    return {'item': 'dflash2', 'what': 'DFlash2 drafter', 'state': 'ok' if j.get('ready') else 'missing',
-            'bytes': int((j.get('gb') or 0) * 1e9), 'source': j.get('repo'), 'fix': 'python3 -I scripts/acquire.py fetch dflash2'}
+def drafting_args(fam, model):
+    """strata drafting plan / fetch for one model: its run config where there is one, since the drafter depends on the
+    model (since 0.2.12 some take Strata's tuned pack, 0.34 GB, beside the stock one), else the family."""
+    conf = install_configs.config_path(fam, model)
+    return ['--config', str(conf)] if conf.exists() else ['--family', fam]
+
+
+def dflash2_item(models):
+    missing, gb_, source = [], 0.0, None
+    for fam, model in models:
+        r = subprocess.run(['strata', 'drafting', 'plan', *drafting_args(fam, model), '--mode', 'dflash2', '--output', 'json'],
+                           capture_output=True, text=True, timeout=120, cwd='/tmp')
+        try:
+            j = json.loads(r.stdout[r.stdout.index('{'):])
+        except ValueError:
+            return {'item': 'dflash2', 'what': 'DFlash2 drafter', 'state': 'unknown', 'detail': (r.stdout + r.stderr)[-200:]}
+        if not j.get('ready'):
+            missing.append((fam, model))
+            gb_ = max(gb_, j.get('gb') or 0)          # the models that lack one lack the same file
+            source = source or j.get('repo')
+    return {'item': 'dflash2', 'what': 'DFlash2 drafter', 'state': 'missing' if missing else 'ok',
+            'detail': ', '.join(f'{f} {m}' for f, m in missing) or None, 'models': missing,
+            'bytes': int(gb_ * 1e9), 'source': source, 'fix': 'python3 -I scripts/acquire.py fetch dflash2'}
 
 
 def harness_item(div):
@@ -139,7 +154,7 @@ def check(env_id, div):
     models, dflash = needed(env_id, div)
     items = model_items(models)
     if dflash:
-        items.append(dflash2_item())
+        items.append(dflash2_item(dflash))
     if envs.load_division(div).get('harness'):
         items.append(harness_item(div))
     items += tool_items(div)
@@ -203,7 +218,10 @@ def fetch(out, wanted, yes, skip_models=False):
     if 'dflash2' in todo and any(i['item'] == 'dflash2' for i in missing):
         it = next(i for i in missing if i['item'] == 'dflash2')
         if ask(f'fetch the DFlash2 drafter ({gb(it["bytes"] or 0)} from {it["source"]}) with strata drafting fetch?', yes):
-            rc |= subprocess.run(['strata', 'drafting', 'fetch', '--family', 'qwen'], cwd='/tmp').returncode
+            for fam, model in it['models']:
+                if dflash2_item([(fam, model)])['state'] == 'missing':   # one fetch may have brought another model's too
+                    rc |= subprocess.run(['strata', 'drafting', 'fetch', *drafting_args(fam, model), '--mode', 'dflash2'],
+                                         cwd='/tmp').returncode
     for it in missing:
         if not it['item'].startswith('harness:') or it['item'] not in todo:
             continue

@@ -116,15 +116,15 @@ TIER5_VARIANTS = [
     ('tune', 'thorough', 'thorough', '--tune thorough --retune', 'tuner の所要時間も記録'),
 ]
 TIER5_CASES = ['decode-prose-ja', 'decode-code', 'prefill-4k', 'prefill-32k']
-# Families whose models DFlash2 drafts (strata launch --plan on 0.1.56: Auto picks it for these; coder, swift and nvfp4
+# Families whose models DFlash2 drafts (strata launch --plan on 0.1.56 and 0.1.58: Auto picks it for these; coder, swift and nvfp4
 # stay on MTP). Every case pins MTP; only these models also get Tier 1's decode cases with DFlash2.
 DFLASH2_FAMILIES = {'qwen', 'gyro', 'unsloth'}
-DFLASH2_NOTE = '0.2.10 から Auto はこのモデルで DFlash2 を選ぶ（ほかのケースは MTP に固定）。drafter（1.2 GB）は計測前に取得しておく'
+DFLASH2_NOTE = '0.2.10 から Auto はこのモデルで DFlash2 を選ぶ（ほかのケースは MTP に固定）。drafter（1.2 GB。0.2.12 から一部のモデルは Strata が調整した 0.34 GB も）は計測前に取得しておく'
 
-# Practical coding cases. Plain Tiers 0 and 3 ask for Shuri Castle as one HTML file (since 2026-11-07); the Minecraft prompt,
+# Practical coding cases. Plain Tiers 0 and 3 ask for Shuri Castle in 3D voxel art as one HTML file (since 2026-11-07); the Minecraft prompt,
 # sent verbatim with no format instructions, is the harness divisions' case (docs: divisions/README.md).
 GAME_FIXTURE = 'coding-shuri'
-GAME_PROMPT = ('Design and create a very creative, elaborate, and detailed scene of Shuri Castle and its surrounding '
+GAME_PROMPT = ('Design and create a very creative, elaborate, and detailed 3D voxel art scene of Shuri Castle and its surrounding '
                'landscape in Okinawa, Japan. … make sure I can paste it all into a single HTML file and open it in Chrome.')
 GAME_NOTE = ('成果物は artifact/ に展開（response.md、files/、manifest.json、静的 HTML なら screenshot.png）。'
              '単一の HTML ファイルか、形式（単体 HTML / 要サーバー / README の有無）は manifest に記録')
@@ -147,8 +147,9 @@ ASSUME = {
     'warmup_s': 8,
     'request_overhead_s': 0.2,
     'reasoning_tokens': {'none': 0, 'low': 50, 'medium': 100, 'high': 150, 'xhigh': 200},
-    'game_reasoning_tokens': {'none': 0, 'low': 3000, 'medium': 6000, 'high': 10000},
-    'game_answer_tokens': 14500,
+    # Shuri Castle in a run of 2026-11-07 at a 32K cap (high, 16K thinking budget): about 18K of thinking, and pages of 12K-16K+
+    'game_reasoning_tokens': {'none': 0, 'low': 3000, 'medium': 6000, 'high': 18000},
+    'game_answer_tokens': 16000,
     'task_answer_tokens': 550,
     'long_answer_tokens': 150,
     'sanity_output_tokens': 150,
@@ -190,7 +191,7 @@ def effort_note(effort, cap, game=False):
 
 def game_case(tier, step, fam, model, effort, temperature, cap, timeout):
     return base(tier, step, fam, model, _key=f'{GAME_FIXTURE}-{effort}', fixture=GAME_FIXTURE,
-                content='首里城の情景を単一の HTML ファイルで（実用的なコーディング）', input_tokens='短文', output_cap=cap,
+                content='首里城の情景を 3D ボクセルアートの単一の HTML ファイルで（実用的なコーディング）', input_tokens='短文', output_cap=cap,
                 effort=effort, temperature=temperature, timeout_s=timeout, artifact=True,
                 measures='完了時間, 出力 token, cap 到達, 成果物が動くか',
                 note=effort_note(effort, cap, game=True) + '。' + GAME_NOTE)
@@ -232,7 +233,9 @@ def build(cfg):
                          measures='prefill tok/s を GYRO.md の 5090 の値と比較',
                          note='sampling は作者の値: top-k 20 / top-p 0.95 / min-p 0.05'))
     if REF:
-        rows.append(game_case('0', '0', *REF, 'none', 0.7, 16384, 1800))
+        # The coding caps: 32K / 64K since 2026-11-07 (16K / 32K before; the Shuri Castle pages, thinking included,
+        # outgrew 32K and nearly every answer was cut off). The retired Minecraft cases below keep the old ones.
+        rows.append(game_case('0', '0', *REF, 'none', 0.7, 32768, 1800))
         rows[-1]['note'] = '成果物の展開・スクリーンショットの仕組みを確かめる。' + rows[-1]['note']
 
     for fam, model, *_ in env_models():
@@ -267,7 +270,7 @@ def build(cfg):
                                  measures='思考 token 数, 回答までの時間, 完了時間, 正答, cap 到達',
                                  note=effort_note(eff, 16384)))
         for eff in GAME_EFFORTS:
-            rows.append(game_case('3', '3', fam, model, eff, 1.0, 32768, 3600))
+            rows.append(game_case('3', '3', fam, model, eff, 1.0, 65536, 3600))
 
     for fam, model, *_ in env_models():
         for ctx in [128 * K, 256 * K, 1024 * K]:
@@ -727,7 +730,7 @@ COMMON = {
 }
 GAME_LAYOUT = {
     'ja': ('コーディングのケースの成果物の置き場所',
-           'Tier 0・3 のコーディングは首里城の情景（英文のプロンプトで、単一の HTML ファイルで答えるよう指定する。全文は prompts/coding-shuri.json）。2026-11-07 より前の run はマイクラ（「マイクラ風3D箱庭ゲーム作って」、形式の指示なし）。出力の形がケースごとに違っても、必ず次の形に展開する。',
+           'Tier 0・3 のコーディングは首里城の情景（英文のプロンプトで、3D ボクセルアートで、単一の HTML ファイルで答えるよう指定する。全文は prompts/coding-shuri.json）。2026-11-07 より前の run はマイクラ（「マイクラ風3D箱庭ゲーム作って」、形式の指示なし）。出力の形がケースごとに違っても、必ず次の形に展開する。',
            '''<run-id>/cases/<case id>/artifact/
   response.md     最終回答の全文（thinking は requests.jsonl 側）
   files/          コードブロックから取り出したファイル（ファイル名が書かれていればその名前、なければ言語ごとの既定名）
@@ -735,7 +738,7 @@ GAME_LAYOUT = {
   screenshot.png  単体 HTML か静的サーバーで開けた場合のみ。headless ブラウザで撮る''',
            '3回分は `artifact/` の下に seed ごとのフォルダ（`seed-1/` など）で分ける。'),
     'en': ('Where the coding cases\' results go',
-           'The coding task of Tiers 0 and 3 is a scene of Shuri Castle (an English prompt that asks for the answer as one HTML file; the whole text is in prompts/coding-shuri.json). Runs before 2026-11-07 had the Minecraft prompt (“マイクラ風3D箱庭ゲーム作って”, Japanese for “make a Minecraft-like 3D sandbox game”, with no format instructions). Whatever shape each answer takes, it is always unpacked like this:',
+           'The coding task of Tiers 0 and 3 is a scene of Shuri Castle (an English prompt that asks for it in 3D voxel art, as one HTML file; the whole text is in prompts/coding-shuri.json). Runs before 2026-11-07 had the Minecraft prompt (“マイクラ風3D箱庭ゲーム作って”, Japanese for “make a Minecraft-like 3D sandbox game”, with no format instructions). Whatever shape each answer takes, it is always unpacked like this:',
            '''<run-id>/cases/<case id>/artifact/
   response.md     the whole final answer (the thinking is in requests.jsonl)
   files/          files taken from the code blocks (named as the answer names them, else a default per language)
@@ -743,7 +746,7 @@ GAME_LAYOUT = {
   screenshot.png  only if it opens as a single HTML file or from a static server; taken with a headless browser''',
            'The 3 runs go in one folder per seed under `artifact/` (`seed-1/` and so on).'),
     'zh': ('编程用例的成果存放位置',
-           'Tier 0、3 的编程任务是首里城的场景（英文提示，要求用单个 HTML 文件回答；全文见 prompts/coding-shuri.json）。2026-11-07 之前的 run 是 Minecraft（“マイクラ風3D箱庭ゲーム作って”，日语，意为“做一个类似 Minecraft 的 3D 沙盒游戏”，不附加格式要求）。无论每个用例的输出形式如何，都按以下结构展开：',
+           'Tier 0、3 的编程任务是首里城的场景（英文提示，要求以 3D 体素艺术、用单个 HTML 文件回答；全文见 prompts/coding-shuri.json）。2026-11-07 之前的 run 是 Minecraft（“マイクラ風3D箱庭ゲーム作って”，日语，意为“做一个类似 Minecraft 的 3D 沙盒游戏”，不附加格式要求）。无论每个用例的输出形式如何，都按以下结构展开：',
            '''<run-id>/cases/<case id>/artifact/
   response.md     最终回答全文（thinking 在 requests.jsonl 中）
   files/          从代码块中取出的文件（写了文件名就用该名称，否则用各语言的默认名）

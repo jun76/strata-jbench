@@ -8,4 +8,4 @@
 
 | 環境 | id | ケース | 見積 h | 完了 | 失敗 |
 | --- | --- | ---: | ---: | ---: | ---: |
-| [GeForce RTX 5090 · 128 GB RAM](plain/rtx5090-128g/README.md) | `rtx5090-128g` | 1,559 | 28 | 1,352 | 0 |
+| [GeForce RTX 5090 · 128 GB RAM](plain/rtx5090-128g/README.md) | `rtx5090-128g` | 1,559 | 29 | 1,352 | 0 |

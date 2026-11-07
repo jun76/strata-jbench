@@ -67,10 +67,10 @@ as simply a result (no "final" or "published" wording in their results section),
    (`run-status/STATUS.md`, `ALERTS.log`, a desktop notification on a new problem), starts again a runner that crashed
    or hung (up to `crash_restarts` / `stuck_restarts` times), and notifies when the run ends. What it cannot cover is
    its own end: a reboot, a logout without linger, a kill. For that, an agent that runs the benchmark registers a
-   scheduled task with its own scheduler (hourly: check, find the cause, recover safely, report the end; 2.3), which
-   also reports when the run is done. The task exists only while a run does: registered when it starts and deleted
-   when it ends, each time with the user's agreement (2.3, 2.6). Without an agent the supervisor alone runs it, and
-   after a reboot `bench.py start` resumes it.
+   scheduled task with its own scheduler in the conversation that started the run (hourly: check, find the cause,
+   recover safely, report the end; 2.3), which reports in that conversation, the end of the run included. The task exists only
+   while a run does: registered when it starts and deleted when it ends, each time with the user's agreement (2.3,
+   2.6). Without an agent the supervisor alone runs it, and after a reboot `bench.py start` resumes it.
 7. **Keep progress in files,** not in the conversation's memory: the state in `run-status/STATUS.md`, problems in
    `run-status/ALERTS.log`, each stage's logs as in section 4.
 8. **Nothing else heavy during a measurement.** No downloads, conversions or another inference engine at the same time.
@@ -190,7 +190,8 @@ the user's call); the pinned version goes into `tools/harness/` beside it. Nothi
      supervisor) change Strata's saved settings.
    - For a harness division: that the model will run shell commands and write files inside the sandboxed work folder
      (the network is not cut off: a harness reaches the proxy over it).
-   - That the hourly watch task will be registered at the start (step 3 of 2.3) and deleted at the end (2.6).
+   - That the hourly watch task will be registered at the start (step 3 of 2.3: which scheduler, where it reports,
+     what it does not survive) and deleted at the end (2.6).
 3. After changing the runner or a fixture, run the affected cases under a RUN_ID starting with `test-` (`test-` results
    appear neither in the case lists nor in the charts): either with `bench.py start` and `"cases": [...]`, or directly
    `python3 scripts/bench_runner.py --run-id test-xxx --steps 1 --ids <case id>,...` (a harness division: with
@@ -218,9 +219,25 @@ the user's call); the pinned version goes into `tools/harness/` beside it. Nothi
      lists and charts rebuilt after each Tier (`preview/`), then `scripts/verify_run.py`
    - the healthcheck every `watch_interval_s`; the restarts of 1.6; a notification at the end
 2. Check that the STATUS printed right after starting is RUNNING or WAITING.
-3. With the user's agreement from 2.2, register the hourly watch task with the agent's own scheduler (Claude Code: the
-   desktop app's scheduled tasks, or `/loop` / cron tasks in the CLI; Codex: its scheduled tasks), named
-   `strata-jbench-watch`. Its prompt must be self-contained, for example:
+3. With the user's agreement from 2.2, register the hourly watch task with the agent's own scheduler, named or
+   described as `strata-jbench-watch`. What matters is where it reports: **in the conversation that started the run,
+   where the user talks with the agent**, as the agent would if the user asked. A scheduler whose runs each open a
+   conversation of their own (a background session, a separate thread) leaves its reports where the user does not
+   look, and a notification alone is easy to miss; neither counts as reporting. Before starting (2.2), tell the user
+   which scheduler will be used, where its reports will appear and what it does not survive (a scheduler living in
+   the conversation is usually gone when the agent's app quits or the PC reboots: after a reboot the user comes back
+   to that conversation, and the agent resumes with `bench.py start` and registers the task again). If the agent has
+   no scheduler that reports in the conversation, say so and agree with the user on another way (they ask in the
+   conversation from time to time; the supervisor's desktop notification at the end).
+   - **Claude Code** (CLI and desktop app): CronCreate in the session that started the run (the same as `/loop`; the
+     prompt comes back into that session every hour while it is idle). Recurring jobs live only in that session's
+     memory and expire after 7 days; CronList shows them and CronDelete removes them (2.6). Not the desktop app's
+     "Scheduled" tasks: each of their runs is a session of its own, so the report stays there (the end of a
+     run on 2026-11-07 was reported only in one of those).
+   - **Other agents** (Codex, Cursor, Gemini CLI and so on): use their in-conversation scheduler if they have one, and
+     check before starting where its runs report; a scheduled or background task that runs as a separate thread or
+     job is the same case as Claude Code's "Scheduled" tasks.
+   Its prompt must be self-contained, for example:
    > In <repository path>, run `python3 -I scripts/bench.py status --json`. RUNNING or WAITING: report nothing
    > unless `warn` is set. DONE: report the end (the run, the cases done and failed, `run-status/STATUS.md`) and ask
    > the user to delete this task. STOPPED: say so and ask whether to resume or delete this task. FAILED or STUCK, or
@@ -269,8 +286,8 @@ The watch task keeps firing every hour after the queue ends, so remove it as soo
 1. The run is over when STATUS is DONE, or when it is FAILED or STOPPED and the user has decided not to resume it.
    A FAILED run that will be resumed after a fix is not over: keep the task.
 2. Ask the user whether the watch task (`strata-jbench-watch`) may be deleted, and delete it only after they agree
-   (with the scheduler it was registered with; in the Claude desktop app, the "Scheduled" section of the sidebar or the
-   scheduled-tasks tool). If the agent cannot delete it, ask the user to.
+   (with the scheduler it was registered with, in the conversation that registered it; Claude Code: CronDelete). If
+   the agent cannot delete it, ask the user to.
 3. Check with the scheduler's list that no watch task is left.
 
 ### 2.7 Making results final and committing them
@@ -354,12 +371,27 @@ policy, report the cause and a proposal, and stop.
 - The measuring engine runs on a dedicated port (18600), started by `strata launch ... --no-tui --restart`. Strata
   creates a profile `launch-<model>-<context>` (shared with the app).
 - `strata launch --stop` stops only what the CLI started; the desktop app's engine keeps running.
+- What is measured is the engine and Control (`~/.local/share/strata/components/`, `strata update`; the version is in
+  each session's `launch.txt` and engine.log), driven by the `strata` CLI. The desktop app's own version does not
+  matter to a run: the `strata` division uses the AppImage its division.json pins, extracted into `tools/harness/`, not
+  an installed app. The app matters only where it shares something: its engine on the GPU (2.2), the profiles and
+  presets the CLI shares with it, and the first model installed through it on a new PC (2.0).
+- When Strata has a new release: `strata update --check`, then `strata update` (engine and Control; the previous
+  engine stays for `strata components rollback`); `~/Strata` to the release's tag (`git pull --ff-only` when main is
+  at it), then `scripts/setup_acquire.py --no-fetch`; the `strata` division's pin (version, URL, SHA-256 from the
+  release's asset list) and `acquire.py fetch harness:strata`; `acquire.py check` for the drafter and the models (a
+  release that changes setup.py's pins changes the files); `scripts/install_configs.py --dry-run` for the run configs;
+  `strata launch --plan` per model for Auto's drafter; then preflight and a `test-` run (2.2). Downloads and the run
+  configs are section 3: agree on them first.
 - The drafter is fixed with `--drafting mtp --mtp on` (the runner adds it). Since 0.2.10, Auto picks DFlash2 for qwen,
   gyro and unsloth and MTP for coder, swift and nvfp4, so without fixing it the drafter would differ between models.
   DFlash2 is measured again as its own launches for Tier 1 decode on the models that have it (qwen, gyro, unsloth), and no drafter in
   Tier 5. DFlash2 cases are made only in environments whose env.json lists `dflash2` in `drafters` (DFlash2 needs a
-  CUDA 8.6 / 8.9 / 12.x GPU; a 7.5 card such as the RTX 2070 has none). Fetch the DFlash2 drafter (1.2 GB) with
-  `strata drafting fetch` beforehand (preflight checks it).
+  CUDA 8.6 / 8.9 / 12.x GPU; a 7.5 card such as the RTX 2070 has none). The drafter depends on the model: the stock
+  pack (1.2 GB), and since 0.2.12 Strata's tuned pack (0.34 GB) beside it for the models its table names (on CUDA,
+  IQ3_S and UD-IQ4_XS-v31), so `scripts/acquire.py` checks it per model with `strata drafting plan --config <run config>
+  --mode dflash2` and `acquire.py fetch dflash2` fetches it the same way (preflight checks it too). The split between
+  the families was the same on 0.2.12 (`strata launch --plan` on the RTX 5090).
 - If setup runs during a launch with `--mtp off` or `--drafting off`, the model's
   `~/.local/share/strata/install/strata-<tag>.json` keeps `"mtp": false` and `--mtp <data>/mtp/rt` disappears from the
   arguments; after that, neither launch's `--drafting mtp` nor `--mtp on` brings MTP back (qwen IQ3_S in

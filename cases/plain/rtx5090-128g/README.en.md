@@ -29,7 +29,7 @@ environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-04-q8-t3
 - cases: 1,559
 - measured requests: 5,121
 - engine launches: 171
-- estimate: 28 h
+- estimate: 29 h
 - reference model: qwen IQ3_S (env.json "ref", else the model Strata recommends for this RAM + VRAM)
 - done: 1,352
 - failed: 0
@@ -42,7 +42,7 @@ environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-04-q8-t3
 | [0](tier-0.en.md) | validating the harness (the reference model × 3 launches, Gyro-S against the author's figures, unpacking the coding result) | 2 | 26 | 186 | 0.4 | 25 |
 | [1](tier-1.en.md) | base speed of every model (5 decode kinds × 3 temperatures, prefill 4K / 32K / 128K); decode also with DFlash2 on the models that have it | 18 | 489 | 1,467 | 2.5 | 489 |
 | [2](tier-2.en.md) | the official standard-v1 (thinking xhigh, temperature 1.0), the whole suite 3 times | 18 | 270 | 810 | 3.0 | 270 |
-| [3](tier-3.en.md) | reasoning effort none / high × 4 tasks, the coding task (Shuri Castle) at high only (every model) | 18 | 180 | 540 | 3.0 | 162 |
+| [3](tier-3.en.md) | reasoning effort none / high × 4 tasks, the coding task (Shuri Castle) at high only (every model) | 18 | 180 | 540 | 3.8 | 162 |
 | [4a](tier-4a.en.md) | the cost of reserving context (the same 4K input at 128K / 256K / 1M) | 18 | 54 | 162 | 1.4 | 54 |
 | [4b](tier-4b.en.md) | long inputs within the trained length (32K / 128K / 256K; the reference model, the largest of each family, the smallest) | 7 | 84 | 252 | 1.8 | 72 |
 | [4c](tier-4c.en.md) | long inputs in the extended range (512K / 1M; the reference model, the smallest and the largest) | 5 | 40 | 120 | 10.2 | 24 |
@@ -91,7 +91,7 @@ environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-04-q8-t3
 
 <details><summary>Where the coding cases' results go</summary>
 
-The coding task of Tiers 0 and 3 is a scene of Shuri Castle (an English prompt that asks for the answer as one HTML file; the whole text is in prompts/coding-shuri.json). Runs before 2026-11-07 had the Minecraft prompt (“マイクラ風3D箱庭ゲーム作って”, Japanese for “make a Minecraft-like 3D sandbox game”, with no format instructions). Whatever shape each answer takes, it is always unpacked like this:
+The coding task of Tiers 0 and 3 is a scene of Shuri Castle (an English prompt that asks for it in 3D voxel art, as one HTML file; the whole text is in prompts/coding-shuri.json). Runs before 2026-11-07 had the Minecraft prompt (“マイクラ風3D箱庭ゲーム作って”, Japanese for “make a Minecraft-like 3D sandbox game”, with no format instructions). Whatever shape each answer takes, it is always unpacked like this:
 
 ```
 <run-id>/cases/<case id>/artifact/
@@ -161,9 +161,9 @@ The 3 runs go in one folder per seed under `artifact/` (`seed-1/` and so on).
     "none": 0,
     "low": 3000,
     "medium": 6000,
-    "high": 10000
+    "high": 18000
   },
-  "game_answer_tokens": 14500,
+  "game_answer_tokens": 16000,
   "task_answer_tokens": 550,
   "long_answer_tokens": 150,
   "sanity_output_tokens": 150,

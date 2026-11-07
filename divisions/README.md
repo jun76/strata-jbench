@@ -12,7 +12,7 @@ conditions (sampling, thinking, seed, output cap) the same for every harness.*
 | --- | --- | --- |
 | [`plain`](plain/division.json) | 計測済み | **プレーン（ハーネスなし）**。モデルとエンジンそのものの性能。`strata launch` で立てたエンジンの OpenAI 互換 API（`/v1/chat/completions`）を、[scripts/bench_runner.py](../scripts/bench_runner.py) が直接呼ぶ。tool call は使わない。Tier 0〜5 |
 | [`dsh`](dsh/division.json) | 計測できる（未計測） | エージェント: [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（dsh 0.2.1-rc.5、単体の CLI の headless profile） |
-| [`strata`](strata/division.json) | 計測できる（未計測） | エージェント: Strata デスクトップアプリ 0.2.11 のエージェント機能。アプリのエージェントのコード（agent bridge）でチャット1ターンを動かす: アプリが pin した dsh 0.2.1-alpha.3 と、アプリの profile・プラグイン、モード Bypass、thinking High |
+| [`strata`](strata/division.json) | 計測できる（未計測） | エージェント: Strata デスクトップアプリ 0.2.12 のエージェント機能。アプリのエージェントのコード（agent bridge）でチャット1ターンを動かす: アプリが pin した dsh 0.2.1-alpha.3 と、アプリの profile・プラグイン、モード Bypass、thinking High |
 | [`opencode`](opencode/division.json) | 計測できる（未計測） | エージェント: opencode 1.19.3（`opencode run`） |
 | [`hermes`](hermes/division.json) | 計測できる（未計測） | エージェント: Hermes Agent v0.21.5（タグ 2026.9.24、`hermes chat --oneshot`） |
 | [`pi`](pi/division.json) | 計測できる（未計測） | エージェント: pi 0.74.2（`pi --mode json`） |
