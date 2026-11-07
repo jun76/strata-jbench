@@ -71,7 +71,8 @@ the NVFP4 ready-made packs need Strata's setup once with `--no-start` to write t
    - `gpu_power_limit_w`: the power limit, if one is set for measuring; `null` to measure at the card's default
    - `cpu_power_limit_w`: the CPU's PL1 / PL2 (`{"pl1": 65, "pl2": 65}`), if set for measuring (in the BIOS; a
      system setting, so the user does it); `null` to measure at the board's setting. Preflight compares it with Intel
-     RAPL, and machine.json records the limits in force either way
+     RAPL (the lower of the MSR and MCHBAR copies, which the CPU holds to; a BIOS may write only one), and machine.json
+     records the limits in force either way
    - `models`: the list (in the form `"qwen IQ3_S"`) to measure only some models; `null` for every model of
      `scripts/build_cases.py` (including models added later). The downloads follow it too: `scripts/setup_acquire.py`
      lists only these models in `downloads/manifest.json`, and writes it again (removing `downloads/READY`) when it changes
