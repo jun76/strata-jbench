@@ -297,7 +297,7 @@ def collect_env(cfg, run_id, published_only, rel=''):
         c['cpu_pkg_c_max'] = num(th, 'cpu_pkg_c', 'max')
         c['gpu_c_max'] = num(th, 'gpu_c', 'max')
         c['gpu_power_w'] = num(th, 'gpu_power_avg_w', 'median')
-        if r['fixture'].startswith('game-'):
+        if r['fixture'].startswith(('coding-', 'game-')):
             c['artifacts'] = artifacts(path.parent, rel, s.get('per_request'))
         cases.append(c)
     models = [{'key': f'{f} {m}', 'family': f, 'model': m, 'gb': gb, 'role': role,

@@ -84,11 +84,20 @@ p.gen { font-size: 12px; color: var(--muted); margin: 4px 0 0; }
 .sample .links a { margin-right: 12px; }
 @media (max-width: 640px) { .sample dl { grid-template-columns: 1fr; } }
 /* what the reader operates (page links, switches, selects): large enough to see and hit at a glance */
-nav.toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; }
-nav.toc a { font-size: 14.5px; padding: 7px 14px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
-  color: var(--text); text-decoration: none; line-height: 1.3; }
-nav.toc a:hover { border-color: var(--accent); color: var(--accent); }
-nav.toc a:focus-visible, .filters select:focus-visible, .envsw button:focus-visible, .chart header button:focus-visible {
+/* one tab per Tier: only its charts are drawn and shown */
+nav.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 20px 0 0; }
+nav.tabs button { font: inherit; font-size: 14.5px; padding: 7px 14px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); color: var(--text); line-height: 1.3; cursor: pointer; }
+nav.tabs button:hover { border-color: var(--accent); color: var(--accent); }
+nav.tabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
+/* what a tab's Tier asks, its conditions, its numbers and how to read them */
+.about { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 8px;
+  padding: 12px 16px; margin: 18px 0 6px; }
+.about dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 18px; margin: 0; }
+.about dt { font-size: 13px; font-weight: 600; color: var(--text-2); padding-top: 1px; }
+.about dd { margin: 0; font-size: 14px; line-height: 1.65; }
+@media (max-width: 640px) { .about dl { grid-template-columns: 1fr; gap: 2px 0; } .about dd { margin-bottom: 8px; } }
+nav.tabs button:focus-visible, .filters select:focus-visible, .envsw button:focus-visible, .chart header button:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px; }
 .filters { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 12px 0; margin-top: 16px;
   display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: end; border-bottom: 1px solid var(--border); }
@@ -161,7 +170,7 @@ th.sort:hover::after, th.sort:focus-visible::after { content: " ⇅"; color: var
 .hit { fill: transparent; cursor: default; outline: none; }
 .hit:focus-visible { stroke: var(--text); stroke-width: 1; }
 [hidden] { display: none !important; }   /* over the display of .filters, .tiles and the like */
-/* the games' gallery and the sandboxed viewer */
+/* the coding results' gallery and the sandboxed viewer */
 .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-top: 10px; }
 .shot { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
 .shot .thumb { display: block; width: 100%; padding: 0; border: 0; background: var(--surface-2); cursor: pointer; aspect-ratio: 16 / 10; }
@@ -193,8 +202,17 @@ dialog#viewer::backdrop { background: rgba(0, 0, 0, .55); }
 <div class="envsw-row"><span class="L ja">環境</span><span class="L en">Environment</span><span class="L zh">环境</span><div id="envsw" class="envsw" role="group" aria-label="environment"></div></div>
 {{env}}
 <div id="runs" class="runs"></div>
-<nav class="toc">
-  <a href="#s-cmp" id="toc-cmp"><span class="L ja">環境の比較</span><span class="L en">Across environments</span><span class="L zh">环境比较</span></a><a href="#s-speed"><span class="L ja">モデル別の速度</span><span class="L en">Speed by model</span><span class="L zh">各模型速度</span></a><a href="#s-long"><span class="L ja">入力の長さ</span><span class="L en">Input length</span><span class="L zh">输入长度</span></a><a href="#s-std">standard-v1</a><a href="#s-think">thinking</a><a href="#s-ctx"><span class="L ja">コンテキスト長</span><span class="L en">Context length</span><span class="L zh">上下文长度</span></a><a href="#s-doc"><span class="L ja">長文</span><span class="L en">Long documents</span><span class="L zh">长文</span></a><a href="#s-yarn">YaRN</a><a href="#s-opts"><span class="L ja">起動オプション</span><span class="L en">Launch options</span><span class="L zh">启动选项</span></a><a href="#s-harness"><span class="L ja">ハーネス</span><span class="L en">Harness</span><span class="L zh">harness</span></a><a href="#s-games"><span class="L ja">ゲームの成果物</span><span class="L en">Games</span><span class="L zh">游戏成果</span></a><a href="#s-env"><span class="L ja">計測時の環境</span><span class="L en">Conditions</span><span class="L zh">测量时的环境</span></a><a href="#s-table"><span class="L ja">一覧表</span><span class="L en">Table</span><span class="L zh">一览表</span></a>
+<nav class="tabs" id="tabs" role="tablist">
+  <button type="button" role="tab" id="tabbtn-overview" data-tab="overview" aria-controls="tab-overview" aria-selected="false"><span class="L ja">概要</span><span class="L en">Overview</span><span class="L zh">概要</span></button>
+  <button type="button" role="tab" id="tabbtn-t1" data-tab="t1" aria-controls="tab-t1" aria-selected="false"><span class="L ja">Tier 1 速度</span><span class="L en">Tier 1 Speed</span><span class="L zh">Tier 1 速度</span></button>
+  <button type="button" role="tab" id="tabbtn-t2" data-tab="t2" aria-controls="tab-t2" aria-selected="false"><span class="L ja">Tier 2 standard-v1</span><span class="L en">Tier 2 standard-v1</span><span class="L zh">Tier 2 standard-v1</span></button>
+  <button type="button" role="tab" id="tabbtn-t3" data-tab="t3" aria-controls="tab-t3" aria-selected="false"><span class="L ja">Tier 3 thinking・コーディング</span><span class="L en">Tier 3 Thinking, coding</span><span class="L zh">Tier 3 thinking・编程</span></button>
+  <button type="button" role="tab" id="tabbtn-t4a" data-tab="t4a" aria-controls="tab-t4a" aria-selected="false"><span class="L ja">Tier 4a 容量</span><span class="L en">Tier 4a Context size</span><span class="L zh">Tier 4a 容量</span></button>
+  <button type="button" role="tab" id="tabbtn-t4bc" data-tab="t4bc" aria-controls="tab-t4bc" aria-selected="false"><span class="L ja">Tier 4b・4c 長文</span><span class="L en">Tiers 4b, 4c Long documents</span><span class="L zh">Tier 4b・4c 长文</span></button>
+  <button type="button" role="tab" id="tabbtn-t4d" data-tab="t4d" aria-controls="tab-t4d" aria-selected="false"><span class="L ja">Tier 4d YaRN</span><span class="L en">Tier 4d YaRN</span><span class="L zh">Tier 4d YaRN</span></button>
+  <button type="button" role="tab" id="tabbtn-t5" data-tab="t5" aria-controls="tab-t5" aria-selected="false"><span class="L ja">Tier 5 起動オプション</span><span class="L en">Tier 5 Launch options</span><span class="L zh">Tier 5 启动选项</span></button>
+  <button type="button" role="tab" id="tabbtn-harness" data-tab="harness" aria-controls="tab-harness" aria-selected="false"><span class="L ja">ハーネス</span><span class="L en">Harness</span><span class="L zh">harness</span></button>
+  <button type="button" role="tab" id="tabbtn-env" data-tab="env" aria-controls="tab-env" aria-selected="false"><span class="L ja">計測時の環境</span><span class="L en">Machine state</span><span class="L zh">测量时的环境</span></button>
 </nav>
 
 <div class="filters" id="filters">
@@ -205,6 +223,12 @@ dialog#viewer::backdrop { background: rgba(0, 0, 0, .55); }
   <label><span class="L ja">decode の文章</span><span class="L en">decode text</span><span class="L zh">decode 的文章</span><select id="f-content"></select></label>
 </div>
 
+<section class="tab" id="tab-overview" data-tab="overview" role="tabpanel" aria-labelledby="tabbtn-overview" hidden>
+<div class="about"><dl>
+  <dt><span class="L ja">このページ</span><span class="L en">This page</span><span class="L zh">本页</span></dt><dd><span class="L ja">Tier（計測の種類）ごとにタブを分けている。各タブの最初の枠に、その Tier が答える問い、条件、値の意味、見方をまとめた。上のボタンで環境（GPU と RAM の組み合わせ）を、絞り込みでモデルと強調するモデルを選ぶ。</span><span class="L en">One tab per Tier (kind of measurement). The first box of each tab says what that Tier asks, under which conditions, what the numbers are and how to read them. The buttons above pick the environment (a GPU and an amount of RAM); the filters pick the models and the one to highlight.</span><span class="L zh">每个 Tier（测量种类）一个标签页。各标签页的第一个框说明该 Tier 回答的问题、条件、数值的含义和怎么看。上方按钮选择环境（GPU 与 RAM 的组合），筛选选择模型和要高亮的模型。</span></dd>
+  <dt><span class="L ja">全 Tier 共通</span><span class="L en">Every Tier</span><span class="L zh">所有 Tier 共通</span></dt><dd><span class="L ja">各ケース3回（seed 1 / 2 / 3）測り、グラフの値は3回の中央値、細い線は3回の範囲。sampling と thinking はリクエストごとに明示し、Strata の共有設定に左右されないようにしている。起動は専用ポートで <code>--vision off --parallel 1 --tune skip --drafting mtp</code>、ほかは Strata の既定。</span><span class="L en">Every case runs 3 times (seed 1 / 2 / 3); a chart's value is the median of the 3 and its thin line their range. Sampling and thinking are set in every request, so that Strata's shared settings do not change them. Launches use a dedicated port with <code>--vision off --parallel 1 --tune skip --drafting mtp</code>, Strata's defaults otherwise.</span><span class="L zh">每个用例测 3 次（seed 1 / 2 / 3），图中数值为 3 次的中位数，细线为 3 次的范围。sampling 与 thinking 在每个请求中显式指定，不受 Strata 共享设置影响。启动使用专用端口与 <code>--vision off --parallel 1 --tune skip --drafting mtp</code>，其余为 Strata 默认。</span></dd>
+  <dt><span class="L ja">入力と出力</span><span class="L en">Inputs and outputs</span><span class="L zh">输入与输出</span></dt><dd><span class="L ja">各タブの「このケースの例」を開くと、実際に送ったリクエスト、プロンプト、1回目の回答と計測値が見られる。グラフの「表」ボタンは同じ値を表で出す。全ケースの条件と記録はケース一覧に。</span><span class="L en">Open “An example case” in a tab to see a request as sent, its prompt, the first answer and what was measured on it. A chart's table button shows its values as a table. Every case's conditions and record: the case lists.</span><span class="L zh">打开各标签页的“用例示例”，可看到实际发送的请求、提示、第 1 次回答及测量值。图表的“表”按钮以表格显示同样的数值。全部用例的条件与记录见用例一览。</span></dd>
+</dl></div>
 <div class="tiles" id="tiles"></div>
 
 <section id="s-cmp-wrap" hidden>
@@ -214,6 +238,18 @@ dialog#viewer::backdrop { background: rgba(0, 0, 0, .55); }
 <div class="grid2"><div id="c-cmp-prefill"></div><div id="c-cmp-ttft"></div></div>
 </section>
 
+<h2 id="s-table"><span class="L ja">モデル別の一覧</span><span class="L en">All models</span><span class="L zh">各模型一览</span></h2>
+<p class="lead"><span class="L ja">Tier 1 の数値（「Tier 1 速度」タブのグラフの値）をモデルごとに1行にまとめた表。列の見出しで並べ替え。decode は上の絞り込み（temperature・文章）に従う。</span><span class="L en">Tier 1's numbers (the values of the “Tier 1 Speed” tab's charts), one row per model. Sort by clicking a heading. decode follows the filters above (temperature, text).</span><span class="L zh">把 Tier 1 的数值（“Tier 1 速度”标签页图表中的值）按模型汇总成一行一个的表格。点击列标题排序。decode 随上方筛选（temperature、文章）变化。</span></p>
+<div id="c-table"></div>
+</section>
+
+<section class="tab" id="tab-t1" data-tab="t1" role="tabpanel" aria-labelledby="tabbtn-t1" hidden>
+<div class="about"><dl>
+  <dt><span class="L ja">この Tier が答える問い</span><span class="L en">The question</span><span class="L zh">本 Tier 回答的问题</span></dt><dd><span class="L ja">どのモデルが、同じ条件でどれだけ速く文字を出し（decode）、どれだけ速く入力を読むか（prefill、TTFT）。</span><span class="L en">Under the same conditions, how fast does each model write (decode) and read its input (prefill, TTFT)?</span><span class="L zh">在相同条件下，各模型输出文字（decode）和读取输入（prefill、TTFT）有多快？</span></dd>
+  <dt><span class="L ja">条件</span><span class="L en">Conditions</span><span class="L zh">条件</span></dt><dd><span class="L ja">全モデル、コンテキスト 128K、thinking off、drafter は MTP。decode は短い指示に 512 token まで書かせる5種（日本語の説明文、英語の説明文、JSON、Python、渡した文章の書き写し）× temperature 0 / 0.7 / 1.0。prefill は同じ作り方の固定レコード列を 4K / 32K / 128K token 読ませ、128 token だけ答えさせる。DFlash2 を持つモデルは decode を DFlash2 でも測る。</span><span class="L en">Every model, context 128K, thinking off, the MTP drafter. Decode: 5 kinds of short request answered up to 512 tokens (Japanese prose, English prose, JSON, Python, copying a given text) × temperature 0 / 0.7 / 1.0. Prefill: a fixed list of records, 4K / 32K / 128K tokens, answered in 128 tokens. Models that have DFlash2 also run the decode cases with it.</span><span class="L zh">全部模型，上下文 128K，thinking off，drafter 为 MTP。decode：5 种短请求最多写 512 token（日语说明文、英语说明文、JSON、Python、照抄给定文章）× temperature 0 / 0.7 / 1.0。prefill：读取同样构造的固定记录列 4K / 32K / 128K token，只回答 128 token。支持 DFlash2 的模型还用 DFlash2 测 decode。</span></dd>
+  <dt><span class="L ja">値</span><span class="L en">The numbers</span><span class="L zh">数值</span></dt><dd><span class="L ja">decode: 出力の token/s（答えを書く速さ）。prefill: 入力の token/s（読む速さ）。TTFT: リクエストから最初の文字までの時間。採用率: drafter が先読みした token のうち本体が認めた割合（高いほど decode が速くなる）。</span><span class="L en">Decode: output tokens per second (how fast the answer is written). Prefill: input tokens per second (how fast it reads). TTFT: the time from the request to the first character. Acceptance: the share of the tokens the drafter guessed that the model kept (the higher, the faster the decode).</span><span class="L zh">decode：输出 token/s（写回答的速度）。prefill：输入 token/s（读取速度）。TTFT：从请求到第一个字的时间。接受率：drafter 预测的 token 中被模型采纳的比例（越高 decode 越快）。</span></dd>
+  <dt><span class="L ja">見方</span><span class="L en">How to read it</span><span class="L zh">怎么看</span></dt><dd><span class="L ja">会話で答えを待つ体感は decode、長い資料を渡したときの待ちは prefill と TTFT で決まる。範囲の線が重なる差は seed によるばらつきの内で、順位をつけるほどの差ではない。書き写しは drafter が当てやすく、decode が他より高く出る。temperature を上げると採用率が下がり decode が落ちやすい。</span><span class="L en">Waiting for an answer in a chat is decode; waiting after handing over a long document is prefill and TTFT. Differences whose range lines overlap are within the seeds' spread and do not rank the models. Copying is easy for the drafter to guess, so its decode is higher than the others. A higher temperature lowers the acceptance and tends to slow the decode.</span><span class="L zh">聊天中等待回答的体感取决于 decode，交给长文档后的等待取决于 prefill 与 TTFT。范围线重叠的差异在 seed 波动之内，不足以排序。照抄对 drafter 来说容易预测，decode 比其他高。temperature 越高接受率越低，decode 越容易下降。</span></dd>
+</dl></div>
 <h2 id="s-speed"><span class="L ja">モデル別の速度（Tier 1）</span><span class="L en">Speed by model (Tier 1)</span><span class="L zh">各模型速度（Tier 1）</span></h2>
 <p class="lead"><span class="L ja">全モデル同じ条件: コンテキスト 128K、thinking off、drafter は MTP に固定（DFlash2 は下の drafter のグラフだけ）、各ケース3回（seed 1/2/3）。値は3回の中央値、細い線は3回の範囲。</span><span class="L en">The same conditions for every model: context 128K, thinking off, the drafter pinned to MTP (DFlash2 only in the drafter chart below), each case 3 times (seed 1/2/3). Values are the median of the 3; thin lines show their range.</span><span class="L zh">所有模型条件相同：上下文 128K，thinking off，drafter 固定为 MTP（DFlash2 只在下方的 drafter 图表中），每个用例 3 次（seed 1/2/3）。数值为 3 次的中位数，细线为 3 次的范围。</span></p>
 <div class="sample" id="x-speed"></div>
@@ -228,53 +264,118 @@ dialog#viewer::backdrop { background: rgba(0, 0, 0, .55); }
 <div class="sample" id="x-long"></div>
 <div class="grid3"><div id="c-long-ttft"></div><div id="c-long-prefill"></div><div id="c-long-decode"></div></div>
 
+</section>
+
+<section class="tab" id="tab-t2" data-tab="t2" role="tabpanel" aria-labelledby="tabbtn-t2" hidden>
+<div class="about"><dl>
+  <dt><span class="L ja">この Tier が答える問い</span><span class="L en">The question</span><span class="L zh">本 Tier 回答的问题</span></dt><dd><span class="L ja">Strata 公式のベンチ（standard-v1）で、ほかの人の結果と並べられる数字はいくつか。</span><span class="L en">What does Strata's official benchmark (standard-v1) say, in numbers comparable with other people's runs?</span><span class="L zh">用 Strata 官方基准（standard-v1）测得、能与他人结果对照的数值是多少？</span></dd>
+  <dt><span class="L ja">条件</span><span class="L en">Conditions</span><span class="L zh">条件</span></dt><dd><span class="L ja">Strata 同梱の <code>strata bench run --suite standard-v1</code> を全モデルでスイートごと3回。thinking xhigh、temperature 1.0 は公式の指定のまま。性能3問（入力 77 / 約4K / 約16K token、出力 512）と sanity 12問（指示・検索・tool call 各4、出力 2,048）。</span><span class="L en"><code>strata bench run --suite standard-v1</code>, bundled with Strata, the whole suite 3 times on every model, with the official thinking xhigh and temperature 1.0. 3 performance prompts (77 / ~4K / ~16K input tokens, 512 out) and 12 sanity tasks (4 each of instruction, retrieval and tool call, 2,048 out).</span><span class="L zh">Strata 自带的 <code>strata bench run --suite standard-v1</code>，对全部模型整个套件运行 3 次，保持官方的 thinking xhigh、temperature 1.0。性能 3 题（输入 77 / 约 4K / 约 16K token，输出 512）和 sanity 12 题（指令、检索、tool call 各 4，输出 2,048）。</span></dd>
+  <dt><span class="L ja">値</span><span class="L en">The numbers</span><span class="L zh">数值</span></dt><dd><span class="L ja">prefill / decode の token/s と回答までの時間はスイートが出す値。sanity は正答の数。</span><span class="L en">The prefill / decode tokens per second and the time to the answer are the suite's own numbers; sanity is the count of correct answers.</span><span class="L zh">prefill / decode 的 token/s 与到回答的时间是套件给出的值；sanity 是正确的个数。</span></dd>
+  <dt><span class="L ja">見方</span><span class="L en">How to read it</span><span class="L zh">怎么看</span></dt><dd><span class="L ja">thinking 込みの実用に近い条件なので Tier 1 より遅く出る。sanity は動作確認で、品質の点数ではない。fine-tune や剪定版（derivative）は公式の比較の対象外。</span><span class="L en">With thinking on, close to real use, so slower than Tier 1. Sanity checks that things work; it is not a quality score. Fine-tunes and pruned models (derivatives) are outside the official comparison.</span><span class="L zh">包含 thinking、接近实际使用，因此比 Tier 1 慢。sanity 是功能确认，不是质量分数。fine-tune 与剪枝版（derivative）不在官方比较范围内。</span></dd>
+</dl></div>
 <h2 id="s-std"><span class="L ja">公式 standard-v1（Tier 2）</span><span class="L en">The official standard-v1 (Tier 2)</span><span class="L zh">官方 standard-v1（Tier 2）</span></h2>
-<p class="lead"><span class="L ja">Strata 同梱のベンチ（thinking xhigh、temperature 1.0）をスイートごと3回。実用に近い条件での速さと sanity の正答。</span><span class="L en">The benchmark bundled with Strata (thinking xhigh, temperature 1.0), the whole suite 3 times: speed under realistic conditions, and the sanity answers.</span><span class="L zh">Strata 自带的基准测试（thinking xhigh，temperature 1.0），整个套件 3 次。接近实际使用条件下的速度与 sanity 正确率。</span></p>
 <div class="sample" id="x-std"></div>
 <div id="c-std"></div>
 
+</section>
+
+<section class="tab" id="tab-t3" data-tab="t3" role="tabpanel" aria-labelledby="tabbtn-t3" hidden>
+<div class="about"><dl>
+  <dt><span class="L ja">この Tier が答える問い</span><span class="L en">The question</span><span class="L zh">本 Tier 回答的问题</span></dt><dd><span class="L ja">考えさせる（thinking on）と、どれだけ時間がかかり、それで正答が増えるか。実用的なコーディング（首里城の情景を1つの HTML で）を最後まで書けるか。</span><span class="L en">Thinking on: how much longer does it take, and does it get more answers right? Can the model write a practical piece of code (a scene of Shuri Castle in one HTML file) through to the end?</span><span class="L zh">开启 thinking 后要多花多少时间，正确率是否提高？能否把实用的代码（用单个 HTML 呈现首里城的场景）完整写完？</span></dd>
+  <dt><span class="L ja">条件</span><span class="L en">Conditions</span><span class="L zh">条件</span></dt><dd><span class="L ja">全モデル、temperature 1.0。4問（数学、テストを実行して判定するコード、日本語の推論、英語の推論）を effort none と high で、出力 16,384 token まで（high の思考はその 3/4 まで）。コーディング（首里城）は high だけ、出力 32,768（思考は半分まで）。</span><span class="L en">Every model, temperature 1.0. 4 tasks (maths, code checked by running its tests, reasoning in Japanese, reasoning in English) at effort none and high, up to 16,384 output tokens (thinking up to 3/4 of that at high). The coding task (Shuri Castle) at high only, up to 32,768 (thinking up to half).</span><span class="L zh">全部模型，temperature 1.0。4 题（数学、运行测试判定的代码、日语推理、英语推理）分别以 effort none 与 high，输出最多 16,384 token（high 的思考最多为其 3/4）。编程（首里城）仅 high，输出 32,768（思考最多一半）。</span></dd>
+  <dt><span class="L ja">値</span><span class="L en">The numbers</span><span class="L zh">数值</span></dt><dd><span class="L ja">完了時間: 回答が終わるまで。思考 token: 答える前に考えた量。正答: 3回中いくつ正しかったか。cap 到達: 出力の上限で切れたか。コーディングは成果物のサムネイルとその場で動かせるページ。</span><span class="L en">Time to the end of the answer; thinking tokens (how much it thought before answering); correct: how many of the 3 runs were right; cap reached: cut off at the output limit. For the coding task, the result's thumbnail and the page itself, runnable here.</span><span class="L zh">完成时间：到回答结束。思考 token：回答前思考的量。正确：3 次中对了几次。触及 cap：是否被输出上限截断。编程为成果的缩略图和可在此运行的页面。</span></dd>
+  <dt><span class="L ja">見方</span><span class="L en">How to read it</span><span class="L zh">怎么看</span></dt><dd><span class="L ja">時間の増え方と正答の増え方を並べて見る。4問 × 3回なので、正答の差は大まかな傾向まで（品質のベンチではない）。cap 到達が多いモデルは、考えすぎて答えまで届いていない。</span><span class="L en">Read the extra time beside the extra correct answers. With 4 tasks × 3 runs, a difference in correct answers is a rough tendency at most (this is not a quality benchmark). A model that often reaches the cap thinks too long to get to its answer.</span><span class="L zh">把时间的增加与正确数的增加放在一起看。4 题 × 3 次，正确数的差异只是大致倾向（不是质量基准）。经常触及 cap 的模型想得太久，没能写到回答。</span></dd>
+</dl></div>
 <h2 id="s-think"><span class="L ja">thinking の有無（Tier 3）</span><span class="L en">With and without thinking (Tier 3)</span><span class="L zh">有无 thinking（Tier 3）</span></h2>
 <p class="lead"><span class="L ja">同じ問題を effort none / high で解かせ、回答が終わるまでの時間と正答を比べる（全モデル）。</span><span class="L en">The same tasks at effort none / high, comparing the time until the answer ends and whether it is correct (every model).</span><span class="L zh">用 effort none / high 解答相同的题目，比较到回答结束的时间和正确率（全部模型）。</span></p>
 <div class="sample" id="x-think"></div>
 <div id="c-think"></div>
 
+<div id="games-wrap">
+<h2 id="s-games"><span class="L ja">コーディングの成果物</span><span class="L en">The coding results</span><span class="L zh">编程的成果</span></h2>
+<p class="lead"><span class="L ja">コーディングのケースの成果物を seed ごとに並べる。サムネイルを押すと、そのページを画面の中で開く（sandbox 付きの枠で動かし、このページには触れさせない。外部のライブラリは CDN から読むので、ネットワークが要る）。</span><span class="L en">The result of every coding case, per seed. Click a thumbnail to open the page here (it runs in a sandboxed frame that cannot reach this page; libraries load from CDNs, so it needs the network).</span><span class="L zh">按 seed 排列编程用例的成果。点击缩略图即在本页内打开该页面（在带 sandbox 的框中运行，不能访问本页；外部库从 CDN 加载，需要网络）。</span></p>
+<div id="c-games"></div>
+</div>
+</section>
+
+<section class="tab" id="tab-t4a" data-tab="t4a" role="tabpanel" aria-labelledby="tabbtn-t4a" hidden>
+<div class="about"><dl>
+  <dt><span class="L ja">この Tier が答える問い</span><span class="L en">The question</span><span class="L zh">本 Tier 回答的问题</span></dt><dd><span class="L ja">コンテキストを大きく確保しておくと、それだけで遅くなるか、起動できなくなるか。</span><span class="L en">Does reserving a large context make the model slower, or keep it from launching, by itself?</span><span class="L zh">预留较大的上下文本身是否会变慢，或无法启动？</span></dd>
+  <dt><span class="L ja">条件</span><span class="L en">Conditions</span><span class="L zh">条件</span></dt><dd><span class="L ja">全モデル。同じ 4K token の入力（文章と続きを書く指示）で、起動時のコンテキストだけを 128K / 256K / 1M に変える。thinking off、出力 512。</span><span class="L en">Every model. The same 4K-token input (a text and a request to continue it); only the context reserved at launch changes: 128K / 256K / 1M. Thinking off, 512 out.</span><span class="L zh">全部模型。相同的 4K token 输入（文章与续写指令），只把启动时的上下文改为 128K / 256K / 1M。thinking off，输出 512。</span></dd>
+  <dt><span class="L ja">値</span><span class="L en">The numbers</span><span class="L zh">数值</span></dt><dd><span class="L ja">decode の token/s と起動にかかった時間。起動できなかった容量は印で示す。</span><span class="L en">Decode tokens per second and the launch time. A size that did not launch is marked.</span><span class="L zh">decode 的 token/s 与启动耗时。无法启动的容量会标出。</span></dd>
+  <dt><span class="L ja">見方</span><span class="L en">How to read it</span><span class="L zh">怎么看</span></dt><dd><span class="L ja">入力は同じなので、差は確保した分のメモリから来る。確保が大きいほど VRAM と RAM を取り、expert のキャッシュに回せる分が減って decode が落ちうる。普段どの容量で起動するかを決める材料。</span><span class="L en">The input is the same, so a difference comes from the memory reserved: the larger it is, the more VRAM and RAM it takes, leaving less for the experts' cache, and the decode can drop. A basis for choosing the context to launch with day to day.</span><span class="L zh">输入相同，差异来自预留的内存：预留越大，占用的 VRAM 与 RAM 越多，留给 expert 缓存的越少，decode 可能下降。可作为日常以多大上下文启动的参考。</span></dd>
+</dl></div>
 <h2 id="s-ctx"><span class="L ja">コンテキスト長の確保コスト（Tier 4a）</span><span class="L en">The cost of reserving context (Tier 4a)</span><span class="L zh">预留上下文长度的代价（Tier 4a）</span></h2>
-<p class="lead"><span class="L ja">同じ 4K の入力で、起動時に確保するコンテキストだけを 128K / 256K / 1M に変える。</span><span class="L en">The same 4K input; only the context reserved at launch changes: 128K / 256K / 1M.</span><span class="L zh">相同的 4K 输入，只把启动时预留的上下文改为 128K / 256K / 1M。</span></p>
 <div class="sample" id="x-ctx"></div>
 <div class="grid2"><div id="c-ctx-decode"></div><div id="c-ctx-launch"></div></div>
 
+</section>
+
+<section class="tab" id="tab-t4bc" data-tab="t4bc" role="tabpanel" aria-labelledby="tabbtn-t4bc" hidden>
+<div class="about"><dl>
+  <dt><span class="L ja">この Tier が答える問い</span><span class="L en">The question</span><span class="L zh">本 Tier 回答的问题</span></dt><dd><span class="L ja">本1冊を超える長さの文書を渡したとき、読むのにどれだけ待たされ、中の事実を正しく拾えるか。</span><span class="L en">Handed a document longer than a book, how long does reading it take, and does the model find the facts in it?</span><span class="L zh">交给超过一本书长度的文档时，读取要等多久，能否正确找到其中的事实？</span></dd>
+  <dt><span class="L ja">条件</span><span class="L en">Conditions</span><span class="L zh">条件</span></dt><dd><span class="L ja">青空文庫と Project Gutenberg の日英10作品を交互に並べた文書に、10 / 50 / 90% の位置へ架空の事実を置き、4問（各位置の事実と、離れた箇所の統合）を聞く。4b は 32K / 128K / 256K（容量 256K で起動）、4c は 512K / 1M（その長さで起動）。代表モデルだけ（基準モデル、系列ごとに最大、最小。4c は基準・最大・最小）。</span><span class="L en">A document of ten Japanese and English works from Aozora Bunko and Project Gutenberg, in turns, with made-up facts at 10 / 50 / 90%, and 4 questions (each fact, and one joining distant parts). 4b: 32K / 128K / 256K (launched at 256K); 4c: 512K / 1M (launched at that length). Representative models only (the reference, the largest of each family, the smallest; 4c: the reference, the largest, the smallest).</span><span class="L zh">把青空文库与 Project Gutenberg 的日英 10 部作品交替排列成文档，在 10 / 50 / 90% 处放入虚构事实，提 4 个问题（各位置的事实，以及综合相隔较远的部分）。4b 为 32K / 128K / 256K（以 256K 启动），4c 为 512K / 1M（以该长度启动）。仅代表模型（基准模型、各系列最大、最小；4c 为基准、最大、最小）。</span></dd>
+  <dt><span class="L ja">値</span><span class="L en">The numbers</span><span class="L zh">数值</span></dt><dd><span class="L ja">TTFT・prefill・decode は文書を最初に読む問い（10% の位置）の値。2問目からは文書を prefix cache から読むので速い。正答は問いごと。</span><span class="L en">TTFT, prefill and decode are from the question that reads the document first (the 10% one); later questions read it from the prefix cache, so they are faster. Correctness is per question.</span><span class="L zh">TTFT、prefill、decode 取首次读取文档的问题（10% 处）的值；从第 2 题起文档从 prefix cache 读取，因此更快。正确与否按问题统计。</span></dd>
+  <dt><span class="L ja">見方</span><span class="L en">How to read it</span><span class="L zh">怎么看</span></dt><dd><span class="L ja">長さに対して待ちがどう伸びるか、どの位置の事実を落とすかを見る。学習時の長さ（256K）を超える 4c は Strata が YaRN で伸ばした範囲で、正答が落ちやすい。</span><span class="L en">See how the wait grows with the length, and which positions' facts get lost. Beyond the trained length (256K), 4c is the range Strata stretches with YaRN, where answers fail more easily.</span><span class="L zh">看等待时间如何随长度增长，以及漏掉哪个位置的事实。超过训练长度（256K）的 4c 是 Strata 用 YaRN 扩展的范围，正确率容易下降。</span></dd>
+</dl></div>
 <h2 id="s-doc"><span class="L ja">長文の読解（Tier 4b・4c）</span><span class="L en">Long documents (Tiers 4b, 4c)</span><span class="L zh">长文阅读（Tier 4b・4c）</span></h2>
-<p class="lead"><span class="L ja">青空文庫と Project Gutenberg の日英10作品を交互に並べた長文（32K〜1M token）を読ませ、文書の 10 / 50 / 90% に置いた架空の事実を問う。代表モデルだけ（1M はさらに一部）。コンテキストは入力が入る大きさで起動（256K までの文書は 256K、512K と 1M はその長さ）。待ち時間と速さは、文書を最初に読む問い（10% の位置）の値。同じ文書への2問目以降は、文書の部分を prefix cache から読む。</span><span class="L en">A long document (32K–1M tokens) of ten Japanese and English works from Aozora Bunko and Project Gutenberg, in turns, with made-up facts placed at 10 / 50 / 90% of it to ask about. Representative models only (fewer at 1M). Launched with a context the input fits in (256K for documents up to 256K, 512K and 1M for those). Waiting and speed are from the question that reads the document first (the 10% one); later questions on the same document read it from the prefix cache.</span><span class="L zh">让模型阅读由青空文库与 Project Gutenberg 的日英 10 部作品交替排列而成的长文（32K〜1M token），并询问放在文档 10 / 50 / 90% 处的虚构事实。仅代表模型（1M 更少）。以能容纳输入的上下文启动（256K 以内的文档为 256K，512K 与 1M 为相应长度）。等待时间与速度取首次读取文档的问题（10% 处）的值；同一文档的后续问题从 prefix cache 读取文档部分。</span></p>
 <div class="sample" id="x-doc"></div>
 <div class="grid3"><div id="c-doc-ttft"></div><div id="c-doc-prefill"></div><div id="c-doc-decode"></div></div>
 <div id="c-doc-correct"></div>
 
+</section>
+
+<section class="tab" id="tab-t4d" data-tab="t4d" role="tabpanel" aria-labelledby="tabbtn-t4d" hidden>
+<div class="about"><dl>
+  <dt><span class="L ja">この Tier が答える問い</span><span class="L en">The question</span><span class="L zh">本 Tier 回答的问题</span></dt><dd><span class="L ja">学習時の長さを超えるための YaRN は、読む力と速さをどれだけ変えるか。いつも 1M で起動しておくと損をするか。</span><span class="L en">How much does YaRN, which stretches past the trained length, change reading and speed? Does always launching at 1M cost anything?</span><span class="L zh">用于超出训练长度的 YaRN 会让阅读能力和速度改变多少？一直以 1M 启动是否吃亏？</span></dd>
+  <dt><span class="L ja">条件</span><span class="L en">Conditions</span><span class="L zh">条件</span></dt><dd><span class="L ja">基準モデルだけ。同じ文書・同じ4問で設定だけを変える: 約 300K の文書を容量 384K で YaRN あり（×1.5）となし、約 200K の文書を容量 256K（YaRN なし）と 1M（×4）。</span><span class="L en">The reference model only. The same document and 4 questions; only the setting changes: a ~300K document at 384K with YaRN (×1.5) and without, a ~200K document at 256K (no YaRN) and at 1M (×4).</span><span class="L zh">仅基准模型。相同文档、相同 4 题，只改设置：约 300K 的文档在 384K 下有 YaRN（×1.5）与无，约 200K 的文档在 256K（无 YaRN）与 1M（×4）。</span></dd>
+  <dt><span class="L ja">値</span><span class="L en">The numbers</span><span class="L zh">数值</span></dt><dd><span class="L ja">問いごとの正答と、prefill / decode の token/s。</span><span class="L en">Correct answers per question, and prefill / decode tokens per second.</span><span class="L zh">各问题的正确与否，以及 prefill / decode 的 token/s。</span></dd>
+  <dt><span class="L ja">見方</span><span class="L en">How to read it</span><span class="L zh">怎么看</span></dt><dd><span class="L ja">同じ入力なので、差はすべて設定から来る。YaRN なしで 256K を超えると正答が崩れやすい。200K を 1M で読んでも正答と速さが変わらなければ、大きく起動しておく損は小さい。</span><span class="L en">The input is the same, so every difference comes from the setting. Past 256K without YaRN, answers tend to break down. If reading the 200K document at 1M changes neither the answers nor the speed, launching large costs little.</span><span class="L zh">输入相同，差异全部来自设置。不用 YaRN 超过 256K 时，正确率容易崩溃。若在 1M 下读 200K 文档的正确率与速度不变，则预留大容量的代价很小。</span></dd>
+</dl></div>
 <h2 id="s-yarn"><span class="L ja">YaRN の影響（Tier 4d）</span><span class="L en">The effect of YaRN (Tier 4d)</span><span class="L zh">YaRN 的影响（Tier 4d）</span></h2>
-<p class="lead"><span class="L ja">学習時の長さ（256K）を超える容量では Strata が YaRN を使う（factor = 容量 ÷ 256K）。同じ文書・同じ問いで、設定だけを変えて比べる: 約 300K の文書を容量 384K で YaRN あり（×1.5）となし、約 200K の文書を容量 256K（YaRN なし）と 1M（×4、普段から 1M にしておくと損をするか）。</span><span class="L en">Above the trained length (256K) Strata uses YaRN (factor = context ÷ 256K). The same document and questions, only the setting changes: a ~300K document at 384K with YaRN (×1.5) and without, and a ~200K document at 256K (no YaRN) and at 1M (×4: does always reserving 1M cost anything?).</span><span class="L zh">超过训练长度（256K）的容量下 Strata 使用 YaRN（factor = 容量 ÷ 256K）。相同的文档和问题，只改设置：约 300K 的文档在 384K 下有 YaRN（×1.5）与无 YaRN，约 200K 的文档在 256K（无 YaRN）与 1M（×4，平时一直设为 1M 是否吃亏）下比较。</span></p>
 <div class="sample" id="x-yarn"></div>
 <div id="c-yarn"></div>
 
+</section>
+
+<section class="tab" id="tab-t5" data-tab="t5" role="tabpanel" aria-labelledby="tabbtn-t5" hidden>
+<div class="about"><dl>
+  <dt><span class="L ja">この Tier が答える問い</span><span class="L en">The question</span><span class="L zh">本 Tier 回答的问题</span></dt><dd><span class="L ja">Strata の起動オプションを変えると、速さはどちらへどれだけ動くか。既定のままでよいか。</span><span class="L en">Which way, and how far, does each of Strata's launch options move the speed? Is the default good enough?</span><span class="L zh">改变 Strata 的启动选项，速度会朝哪个方向变化多少？保持默认是否就好？</span></dd>
+  <dt><span class="L ja">条件</span><span class="L en">Conditions</span><span class="L zh">条件</span></dt><dd><span class="L ja">代表3モデル（基準、最大、最小）。既定（baseline）から1つだけ変えた起動で、decode 2種（日本語の説明文、Python）と prefill 2種（4K、32K）を測る。変えるもの: drafter なし、spec、spec-min-p、KV の型、prefill の区切り、VRAM の予約、vision、pool-workers、P コアへの固定、ple-io、並列数、自動 tune（quick / thorough）。</span><span class="L en">3 representative models (the reference, the largest, the smallest). Each launch changes one option from the default (baseline), measured on 2 decode cases (Japanese prose, Python) and 2 prefill cases (4K, 32K). Options: no drafter, spec, spec-min-p, the KV type, the prefill chunk, the VRAM reserve, vision, pool-workers, pinning to the P cores, ple-io, parallel requests, auto tune (quick / thorough).</span><span class="L zh">3 个代表模型（基准、最大、最小）。每次启动只改一个相对默认（baseline）的选项，测 2 种 decode（日语说明文、Python）和 2 种 prefill（4K、32K）。改动项：无 drafter、spec、spec-min-p、KV 类型、prefill 分块、VRAM 预留、vision、pool-workers、固定到 P 核、ple-io、并行数、自动 tune（quick / thorough）。</span></dd>
+  <dt><span class="L ja">値</span><span class="L en">The numbers</span><span class="L zh">数值</span></dt><dd><span class="L ja">既定（baseline）に対する比。グラフは decode（日本語の説明文）と prefill（32K 入力）で、残りの2ケース（Python の decode、4K の prefill）はケース一覧と summary.csv に。並列は1リクエストあたりの速さ。</span><span class="L en">The ratio to the default (baseline). The charts show decode (Japanese prose) and prefill (32K input); the other 2 cases (Python decode, 4K prefill) are in the case lists and summary.csv. For parallel requests, the speed per request.</span><span class="L zh">相对默认（baseline）的比值。图表为 decode（日语说明文）与 prefill（32K 输入），其余 2 种（Python 的 decode、4K 的 prefill）见用例一览与 summary.csv。并行时为每个请求的速度。</span></dd>
+  <dt><span class="L ja">見方</span><span class="L en">How to read it</span><span class="L zh">怎么看</span></dt><dd><span class="L ja">数 % の差は起動ごとのばらつきと区別しにくい（Tier 0 で起動間のばらつきを測っている）。KV を q4_0 にすると速くても品質が変わる側。tune は自動調整にかかった時間も別に記録している。</span><span class="L en">A few percent is hard to tell from the spread between launches (Tier 0 measures that spread). A q4_0 KV may be faster but changes quality. Tune's own time is recorded apart.</span><span class="L zh">几个百分点的差异难以与启动间的波动区分（Tier 0 测量了启动间的波动）。KV 用 q4_0 可能更快但会改变质量。tune 自身耗时另行记录。</span></dd>
+</dl></div>
 <h2 id="s-opts"><span class="L ja">起動オプション（Tier 5）</span><span class="L en">Launch options (Tier 5)</span><span class="L zh">启动选项（Tier 5）</span></h2>
-<p class="lead"><span class="L ja">代表3モデルで起動オプションを1つずつ変え、既定（baseline）からの変化を見る。</span><span class="L en">One launch option changed at a time on 3 representative models, against the default (baseline).</span><span class="L zh">在 3 个代表模型上每次只改一个启动选项，观察相对默认（baseline）的变化。</span></p>
 <div class="sample" id="x-opts"></div>
 <div id="c-opts"></div>
 
+</section>
+
+<section class="tab" id="tab-harness" data-tab="harness" role="tabpanel" aria-labelledby="tabbtn-harness" hidden>
+<div class="about"><dl>
+  <dt><span class="L ja">この Tier が答える問い</span><span class="L en">The question</span><span class="L zh">本 Tier 回答的问题</span></dt><dd><span class="L ja">同じモデル・同じエンジン条件で、エージェントのハーネスが変わると、仕上がるまでの時間と成果物はどう変わるか。</span><span class="L en">With the same model and the same engine conditions, how do the time to finish and the result change with the agent harness?</span><span class="L zh">在相同模型、相同引擎条件下，换用不同的 agent harness，完成时间与成果会怎样变化？</span></dd>
+  <dt><span class="L ja">条件</span><span class="L en">Conditions</span><span class="L zh">条件</span></dt><dd><span class="L ja">基準モデル、コンテキスト 128K。コーディング（「マイクラ風3D箱庭ゲーム作って」、形式の指示なし）をハーネスに one shot で渡し、各3回。記録プロキシが各リクエストの sampling・thinking・seed・出力 cap をそろえる。ハーネスは版を固定し、作業フォルダごと bubblewrap に閉じ込めて、tool は承認なしで実行させる。</span><span class="L en">The reference model, context 128K. The coding task (“マイクラ風3D箱庭ゲーム作って”, no format instructions) handed to the harness in one shot, 3 runs each. The recording proxy sets every request's sampling, thinking, seed and output cap. Each harness is pinned to a version and confined with its work folder in bubblewrap, running tools without approval.</span><span class="L zh">基准模型，上下文 128K。把编程任务（“マイクラ風3D箱庭ゲーム作って”，无格式要求）一次性交给 harness，各 3 次。记录代理统一每个请求的 sampling、thinking、seed 与输出 cap。harness 固定版本，与工作目录一起由 bubblewrap 隔离，tool 无需批准即执行。</span></dd>
+  <dt><span class="L ja">値</span><span class="L en">The numbers</span><span class="L zh">数值</span></dt><dd><span class="L ja">完了までの壁時計とその内訳（ハーネスの起動、エンジンが働いていた時間、リクエスト数、tool call、最初のリクエストの入力 token = ハーネスの前置き）。成果物はサムネイルから開ける。</span><span class="L en">The wall-clock time to the end and what it is made of (the harness's start, the time the engine was working, requests, tool calls, the first request's input tokens = the harness's preamble). Results open from their thumbnails.</span><span class="L zh">到完成的实际时间及其构成（harness 启动、引擎工作的时间、请求数、tool call、首个请求的输入 token = harness 的前置部分）。成果可从缩略图打开。</span></dd>
+  <dt><span class="L ja">見方</span><span class="L en">How to read it</span><span class="L zh">怎么看</span></dt><dd><span class="L ja">エンジン側の条件はそろえてあるので、差はハーネスが足したもの（system prompt と tool の定義、ターン数、tool の実行）から来る。前置きが長いハーネスは最初の応答まで待たされる。</span><span class="L en">The engine-side conditions are the same, so the differences come from what the harness adds (its system prompt and tool definitions, the turns, running tools). A harness with a long preamble keeps you waiting for its first reply.</span><span class="L zh">引擎侧条件已统一，差异来自 harness 增加的部分（system prompt 与 tool 定义、轮数、tool 执行）。前置部分长的 harness，等待首次响应的时间更长。</span></dd>
+</dl></div>
 <h2 id="s-harness"><span class="L ja">ハーネス越しの実行</span><span class="L en">Through the harness</span><span class="L zh">经由 harness 的运行</span></h2>
-<p class="lead"><span class="L ja">ゲーム作成をハーネスに one shot で渡したときの、終わるまでの時間とその内訳。エンジンの条件（sampling・thinking・seed・出力 cap）は記録プロキシがそろえているので、差はハーネスが足したもの（system prompt と tool の定義、ターン数、tool の実行、起動）から来る。値は3回の中央値。</span><span class="L en">The game handed to the harness in one shot: the time until it ends and what that time is made of. The recording proxy keeps the engine-side conditions (sampling, thinking, seed, output cap) the same, so the differences come from what the harness adds (its system prompt and tool definitions, the turns, running the tools, its start). Medians of 3 runs.</span><span class="L zh">把游戏制作一次性交给 harness 时，到结束为止的时间及其构成。记录代理统一了引擎侧的条件（sampling、thinking、seed、输出 cap），因此差异来自 harness 增加的部分（system prompt 与 tool 定义、轮数、tool 执行、启动）。数值为 3 次的中位数。</span></p>
 <div id="c-harness"></div>
 
-<h2 id="s-games"><span class="L ja">ゲーム作成の成果物</span><span class="L en">The games made</span><span class="L zh">游戏制作的成果</span></h2>
-<p class="lead"><span class="L ja">ゲーム作成ケースの成果物を seed ごとに並べる。サムネイルを押すと、そのページを画面の中で開く（sandbox 付きの枠で動かし、このページには触れさせない。外部のライブラリは CDN から読むので、ネットワークが要る）。</span><span class="L en">The result of every game case, per seed. Click a thumbnail to open the page here (it runs in a sandboxed frame that cannot reach this page; libraries load from CDNs, so it needs the network).</span><span class="L zh">按 seed 排列游戏制作用例的成果。点击缩略图即在本页内打开该页面（在带 sandbox 的框中运行，不能访问本页；外部库从 CDN 加载，需要网络）。</span></p>
-<div id="c-games"></div>
-<dialog id="viewer" aria-label="viewer"><header><span class="grow" id="viewer-title"></span><a id="viewer-tab" target="_blank" rel="noopener noreferrer"></a><a id="viewer-folder"></a><button type="button" id="viewer-close"></button></header><iframe id="viewer-frame" sandbox="allow-scripts allow-pointer-lock" allow="fullscreen" title="game"></iframe></dialog>
+</section>
 
+<section class="tab" id="tab-env" data-tab="env" role="tabpanel" aria-labelledby="tabbtn-env" hidden>
+<div class="about"><dl>
+  <dt><span class="L ja">この Tier が答える問い</span><span class="L en">The question</span><span class="L zh">本 Tier 回答的问题</span></dt><dd><span class="L ja">計測の間、熱や電力の制限で遅くなっていなかったか。</span><span class="L en">Was anything slowed down by heat or power limits while it was measured?</span><span class="L zh">测量期间是否因过热或功耗限制而变慢？</span></dd>
+  <dt><span class="L ja">条件</span><span class="L en">Conditions</span><span class="L zh">条件</span></dt><dd><span class="L ja">各モデルの Tier 1 を測っていた間の 5 秒ごとの記録（CPU と GPU の温度・電力・クロック、抑制の割合、メモリ）。</span><span class="L en">The record taken every 5 s while each model's Tier 1 ran (CPU and GPU temperature, power, clocks, the share of time held back, memory).</span><span class="L zh">测量各模型 Tier 1 期间每 5 秒的记录（CPU 与 GPU 的温度、功耗、频率、受抑制的比例、内存）。</span></dd>
+  <dt><span class="L ja">値</span><span class="L en">The numbers</span><span class="L zh">数值</span></dt><dd><span class="L ja">期間中の最大・中央値と、抑えられていた時間の割合。</span><span class="L en">Maximum and median over the period, and the share of time held back.</span><span class="L zh">期间内的最大值、中位数以及受抑制时间的比例。</span></dd>
+  <dt><span class="L ja">見方</span><span class="L en">How to read it</span><span class="L zh">怎么看</span></dt><dd><span class="L ja">抑えられていたモデルは、その分だけ遅く出ている可能性がある。速さの差を読む前に確かめる。</span><span class="L en">A model measured while held back may show as slower by that much: check here before reading a difference in speed.</span><span class="L zh">受抑制的模型结果可能相应偏慢：解读速度差异前先在此确认。</span></dd>
+</dl></div>
 <h2 id="s-env"><span class="L ja">計測時の環境</span><span class="L en">Conditions during the measurements</span><span class="L zh">测量时的环境</span></h2>
-<p class="lead"><span class="L ja">各モデルの Tier 1 を測っていた間の温度・電力・メモリ。CPU が熱で抑えられていたモデルは、その分だけ遅く出ている可能性がある。</span><span class="L en">Temperature, power and memory while each model's Tier 1 ran. A model measured while the CPU was held back by heat may show as slower by that much.</span><span class="L zh">测量各模型 Tier 1 期间的温度、功耗和内存。测量时 CPU 因过热降频的模型，结果可能相应偏慢。</span></p>
 <div id="c-env"></div>
 
-<h2 id="s-table"><span class="L ja">モデル別の一覧</span><span class="L en">All models</span><span class="L zh">各模型一览</span></h2>
-<p class="lead"><span class="L ja">上のグラフの数値をまとめた表。列の見出しで並べ替え。decode は上の絞り込み（temperature・文章）に従う。</span><span class="L en">The numbers from the charts above in one table. Sort by clicking a heading. decode follows the filters above (temperature, text).</span><span class="L zh">汇总上方图表数值的表格。点击列标题排序。decode 随上方筛选（temperature、文章）变化。</span></p>
-<div id="c-table"></div>
+</section>
+
+<dialog id="viewer" aria-label="viewer"><header><span class="grow" id="viewer-title"></span><a id="viewer-tab" target="_blank" rel="noopener noreferrer"></a><a id="viewer-folder"></a><button type="button" id="viewer-close"></button></header><iframe id="viewer-frame" sandbox="allow-scripts allow-pointer-lock" allow="fullscreen" title="page"></iframe></dialog>
 </main>
 <div id="tip" role="tooltip"></div>
 <script type="application/json" id="data">{{data}}</script>
@@ -1055,21 +1156,21 @@ function sThink() {
   const data = rows.map(r => {
     const vals = {}, toks = {}, notes = [];
     for (const e of KEYS) {
-      const cs = (byModel[r.key] || []).filter(c => c.step === '3' && c.effort === e.k && done(c) && !c.fixture.startsWith('game'));
+      const cs = (byModel[r.key] || []).filter(c => c.step === '3' && c.effort === e.k && done(c) && !CODING(c.fixture));
       vals[e.k] = cs.length ? median(cs.map(c => c.total_ms)) / 1000 : null;
       toks[e.k] = cs.length ? median(cs.map(c => c.completion_tokens)) : null;
       let ok = 0, all = 0; for (const c of cs) if (c.correct) { const [a, b] = c.correct.split('/').map(Number); ok += a; all += b; }
       if (cs.length) notes.push(`${e.k}: ${L('正答', 'correct', '正确')} ${all ? ok + '/' + all : '–'}`);
     }
-    const games = (byModel[r.key] || []).filter(c => c.step === '3' && c.effort === 'high' && c.fixture.startsWith('game') && done(c));
-    const game = games.find(c => c.fixture === 'game-shuri') || games[0];   // Minecraft: runs before 2026-11-07
-    if (game && game.fixture !== 'game-shuri') notes.push(L('ゲームはマイクラ（2026-11-07 より前）', 'game: Minecraft (before 2026-11-07)', '游戏为 Minecraft（2026-11-07 之前）'));
+    const games = (byModel[r.key] || []).filter(c => c.step === '3' && c.effort === 'high' && CODING(c.fixture) && done(c));
+    const game = games.find(c => c.fixture === 'coding-shuri') || games[0];   // Minecraft: runs before 2026-11-07
+    if (game && game.fixture !== 'coding-shuri') notes.push(L('コーディングはマイクラ（2026-11-07 より前）', 'coding: Minecraft (before 2026-11-07)', '编程为 Minecraft（2026-11-07 之前）'));
     return { ...r, vals, toks, game: game ? game.total_ms / 1000 : null, note: notes.join(' / '), missing: planned('3', r.key) ? null : L('対象外（計画で除外）', 'not in the plan', '不在计划内') };
   });
   dots(k, data, KEYS, { fmt: fmtS, tick: fmtTick, x: L('回答が終わるまでの時間（s）', 'time until the answer is complete (s)', '回答完成所需时间（s）'), y: MODEL_AXIS(), emptyMsg: NO_RESULT('3'), aria: L('thinking の有無と回答時間', 'thinking and answer time', '有无 thinking 与回答时间') });
   const tok = v => v == null ? '–' : Math.round(v).toLocaleString();
   table(k, [MODEL(), 'none', 'high', L('出力 token none', 'output tokens, none', '输出 token none'), L('出力 token high', 'output tokens, high', '输出 token high'),
-            L('ゲーム作成（首里城、high）', 'game (Shuri Castle, high)', '游戏制作（首里城，high）'), L('正答・注', 'correct, notes', '正确・注')],
+            L('コーディング（首里城、high）', 'coding (Shuri Castle, high)', '编程（首里城，high）'), L('正答・注', 'correct, notes', '正确・注')],
     data.map(r => [r.label, fmtS(r.vals.none), fmtS(r.vals.high), tok(r.toks.none), tok(r.toks.high), fmtS(r.game), r.note || '–']), i => i >= 1 && i <= 5);
 }
 
@@ -1246,7 +1347,7 @@ function sTable() {
 
 function sCompare() {
   const have = ENV_IDS.filter(id => D.cases.some(c => c.env === id && c.step === '1' && done(c)));
-  $('s-cmp-wrap').hidden = have.length < 2; $('toc-cmp').hidden = have.length < 2;
+  $('s-cmp-wrap').hidden = have.length < 2;
   if (have.length < 2) return;
   const keys = have.map(id => ({ k: id, label: ENVS.find(e => e.id === id).label, color: '--e' + (ENV_IDS.indexOf(id) % 8 + 1) }));
   const fams = [...new Set(ENVS.flatMap(e => e.models.map(m => m.family)))];
@@ -1347,7 +1448,7 @@ function sHarness() {
   const box = $('c-harness'); box.replaceChildren();
   const cs = CASES.filter(c => c.harness && done(c) && modelsShown().some(m => m.key === c.family + ' ' + c.model));
   const c = h('section', { class: 'chart' }, box);
-  h('h3', {}, c, L(`${D.harness} の one shot（ゲーム作成）`, `${D.harness} in one shot (the game)`, `${D.harness} 的一次性运行（游戏制作）`));
+  h('h3', {}, c, L(`${D.harness} の one shot（コーディング）`, `${D.harness} in one shot (the coding task)`, `${D.harness} 的一次性运行（编程）`));
   if (!cs.length) { h('div', { class: 'empty' }, c, NO_RESULT('G')); return; }
   const n = v => v == null ? '–' : Math.round(v).toLocaleString();
   barTable(c, [
@@ -1369,7 +1470,9 @@ function sHarness() {
     '前置 token 是第 1 次请求的输入 token（harness 的 system prompt、tool 定义与任务文）。cache 复用是所有请求的输入中从 prefix cache 读取的比例。decode / prefill 由所有轮次的 token 与时间之和计算。引擎时间占比之外的部分是 harness 自身和 tool 执行的时间。'));
 }
 
-const GAME_NAME = { 'game-shuri': ['首里城', 'Shuri Castle', '首里城'], 'game-minecraft': ['マイクラ', 'Minecraft', 'Minecraft'] };
+// the coding cases: coding-shuri, and game-minecraft (named before 2026-11-07, kept for the runs that measured it)
+const CODING = fx => /^(coding|game)-/.test(fx);
+const GAME_NAME = { 'coding-shuri': ['首里城', 'Shuri Castle', '首里城'], 'game-minecraft': ['マイクラ', 'Minecraft', 'Minecraft'] };
 function openViewer(c, a) {
   const d = $('viewer');
   $('viewer-title').textContent = `${L(...(GAME_NAME[c.fixture] || [c.fixture, c.fixture, c.fixture]))} · ${c.family} ${c.model} · seed ${a.seed} · RUN_ID ${c.run_id}`;
@@ -1385,12 +1488,12 @@ function openViewer(c, a) {
 function sGames() {
   const box = $('c-games'); box.replaceChildren();
   const shown = new Set(modelsShown().map(m => m.key));
-  const games = CASES.filter(c => c.fixture.startsWith('game-') && (c.artifacts || []).length && shown.has(c.family + ' ' + c.model));
+  const games = CASES.filter(c => CODING(c.fixture) && (c.artifacts || []).length && shown.has(c.family + ' ' + c.model));
   if (!games.length) { h('div', { class: 'empty' }, box, NO_RESULT(D.harness ? 'G' : '3')); return; }
   const groups = {};
   for (const c of games) (groups[[c.fixture, c.step, c.effort].join('|')] ||= []).push(c);
   // the current game first (Shuri Castle in plain), then by Tier
-  const rank = k => (k.startsWith('game-shuri') ? 0 : 1);
+  const rank = k => (k.startsWith('coding-shuri') ? 0 : 1);
   for (const key of Object.keys(groups).sort((a, b) => rank(a) - rank(b) || b.localeCompare(a))) {
     const [fx, step, effort] = key.split('|');
     h('h3', { class: 'opt-h' }, box, `${L(...(GAME_NAME[fx] || [fx, fx, fx]))} · Tier ${step} · effort ${effort}`);
@@ -1417,29 +1520,44 @@ function sGames() {
   }
 }
 
-// A harness division's page shows only its own sections; plain's page has no harness section.
+// The tabs: a harness division's page has its own tab only (with the games); plain's page has no harness tab.
+// Only the tab shown is drawn: the charts take their width from their box, which a hidden tab does not have.
+const TAB_DRAW = {
+  overview: () => { tiles(); sCompare(); sTable(); },
+  t1: () => { sDecode(); sPrefillTtft(); sTemp(); sSize(); sDrafter(); sLong(); },
+  t2: () => sStd(), t3: () => { sThink(); sGames(); }, t4a: () => sCtx(), t4bc: () => sDoc(), t4d: () => sYarn(), t5: () => sOpts(),
+  harness: () => { sHarness(); sGames(); }, env: () => sEnv(),
+};
+const TABS = [...document.querySelectorAll('section.tab')].map(t => t.dataset.tab).filter(t => D.harness ? t === 'harness' : t !== 'harness');
+let tab = TABS[0];
 function sections() {
-  const keep = D.harness ? new Set(['s-harness', 's-games']) : null;
-  let cur = null;
-  for (const el of [...document.querySelector('main').children]) {
-    if (el.tagName === 'H2') cur = el.id;
-    if (!cur || el.tagName === 'NAV' || el.id === 'tip') continue;
-    if (D.harness ? !keep.has(cur) : cur === 's-harness') el.hidden = true;
+  if (D.harness) $('tab-harness').append($('games-wrap'));
+  for (const t of document.querySelectorAll('section.tab')) if (!TABS.includes(t.dataset.tab)) t.remove();
+  for (const b of document.querySelectorAll('nav.tabs button')) {
+    if (!TABS.includes(b.dataset.tab)) { b.remove(); continue; }
+    b.addEventListener('click', () => { showTab(b.dataset.tab); history.replaceState(null, '', '#tab-' + b.dataset.tab); });
   }
-  for (const a of document.querySelectorAll('nav.toc a')) {
-    const id = a.getAttribute('href').slice(1);
-    if (D.harness ? !keep.has(id) : id === 's-harness') a.hidden = true;
-  }
-  if (D.harness) { $('filters').hidden = true; $('tiles').hidden = true; $('s-cmp-wrap').hidden = true;
-    for (const id of ['f-temp', 'f-content']) $(id).closest('label').hidden = true; }
+  if (D.harness) { $('tabs').hidden = true; $('filters').hidden = true; }
+}
+function showTab(id) {
+  tab = TABS.includes(id) ? id : TABS[0];
+  for (const t of document.querySelectorAll('section.tab')) t.hidden = t.dataset.tab !== tab;
+  for (const b of document.querySelectorAll('nav.tabs button')) b.setAttribute('aria-selected', String(b.dataset.tab === tab));
+  // temperature and text choose Tier 1's decode cases: shown only where those are
+  for (const id of ['f-temp', 'f-content']) $(id).closest('label').hidden = !['overview', 't1'].includes(tab);
+  draw();
+}
+// #tab-<id>, or a section's heading (#s-speed, as the page's links had it before the tabs): the tab that holds it
+function tabOf(hash) {
+  const el = hash && document.getElementById(decodeURIComponent(hash.slice(1)));
+  return el ? (el.closest('section.tab') || {}).dataset?.tab || (el.dataset || {}).tab : null;
 }
 
 function draw() {
   hideTip();
-  if (D.harness) { sHarness(); sGames(); return; }
-  tiles(); sCompare(); sDecode(); sPrefillTtft(); sTemp(); sSize(); sDrafter(); sLong(); sDoc(); sYarn(); sCtx(); sStd(); sThink(); sOpts(); sGames(); sEnv(); sTable();
+  TAB_DRAW[tab]();
 }
-sections(); envSwitch(); runs(); filters(); draw();
+sections(); envSwitch(); runs(); filters(); showTab(tabOf(location.hash));
 // the sticky filters' height, for the headings' scroll margin
 const stick = () => { const f = $('filters');
   document.documentElement.style.setProperty('--stick', (getComputedStyle(f).position === 'sticky' ? f.offsetHeight : 0) + 'px'); };
@@ -1450,8 +1568,9 @@ document.querySelectorAll('main h2[id]').forEach(h2 => {
   const go = () => { history.pushState(null, '', '#' + h2.id); h2.scrollIntoView(); };
   h2.addEventListener('click', go); h2.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
 });
-// opened with #id: go there again now that the charts have their height
-if (location.hash) document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView();
+// opened with a section's #id: go there now that its tab is drawn and the charts have their height
+if (location.hash && !location.hash.startsWith('#tab-')) document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView();
+addEventListener('hashchange', () => { const t = tabOf(location.hash); if (t && t !== tab) showTab(t); });
 let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(draw, 150); });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
 new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });

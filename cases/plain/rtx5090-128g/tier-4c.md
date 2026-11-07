@@ -2,9 +2,9 @@
 
 [← ケース一覧](README.md)
 
-# Tier 4c: 拡張範囲の長文（512K / 1M、代表3）
+# Tier 4c: 拡張範囲の長文（512K / 1M。基準モデル、最小と最大のモデル）
 
-GeForce RTX 5090 · 128 GB RAM · 24 ケース / 72 リクエスト。ほかのパラメータ（入力の内容、見るもの、備考、seed、timeout、起動セッション）は [tier-4c.csv](tier-4c.csv)。
+GeForce RTX 5090 · 128 GB RAM · 40 ケース / 120 リクエスト。ほかのパラメータ（入力の内容、見るもの、備考、seed、timeout、起動セッション）は [tier-4c.csv](tier-4c.csv)。
 
 | 状態 | case id | model | context | 設定 | 起動オプションの差分 | fixture | effort | temp | 並列 | 入力 token | 出力 cap | 回数 | 結果 | エビデンス |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -16,6 +16,22 @@ GeForce RTX 5090 · 128 GB RAM · 24 ケース / 72 リクエスト。ほかの�
 | done | `T4c-qwen-IQ3_S-long-1M-q-d50` | qwen IQ3_S | 1M (YaRN 4) | baseline |  | long-1M | none | 0.7 | 1 | 1,048,576 | 512 | 3 | prefill 2266.4 / decode 98.0 / TTFT ms 7282.4 / 採用率 0.552 / 正答 3/3 | [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/cases/T4c-qwen-IQ3_S-long-1M-q-d50/) |
 | done | `T4c-qwen-IQ3_S-long-1M-q-d90` | qwen IQ3_S | 1M (YaRN 4) | baseline |  | long-1M | none | 0.7 | 1 | 1,048,576 | 512 | 3 | prefill 2268.2 / decode 117.5 / TTFT ms 7277.8 / 採用率 0.659 / 正答 3/3 | [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/cases/T4c-qwen-IQ3_S-long-1M-q-d90/) |
 | done | `T4c-qwen-IQ3_S-long-1M-q-multi` | qwen IQ3_S | 1M (YaRN 4) | baseline |  | long-1M | none | 0.7 | 1 | 1,048,576 | 512 | 3 | prefill 2269.8 / decode 144.9 / TTFT ms 7282.6 / 採用率 0.736 / 正答 3/3 | [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/cases/T4c-qwen-IQ3_S-long-1M-q-multi/) |
+| planned | `T4c-gyro-Gyro-S-long-512K-q-d10` | gyro Gyro-S | 512K (YaRN 2) | baseline |  | long-512K | none | 0.7 | 1 | 524,288 | 512 | 3 |  |  |
+| planned | `T4c-gyro-Gyro-S-long-512K-q-d50` | gyro Gyro-S | 512K (YaRN 2) | baseline |  | long-512K | none | 0.7 | 1 | 524,288 | 512 | 3 |  |  |
+| planned | `T4c-gyro-Gyro-S-long-512K-q-d90` | gyro Gyro-S | 512K (YaRN 2) | baseline |  | long-512K | none | 0.7 | 1 | 524,288 | 512 | 3 |  |  |
+| planned | `T4c-gyro-Gyro-S-long-512K-q-multi` | gyro Gyro-S | 512K (YaRN 2) | baseline |  | long-512K | none | 0.7 | 1 | 524,288 | 512 | 3 |  |  |
+| planned | `T4c-gyro-Gyro-S-long-1M-q-d10` | gyro Gyro-S | 1M (YaRN 4) | baseline |  | long-1M | none | 0.7 | 1 | 1,048,576 | 512 | 3 |  |  |
+| planned | `T4c-gyro-Gyro-S-long-1M-q-d50` | gyro Gyro-S | 1M (YaRN 4) | baseline |  | long-1M | none | 0.7 | 1 | 1,048,576 | 512 | 3 |  |  |
+| planned | `T4c-gyro-Gyro-S-long-1M-q-d90` | gyro Gyro-S | 1M (YaRN 4) | baseline |  | long-1M | none | 0.7 | 1 | 1,048,576 | 512 | 3 |  |  |
+| planned | `T4c-gyro-Gyro-S-long-1M-q-multi` | gyro Gyro-S | 1M (YaRN 4) | baseline |  | long-1M | none | 0.7 | 1 | 1,048,576 | 512 | 3 |  |  |
+| planned | `T4c-unsloth-Q8_0-long-512K-q-d10` | unsloth Q8_0 | 512K (YaRN 2) | baseline |  | long-512K | none | 0.7 | 1 | 524,288 | 512 | 3 |  |  |
+| planned | `T4c-unsloth-Q8_0-long-512K-q-d50` | unsloth Q8_0 | 512K (YaRN 2) | baseline |  | long-512K | none | 0.7 | 1 | 524,288 | 512 | 3 |  |  |
+| planned | `T4c-unsloth-Q8_0-long-512K-q-d90` | unsloth Q8_0 | 512K (YaRN 2) | baseline |  | long-512K | none | 0.7 | 1 | 524,288 | 512 | 3 |  |  |
+| planned | `T4c-unsloth-Q8_0-long-512K-q-multi` | unsloth Q8_0 | 512K (YaRN 2) | baseline |  | long-512K | none | 0.7 | 1 | 524,288 | 512 | 3 |  |  |
+| planned | `T4c-unsloth-Q8_0-long-1M-q-d10` | unsloth Q8_0 | 1M (YaRN 4) | baseline |  | long-1M | none | 0.7 | 1 | 1,048,576 | 512 | 3 |  |  |
+| planned | `T4c-unsloth-Q8_0-long-1M-q-d50` | unsloth Q8_0 | 1M (YaRN 4) | baseline |  | long-1M | none | 0.7 | 1 | 1,048,576 | 512 | 3 |  |  |
+| planned | `T4c-unsloth-Q8_0-long-1M-q-d90` | unsloth Q8_0 | 1M (YaRN 4) | baseline |  | long-1M | none | 0.7 | 1 | 1,048,576 | 512 | 3 |  |  |
+| planned | `T4c-unsloth-Q8_0-long-1M-q-multi` | unsloth Q8_0 | 1M (YaRN 4) | baseline |  | long-1M | none | 0.7 | 1 | 1,048,576 | 512 | 3 |  |  |
 | done | `T4c-qwen-Q2_0-long-512K-q-d10` | qwen Q2_0 | 512K (YaRN 2) | baseline |  | long-512K | none | 0.7 | 1 | 524,288 | 512 | 3 | prefill 5416.9 / decode 179.0 / TTFT ms 96904.9 / 採用率 0.857 / 正答 3/3 | [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/cases/T4c-qwen-Q2_0-long-512K-q-d10/) |
 | done | `T4c-qwen-Q2_0-long-512K-q-d50` | qwen Q2_0 | 512K (YaRN 2) | baseline |  | long-512K | none | 0.7 | 1 | 524,288 | 512 | 3 | prefill 3926.3 / decode 191.8 / TTFT ms 4164.1 / 採用率 0.75 / 正答 1/3 | [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/cases/T4c-qwen-Q2_0-long-512K-q-d50/) |
 | done | `T4c-qwen-Q2_0-long-512K-q-d90` | qwen Q2_0 | 512K (YaRN 2) | baseline |  | long-512K | none | 0.7 | 1 | 524,288 | 512 | 3 | prefill 3930.1 / decode 191.4 / TTFT ms 4163.8 / 採用率 0.72 / 正答 3/3 | [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/cases/T4c-qwen-Q2_0-long-512K-q-d90/) |

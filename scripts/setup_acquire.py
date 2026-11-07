@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Make what the acquisition phase (scripts/overnight.py) runs with, on a fresh clone or after a Strata update.
 
-Every step is skipped when its result is already there, so it can run before every start (scripts/start_pipeline.sh
+Every step is skipped when its result is already there, so it can run before every start (scripts/bench.py start
 runs it while downloads/READY is missing). It writes only inside the repository (Git-ignored) and installs pinned
 packages from PyPI and the PyTorch index; nothing in Strata's own folders is changed.
 
@@ -22,7 +22,7 @@ commit is kept in downloads/manifest.json.
     python3 -I scripts/setup_acquire.py [--source ~/Strata]
     python3 -I scripts/setup_acquire.py --rebuild      make the venvs and work/qad-root again
     python3 -I scripts/setup_acquire.py --no-fetch     never install from PyPI: a missing venv is an error (what
-                                                       scripts/start_pipeline.sh runs unless FETCH=yes)
+                                                       scripts/bench.py start runs unless bench.json "fetch")
 """
 import argparse
 import json
@@ -61,7 +61,7 @@ def venv_ok(venv, probe):
     return py.is_file() and subprocess.run([str(py), '-c', probe], capture_output=True).returncode == 0
 
 
-NO_FETCH = False   # --no-fetch: installing a venv's packages from PyPI is a download, agreed with FETCH=yes only
+NO_FETCH = False   # --no-fetch: installing a venv's packages from PyPI is a download, agreed with bench.json "fetch" only
 
 
 def make_venv(venv, requirements, probe, rebuild, extra=()):
@@ -69,7 +69,7 @@ def make_venv(venv, requirements, probe, rebuild, extra=()):
         return
     if NO_FETCH:
         sys.exit(f'setup_acquire: {venv.name} is missing or broken, and making it downloads packages from PyPI: '
-                 'start again with FETCH=yes once agreed (AGENTS.md 2.0a)')
+                 'start again with "fetch": true in bench.json once agreed (AGENTS.md 2.0a)')
     if venv.exists():
         shutil.rmtree(venv)
     base = bundled_python()

@@ -2,12 +2,13 @@
 
   python3 scripts/healthcheck.py --run-id <run id> [--env <id>] [--quiet]
 
-Run every 15 minutes by a systemd user timer (scripts/start_pipeline.sh installs it), independent of any Claude
-session. Writes run-status/status.json and run-status/STATUS.md; when the overall state turns FAILED or STUCK it
+Run by the run's supervisor every "watch_interval_s" (scripts/supervise.py, bench.json; 5 min by default) and by
+`scripts/bench.py status`, independent of any agent's session. Writes run-status/status.json and run-status/STATUS.md; when the overall state turns FAILED or STUCK it
 appends to run-status/ALERTS.log and shows a desktop notification, once per new problem.
 
-States: RUNNING (alive and progressing), WAITING (queue waiting until what the run needs is on disk), DONE, FAILED (a phase ended without its
-result), STUCK (alive but nothing has changed for longer than the phase ever needs).
+States: RUNNING (alive and progressing), WAITING (queue waiting until what the run needs is on disk), DONE, STOPPED
+(stopped with scripts/bench.py stop), FAILED (a phase ended without its result), STUCK (alive but nothing has changed
+for longer than the phase ever needs).
 A finished queue is DONE only when no runner exited with an error and every planned case of the steps it ran has a
 result; otherwise FAILED. A runner error while the queue goes on with the next Tier is notified at once.
 """
@@ -22,6 +23,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
+import config  # noqa: E402
 import envs  # noqa: E402
 DL = ROOT / 'downloads'
 OUT = ROOT / 'run-status'
@@ -78,26 +80,32 @@ def acquire_state():
 
 
 def queue_errors(lines):
-    """Runner exits other than 0 ("steps <s>: runner exit <rc>", scripts/overnight_bench.sh) and Python tracebacks
+    """Runner exits other than 0 ("steps <s>: runner exit <rc>", scripts/supervise.py) and Python tracebacks
     in the queue log (a queue started before the exit codes were logged shows only the traceback)."""
-    errors = [ln[26:].strip() for ln in lines if ': runner exit ' in ln and not ln.rstrip().endswith(' exit 0')]
+    exits = [ln for ln in lines if ': runner exit ' in ln]
+    errors = [ln[26:].strip() for ln in exits if not ln.rstrip().endswith(' exit 0')]
     tracebacks = sum(ln.startswith('Traceback (most recent call last)') for ln in lines)
-    if tracebacks and not errors:
+    # a runner started again by the supervisor after a crash leaves its traceback above an exit 0
+    if tracebacks and not exits:
         errors.append(f'{tracebacks} traceback(s) in queue.log')
     return errors
 
 
 def missing_cases(run_dir, env_id, lines):
-    """Planned cases of the steps (and models, $MODELS) this queue ran that have no summary.json: {step: count}."""
-    steps = [ln.split(' steps ', 1)[1].strip() for ln in lines if ' steps ' in ln and ': runner exit ' not in ln]
-    # $MODELS from the timer's unit; a run by hand takes them from run-status/current-run.json when it is the same run
-    current = load(OUT / 'current-run.json')
-    chosen = os.environ.get('MODELS') or (current.get('models', '') if current.get('run_dir') == str(run_dir.relative_to(ROOT)) else '')
-    models = {tuple(m.split(':')) for m in chosen.split(',') if m}
+    """Planned cases of the steps this queue ran, among the models and cases its settings chose (the run's bench.json),
+    that have no summary.json: {step: count}."""
+    steps = {ln[26:].split('steps ', 1)[1].strip() for ln in lines if ln[26:].startswith('steps ') and ':' not in ln[26:]}
+    if (run_dir / 'bench.json').exists():
+        cfg = config.load(run_dir / 'bench.json')
+    else:   # a run started before bench.json: $MODELS, as run-status/current-run.json kept it
+        current = load(OUT / 'current-run.json')
+        chosen = current.get('models', '') if current.get('run_dir') == str(run_dir.relative_to(ROOT)) else ''
+        cfg = {'models': [m.replace(':', ' ', 1) for m in chosen.split(',') if m]}
     missing = {}
     plan = envs.plan_dir(env_id) / 'cases.jsonl'
-    for row in (json.loads(ln) for ln in plan.read_text().splitlines() if ln.strip()) if plan.exists() else []:
-        if row.get('step') in steps and (not models or (row['family'], row['model']) in models) and not (run_dir / 'cases' / row['id'] / 'summary.json').exists():
+    rows = [json.loads(ln) for ln in plan.read_text().splitlines() if ln.strip()] if plan.exists() else []
+    for row in config.select(rows, {**cfg, 'tiers': None}):
+        if row.get('step') in steps and not (run_dir / 'cases' / row['id'] / 'summary.json').exists():
             missing[row['step']] = missing.get(row['step'], 0) + 1
     return missing
 
@@ -126,9 +134,12 @@ def bench_state(run_dir, env_id):
                     'detail': '; '.join(filter(None, ['; '.join(errors), f'cases without a result ({gaps})' if gaps else '',
                                                       f'cases {counts}']))}
         return {'phase': 'bench', 'state': 'DONE', 'detail': f'cases {counts}'}
+    if 'queue stopped' in last[0]:
+        return {'phase': 'bench', 'state': 'STOPPED', 'detail': f'stopped at {last[0][:25]} (scripts/bench.py start resumes it); cases {counts}'}
     if not alive(pid):
         return {'phase': 'bench', 'state': 'FAILED', 'detail': f'queue ended: {last[0]}; cases {counts}'}
-    if 'waiting for downloads/READY' in last[0] or 'waiting until what the run needs is on disk' in last[0]:
+    if any(w in last[0] for w in ('waiting for downloads/READY', 'waiting until what the run needs is on disk',
+                                  'waiting until the downloads end')):
         return {'phase': 'bench', 'state': 'WAITING', 'detail': 'queue waits until what the run needs is on disk (run-status/acquire.json)'}
     fresh = [age(run_dir / 'runner.log')] + [age(p) for p in run_dir.glob('sessions/*/*/telemetry.csv')]
     fresh = min((a for a in fresh if a is not None), default=None)
@@ -151,14 +162,15 @@ def stats_line(run_dir, bench):
     a = age(run_dir / 'stats' / 'last.json')
     if bench['state'] == 'RUNNING' and (a is None or a > 900):
         stale = 'no snapshot yet' if a is None else f'no snapshot for {a / 60:.0f} min'
-        bench['warn'] = '; '.join(filter(None, [bench.get('warn'), f'stats: {stale} (strata-jbench-stats)']))
+        bench['warn'] = '; '.join(filter(None, [bench.get('warn'), f'stats: {stale} (scripts/stats_watch.py)']))
     return f'統計スナップショット: {last.get("t", "なし")} {last.get("event", "")}'
 
 
-def notify(text):
+def notify(text, desktop=True):
     with (OUT / 'ALERTS.log').open('a') as f:
         f.write(f'{datetime.now().astimezone().isoformat(timespec="seconds")} {text}\n')
-    subprocess.run(['notify-send', '--urgency=critical', 'strata-jbench', text], capture_output=True)
+    if desktop:
+        subprocess.run(['notify-send', '--urgency=critical', 'strata-jbench', text], capture_output=True)
 
 
 def main():
@@ -169,15 +181,15 @@ def main():
     a = ap.parse_args()
     OUT.mkdir(exist_ok=True)
     env_id = a.env or envs.current()
-    # the division: the timer's unit sets BENCH_DIVISION; by hand, the one of the run started last when it is this run
+    # the division: the supervisor sets BENCH_DIVISION; by hand, the one of the run started last when it is this run
     current = load(OUT / 'current-run.json')
     if not os.environ.get('BENCH_DIVISION') and current.get('run_id') == a.run_id and current.get('division'):
         os.environ['BENCH_DIVISION'] = current['division']
     run_dir = envs.run_dir(env_id, a.run_id)
     parts = [acquire_state(), bench_state(run_dir, env_id)]
     bad = [p for p in parts if p['state'] in ('FAILED', 'STUCK')]
-    overall = bad[0]['state'] if bad else 'DONE' if all(p['state'] in ('DONE', 'NOT_STARTED') for p in parts) \
-        else 'RUNNING'
+    overall = bad[0]['state'] if bad else 'STOPPED' if parts[1]['state'] == 'STOPPED' \
+        else 'DONE' if all(p['state'] in ('DONE', 'NOT_STARTED') for p in parts) else 'RUNNING'
     gpu = subprocess.run(['nvidia-smi', *envs.smi_card(env_id), '--query-gpu=memory.used,temperature.gpu', '--format=csv,noheader'],
                          capture_output=True, text=True).stdout.strip()
     disk = os.statvfs(ROOT)
@@ -193,15 +205,16 @@ def main():
               for p in parts]
     lines += ['', f'GPU: {gpu} / 空きディスク: {status["disk_free_gb"]} GB', stats]
     (OUT / 'STATUS.md').write_text('\n'.join(lines) + '\n')
+    desktop = config.load(run_dir / 'bench.json')['notify'] if (run_dir / 'bench.json').exists() else True
     problem = '; '.join(f'{p["phase"]} {p["state"]}: {p["detail"]}' for p in bad)
     old = '; '.join(f'{p["phase"]} {p["state"]}: {p["detail"]}' for p in prev.get('parts', [])
                     if p['state'] in ('FAILED', 'STUCK'))
     if problem and problem.split(':')[0] != old.split(':')[0]:
-        notify(problem)
+        notify(problem, desktop)
     alerts = [f'{p["phase"]} {p["state"]}: {p["alert"]}' for p in parts if p.get('alert')]
     old_alerts = [f'{p["phase"]} {p["state"]}: {p["alert"]}' for p in prev.get('parts', []) if p.get('alert')]
     if alerts and alerts != old_alerts:
-        notify('; '.join(alerts))
+        notify('; '.join(alerts), desktop)
     if not a.quiet:
         print((OUT / 'STATUS.md').read_text())
     return 1 if bad else 0

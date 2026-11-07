@@ -2,7 +2,7 @@
 
 [← ケース一覧](README.md)
 
-# Tier 4d: YaRN の影響（IQ3_S、同じ入力で設定だけ変える）
+# Tier 4d: YaRN の影響（基準モデル、同じ入力で設定だけ変える）
 
 GeForce RTX 5090 · 128 GB RAM · 16 ケース / 48 リクエスト。ほかのパラメータ（入力の内容、見るもの、備考、seed、timeout、起動セッション）は [tier-4d.csv](tier-4d.csv)。
 

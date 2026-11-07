@@ -125,14 +125,14 @@ TR = {
         'thinking on：reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true，'
         'reasoning_budget_tokens 12,288（显式指定）'),
     'thinking on: reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true、reasoning_budget_tokens 16,384'
-    '（明示。ゲームは cap の半分: 3/4 だと回答のコードが途中で切れたため）。成果物は artifact/ に展開'
+    '（明示。コーディングは cap の半分: 3/4 だと回答のコードが途中で切れたため）。成果物は artifact/ に展開'
     '（response.md、files/、manifest.json、静的 HTML なら screenshot.png）。形式（単体 HTML / 要サーバー / README の有無）は manifest に記録': (
         'thinking on: reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true, reasoning_budget_tokens 16,384 '
-        '(explicit; half the cap for the game, since at 3/4 the answer\'s code was cut off). The result is unpacked into '
+        '(explicit; half the cap for the coding task, since at 3/4 the answer\'s code was cut off). The result is unpacked into '
         'artifact/ (response.md, files/, manifest.json, and screenshot.png for static HTML). Its form (single HTML / needs a '
         'server / has a README) is recorded in the manifest',
         'thinking on：reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true，reasoning_budget_tokens 16,384'
-        '（显式指定；游戏取 cap 的一半，因为 3/4 时回答中的代码会被截断）。成果展开到 artifact/（response.md、files/、'
+        '（显式指定；编程任务取 cap 的一半，因为 3/4 时回答中的代码会被截断）。成果展开到 artifact/（response.md、files/、'
         'manifest.json，静态 HTML 另有 screenshot.png）。形式（单个 HTML / 需要服务器 / 有无 README）记录在 manifest 中'),
     '成果物の展開・スクリーンショットの仕組みを確かめる。thinking off: reasoning_effort "none" + '
     'chat_template_kwargs.enable_thinking false。成果物は artifact/ に展開（response.md、files/、manifest.json、'
@@ -144,18 +144,18 @@ TR = {
         '检查成果的展开和截图机制。thinking off：reasoning_effort "none" + chat_template_kwargs.enable_thinking false。'
         '成果展开到 artifact/（response.md、files/、manifest.json，静态 HTML 另有 screenshot.png）。'
         '形式（单个 HTML / 需要服务器 / 有无 README）记录在 manifest 中'),
-    # the game since 2026-11-07: Shuri Castle in plain, Minecraft in the harness divisions
+    # the coding task since 2026-11-07: Shuri Castle in plain, Minecraft in the harness divisions
     '首里城の情景を単一の HTML ファイルで（実用的なコーディング）': (
         'a scene of Shuri Castle as one HTML file (practical coding)', '用单个 HTML 文件呈现首里城的场景（实用编码）'),
     'thinking on: reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true、reasoning_budget_tokens 16,384'
-    '（明示。ゲームは cap の半分: 3/4 だと回答のコードが途中で切れたため）。成果物は artifact/ に展開'
+    '（明示。コーディングは cap の半分: 3/4 だと回答のコードが途中で切れたため）。成果物は artifact/ に展開'
     '（response.md、files/、manifest.json、静的 HTML なら screenshot.png）。単一の HTML ファイルか、形式（単体 HTML / 要サーバー / README の有無）は manifest に記録': (
         'thinking on: reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true, reasoning_budget_tokens 16,384 '
-        '(explicit; half the cap for the game, since at 3/4 the answer\'s code was cut off). The result is unpacked into '
+        '(explicit; half the cap for the coding task, since at 3/4 the answer\'s code was cut off). The result is unpacked into '
         'artifact/ (response.md, files/, manifest.json, and screenshot.png for static HTML). Whether it is one HTML file, and its '
         'form (single HTML / needs a server / has a README), are recorded in the manifest',
         'thinking on：reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true，reasoning_budget_tokens 16,384'
-        '（显式指定；游戏取 cap 的一半，因为 3/4 时回答中的代码会被截断）。成果展开到 artifact/（response.md、files/、'
+        '（显式指定；编程任务取 cap 的一半，因为 3/4 时回答中的代码会被截断）。成果展开到 artifact/（response.md、files/、'
         'manifest.json，静态 HTML 另有 screenshot.png）。是否为单个 HTML 文件及其形式（单个 HTML / 需要服务器 / 有无 README）记录在 manifest 中'),
     '成果物の展開・スクリーンショットの仕組みを確かめる。thinking off: reasoning_effort "none" + '
     'chat_template_kwargs.enable_thinking false。成果物は artifact/ に展開（response.md、files/、manifest.json、'
@@ -180,22 +180,36 @@ TR = {
         'time to finish, turns, tool calls, the harness\'s preamble tokens, cached share, whether the result runs',
         '完成时间、轮数、tool call、harness 前置部分的 token、cached 占比、成果是否能运行'),
     'thinking on: reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true、reasoning_budget_tokens 16,384'
-    '（明示。ゲームは cap の半分: 3/4 だと回答のコードが途中で切れたため）。ハーネスに one shot で渡す（形式の指示なし）。'
+    '（明示。コーディングは cap の半分: 3/4 だと回答のコードが途中で切れたため）。ハーネスに one shot で渡す（形式の指示なし）。'
     '成果物は作業ディレクトリに書かれた HTML、なければ回答のコードブロックから artifact/ に展開。'
     'sampling・thinking・seed・出力 cap は記録プロキシがリクエストごとに入れる': (
         'thinking on: reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true, reasoning_budget_tokens 16,384 '
-        '(explicit; half the cap for the game, since at 3/4 the answer\'s code was cut off). Handed to the harness in one shot '
+        '(explicit; half the cap for the coding task, since at 3/4 the answer\'s code was cut off). Handed to the harness in one shot '
         '(no format instructions). The result is the HTML written into the work folder, else the answer\'s code blocks, unpacked '
         'into artifact/. Sampling, thinking, seed and output cap are put into every request by the recording proxy',
         'thinking on：reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true，reasoning_budget_tokens 16,384'
-        '（显式指定；游戏取 cap 的一半，因为 3/4 时回答中的代码会被截断）。一次性交给 harness（不附加格式要求）。'
+        '（显式指定；编程任务取 cap 的一半，因为 3/4 时回答中的代码会被截断）。一次性交给 harness（不附加格式要求）。'
         '成果取写入工作目录的 HTML，否则取回答的代码块，展开到 artifact/。sampling、thinking、seed、输出 cap 由记录代理写入每个请求'),
 }
 
 
+def joined(ja):
+    """A note made of two translated notes joined by "。" (a case's own note and the note of its group, such as a
+    retired case's): (first, second), else None."""
+    for i in (i for i, c in enumerate(ja) if c == '。'):
+        if ja[:i] in TR and ja[i + 1:] in TR:
+            return ja[:i], ja[i + 1:]
+    return None
+
+
 def tr(ja, lang):
-    if lang == 'ja' or ja not in TR:
+    if lang == 'ja':
         return ja
+    if ja not in TR:
+        two = joined(ja) if isinstance(ja, str) else None
+        if not two:
+            return ja
+        return tr(two[0], lang).rstrip('.') + '. ' + tr(two[1], lang) if lang == 'en' else tr(two[0], lang) + '。' + tr(two[1], lang)
     return TR[ja][0 if lang == 'en' else 1]
 
 
@@ -231,7 +245,7 @@ def T(ja):
 def untranslated(strings):
     import re
     jp = re.compile(r'[぀-ヿ一-鿿]')
-    return sorted({s for s in strings if isinstance(s, str) and jp.search(s) and s not in TR})
+    return sorted({s for s in strings if isinstance(s, str) and jp.search(s) and s not in TR and not joined(s)})
 
 
 # Shared by both pages: in <head>, the switchers' markup (light / dark beside the language), and the script that applies the choices.

@@ -40,7 +40,7 @@ The charts and the case lists show the results of every run measured up to that 
 | Finished | Division | Environment | RUN_ID | Tier | Cases (done / all) | Content | See |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2026-11-04 22:51 | Plain (no harness) | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-long` | 4b, 4c, 4d | 112 / 112 | Tiers 4b, 4c and 4d (long documents, 32K to 1M, and a YaRN check). 2026-11-03-main skipped them because the long fixtures did not exist yet; a long document was made from ten Japanese and English works of Aozora Bunko and Project Gutenberg and measured | [📈](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-long/?env=rtx5090-128g "Charts") [📋](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-long/cases/plain/rtx5090-128g/README.en.md "Cases") [📁](published/plain/rtx5090-128g/2026-11-04-long/ "Evidence") |
-| 2026-11-04 18:20 | Plain (no harness) | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-q8-t3` | 3 | 9 / 9 | Tier 3 for unsloth Q8_0 (with and without thinking, and the game task). The first plan left Q8_0 out of Tier 3, so it was added and measured | [📈](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-q8-t3/?env=rtx5090-128g "Charts") [📋](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-q8-t3/cases/plain/rtx5090-128g/README.en.md "Cases") [📁](published/plain/rtx5090-128g/2026-11-04-q8-t3/ "Evidence") |
+| 2026-11-04 18:20 | Plain (no harness) | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-q8-t3` | 3 | 9 / 9 | Tier 3 for unsloth Q8_0 (with and without thinking, and the coding task). The first plan left Q8_0 out of Tier 3, so it was added and measured | [📈](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-q8-t3/?env=rtx5090-128g "Charts") [📋](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-q8-t3/cases/plain/rtx5090-128g/README.en.md "Cases") [📁](published/plain/rtx5090-128g/2026-11-04-q8-t3/ "Evidence") |
 | 2026-11-04 15:25 | Plain (no harness) | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-iq3s-mtp` | 0, 1, 2, 3, 4a, 5 | 159 / 159 | qwen IQ3_S measured again (in 2026-11-03-main its MTP draft layer was not loaded); the same Tiers, DFlash2 cases included | [📈](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-iq3s-mtp/?env=rtx5090-128g "Charts") [📋](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/plain/rtx5090-128g/README.en.md "Cases") [📁](published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/ "Evidence") |
 
 <details>
@@ -63,7 +63,7 @@ The plain division is measured in Tiers. The cases are defined in [scripts/build
 | 0 | Whether the measurement itself is right, and how much it varies | Some |
 | 1 | Each model's plain speed (prefill and decode, by kind of text, by temperature, by drafter) | All |
 | 2 | Speed and sanity answers on standard-v1, the benchmark that ships with Strata | All |
-| 3 | How thinking changes the time to answer, the answers and a game-making task | All |
+| 3 | How thinking changes the time to answer, the answers and a coding task | All |
 | 4 | The cost of reserving context (4a) and reading real long documents (4b–4d, to 1M tokens) | 4a all, 4b–4d representative ones |
 | 5 | Changing one launch option at a time (automatic tuning included) | 3 representative ones |
 
@@ -100,7 +100,7 @@ The records of the runs are in `published/<division>/<environment>/<RUN_ID>/` (o
 
 | What | Where |
 | --- | --- |
-| Per case | `cases/<case id>/summary.json` (the summary), `requests.jsonl` (the requests sent), `responses/` (the answers), `artifact/` (what the game task made) |
+| Per case | `cases/<case id>/summary.json` (the summary), `requests.jsonl` (the requests sent), `responses/` (the answers), `artifact/` (what the coding task made) |
 | Per launch | `sessions/<session>/start-N/` (`strata launch` output, the engine log, /settings, /config, /props, telemetry.csv) |
 | standard-v1 output | `standard/` |
 | Temperature and power over time | `stats/thermal.csv` (every 5 s) |
@@ -124,33 +124,37 @@ and nothing in them is sent anywhere (the only network traffic is downloading th
 | `results/…/<RUN_ID>/raw/` | `scripts/bench_runner.py` | The raw streams (SSE and the full thinking text); never moved to `published/` |
 | `results/…/<RUN_ID>/stats/snapshots.jsonl.gz`, `last.json` | `scripts/stats_watch.py` | **Snapshots of the whole PC during a run.** At each session start, launch, case end, failure and Tier change, and every 5 minutes: every running process (PID, user name, full command line, CPU, memory, disk IO), the processes using the GPU, and CPU, memory, PSI and temperatures. They are for checking afterwards that nothing running beside the benchmark disturbed it. They keep other programs' command lines (with any paths or values given as arguments), so they are never moved to `published/` |
 | `preview/` | `scripts/build_cases.py`, `scripts/build_results.py` | Charts and case lists for checking, built with `results/` too |
-| `run-status/` | `scripts/start_pipeline.sh`, `scripts/healthcheck.py`, `scripts/preflight.py` | The state of an unattended run (`STATUS.md`, `ALERTS.log`, `current-run.json`, `preflight.json`) |
+| `run-status/` | `scripts/bench.py`, `scripts/healthcheck.py`, `scripts/preflight.py` | The state of an unattended run (`STATUS.md`, `ALERTS.log`, `current-run.json`, `preflight.json`) |
 | `downloads/` | `scripts/download_models.py`, `scripts/overnight.py` | Download state and logs (`manifest.json` with SHA-256) |
 | `work/` | `scripts/overnight.py` (the NVFP4-QAD conversion) | The working folder for the NVFP4-QAD conversion. The long corpus's sources (`work/corpus/raw/`, fetched by hand) are kept here too, and `scripts/long_corpus.py` reads them |
 
-To take no snapshots, stop the `strata-jbench-stats` unit that `scripts/start_pipeline.sh` starts
-(`systemctl --user stop strata-jbench-stats`; the measurement goes on). Anything under `results/` can be deleted once
-it is no longer needed.
+To take no snapshots, set `"stats": false` in `bench.json` before starting. Anything under `results/` can be deleted
+once it is no longer needed. `bench.json` at the top of the repository (the benchmark's settings) is outside Git too.
 
 Outside the repository, the model weights go to `~/.local/share/strata/Strata-data/models`, and Strata's launch
-profiles (`launch-<model>-<context>`) and Tier 5's tuned presets go into Strata's settings. During a run, systemd user
-units (`strata-jbench-*`, transient ones made by `systemd-run`) are running.
+profiles (`launch-<model>-<context>`) and Tier 5's tuned presets go into Strata's settings. During a run, a supervisor
+process detached from the terminal (`scripts/supervise.py`) and its children are running; no systemd unit is made.
 
 ## Running it again
 
-The measurement takes a long time, so it runs unattended as systemd user units. The procedure (preparing an
+The measurement takes a long time, so it runs unattended under a supervisor process detached from the terminal
+(which also restarts a runner that fails or hangs, and records the state). The procedure (preparing an
 environment, preflight, starting, watching, recovering, making a run final) is in [AGENTS.md](AGENTS.md),
 and how to write an environment in [envs/README.md](envs/README.md).
 
 It needs Strata (the desktop app) installed, with one model installed once, and Strata's source in `~/Strata` (its
 `setup.py` pins the files fetched and their SHA-256). The Python environments for downloading and for the NVFP4-QAD
-conversion are made by `scripts/setup_acquire.py`, which `scripts/start_pipeline.sh` runs by itself.
+conversion are made by `scripts/setup_acquire.py`, which `scripts/bench.py start` runs by itself. The settings (the
+RUN_ID, the division, the Tiers, models and cases to run, and so on) go in `bench.json`; `scripts/bench.py config` lists
+every one with its default.
 
 ```bash
-python3 -I scripts/envs.py list                                     # the environment this hardware matches
-python3 -I scripts/build_cases.py                                    # the plan and case list (cases, estimated hours)
-python3 scripts/preflight.py --phase all --steps "0,1,2,3,4a,4b,4c,4d,5"      # checks before starting
-RUN_ID=<run id> STEPS="0 1 2 3 4a 4b 4c 4d 5" scripts/start_pipeline.sh       # start
+python3 -I scripts/envs.py list          # the environment this hardware matches
+python3 -I scripts/bench.py config        # every setting (bench.json's values and the defaults)
+python3 -I scripts/bench.py plan          # the cases chosen and the estimated hours
+python3 -I scripts/bench.py start         # check, then start (the supervisor runs detached)
+python3 -I scripts/bench.py status        # how it is going
+python3 -I scripts/bench.py stop          # stop it (start again with the same run_id resumes)
 ```
 
 ## License

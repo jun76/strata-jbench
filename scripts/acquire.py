@@ -6,8 +6,9 @@ and fetching the missing ones only after asking (AGENTS.md 2.0a).
     python3 -I scripts/acquire.py fetch <item>... [--yes]       # items as check names them: models, dflash2, harness:<division>
     python3 -I scripts/acquire.py fetch --all [--yes]
 
-The division is $BENCH_DIVISION (default plain) and the environment the one this hardware matches, as for the runner;
-what is needed comes from the environment's plan (plan/<division>/<env>/cases.jsonl, scripts/build_cases.py).
+The division, the environment and the cases are bench.json's, as for the run (scripts/config.py; $BENCH_DIVISION
+and $BENCH_ENV override them): what is needed is what the cases chosen use, from the environment's plan
+(plan/<division>/<env>/cases.jsonl, scripts/build_cases.py).
 Where each thing is looked for:
   models     Strata's models folder (downloads/manifest.json, pinned by Strata's setup.py: scripts/setup_acquire.py)
   dflash2    strata drafting plan (the drafter Strata fetches with strata drafting fetch)
@@ -15,8 +16,8 @@ Where each thing is looked for:
              (divisions/<division>/division.json "pin"; scripts/harnesses.py)
 
 fetch asks before each item (its size and source), unless --yes (for a fetch agreed beforehand, AGENTS.md 2.2):
-  models     the strata-jbench-acquire unit (scripts/overnight.py: hf downloads, the NVFP4-QAD conversion), as
-             scripts/start_pipeline.sh starts it; it runs for hours, so it is started and not waited for
+  models     scripts/overnight.py (hf downloads, the NVFP4-QAD conversion) detached from the terminal, as the run's
+             supervisor starts it with "fetch"; it runs for hours, so it is started and not waited for
   dflash2    strata drafting fetch
   harness    the pinned version into tools/harness/<division>/<version>/, never the user's global packages: npm
              --prefix, a venv for a pip pin (Hermes Agent at its tagged commit), or the Strata app's AppImage checked
@@ -34,6 +35,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
+import config  # noqa: E402
 import envs  # noqa: E402
 import harnesses  # noqa: E402
 import overnight  # noqa: E402
@@ -58,12 +60,20 @@ def queue_running():
         return None
 
 
+def overnight_running():
+    try:
+        os.kill(int(json.loads((ROOT / 'downloads/overnight-state.json').read_text())['pid']), 0)
+        return True
+    except (OSError, ValueError, KeyError):
+        return False
+
+
 def needed(env_id, div):
-    """The models and the drafter the environment's plan for this division uses."""
+    """The models and the drafter the cases bench.json chooses from the environment's plan for this division use."""
     plan = envs.plan_dir(env_id, div) / 'cases.jsonl'
     if not plan.exists():
         raise SystemExit(f'{plan.relative_to(ROOT)} is missing: python3 -I scripts/build_cases.py (with BENCH_DIVISION={div})')
-    rows = [json.loads(x) for x in plan.read_text().splitlines() if x.strip()]
+    rows = config.select([json.loads(x) for x in plan.read_text().splitlines() if x.strip()], config.load())
     models = list(dict.fromkeys((r['family'], r['model']) for r in rows))
     return models, any('--drafting dflash2' in r['launch_opts'] for r in rows)
 
@@ -180,17 +190,16 @@ def fetch(out, wanted, yes, skip_models=False):
     if 'models' in todo and any(i['item'] == 'models' for i in missing):
         size = sum(i['bytes'] or 0 for i in missing if i['item'] == 'models')
         names = ', '.join(i['what'] for i in missing if i['item'] == 'models')
-        if ask(f'download {names} ({gb(size)} from huggingface.co) as the strata-jbench-acquire unit?', yes):
-            if subprocess.run(['systemctl', '--user', 'is-active', '--quiet', 'strata-jbench-acquire']).returncode == 0:
-                print('strata-jbench-acquire is already running')
+        if ask(f'download {names} ({gb(size)} from huggingface.co) with scripts/overnight.py?', yes):
+            if overnight_running():
+                print('scripts/overnight.py is already running (downloads/overnight.log)')
             else:
                 (ROOT / 'downloads/READY').unlink(missing_ok=True)
-                subprocess.run(['systemd-run', '--user', '--unit=strata-jbench-acquire', '--collect',
-                                f'--working-directory={ROOT}',
-                                f'--setenv=PATH={Path.home()}/.local/bin:/usr/local/bin:/usr/bin:/bin',
-                                f'--setenv=BENCH_ENV={out["env"]}', '.venv-hf/bin/python', '-u', 'scripts/overnight.py'],
-                               check=False)
-                print('started strata-jbench-acquire (downloads/overnight.log); it runs for hours, so it is not waited for')
+                with (ROOT / 'downloads/overnight.out').open('a') as f:
+                    subprocess.Popen([str(ROOT / '.venv-hf/bin/python'), '-u', 'scripts/overnight.py'], cwd=ROOT,
+                                     env={**os.environ, 'BENCH_ENV': out['env']}, stdout=f, stderr=subprocess.STDOUT,
+                                     stdin=subprocess.DEVNULL, start_new_session=True)
+                print('started scripts/overnight.py (downloads/overnight.log); it runs for hours, so it is not waited for')
     if 'dflash2' in todo and any(i['item'] == 'dflash2' for i in missing):
         it = next(i for i in missing if i['item'] == 'dflash2')
         if ask(f'fetch the DFlash2 drafter ({gb(it["bytes"] or 0)} from {it["source"]}) with strata drafting fetch?', yes):
@@ -216,7 +225,7 @@ def main():
     ap.add_argument('--all', action='store_true', help='fetch: every missing item')
     ap.add_argument('--yes', action='store_true', help='fetch: do not ask (agreed beforehand)')
     ap.add_argument('--skip-models', action='store_true',
-                    help='fetch: leave the models out (scripts/start_pipeline.sh starts their unit itself)')
+                    help='fetch: leave the models out (the run\'s supervisor starts scripts/overnight.py itself)')
     ap.add_argument('--env', default='', help='the environment (default: the one this hardware matches)')
     a = ap.parse_args()
     env_id = envs.current(a.env)

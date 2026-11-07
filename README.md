@@ -38,7 +38,7 @@
 | 計測完了 | 部門 | 環境 | RUN_ID | Tier | ケース（done / 全体） | 内容 | 見る |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2026-11-04 22:51 | プレーン（ハーネスなし） | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-long` | 4b, 4c, 4d | 112 / 112 | Tier 4b・4c・4d（長文の読解 32K〜1M と YaRN の点検）。2026-11-03-main では長文の fixture が未作成で省いていたので、青空文庫と Project Gutenberg の日英10作品から長文を作って追加で測った | [📈](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-long/?env=rtx5090-128g "グラフ") [📋](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-long/cases/plain/rtx5090-128g/README.md "ケース一覧") [📁](published/plain/rtx5090-128g/2026-11-04-long/ "エビデンス") |
-| 2026-11-04 18:20 | プレーン（ハーネスなし） | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-q8-t3` | 3 | 9 / 9 | unsloth Q8_0 の Tier 3（thinking の有無とゲーム作成）。当初の計画では Q8_0 を Tier 3 から外していたので、計画に足して追加で測った | [📈](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-q8-t3/?env=rtx5090-128g "グラフ") [📋](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-q8-t3/cases/plain/rtx5090-128g/README.md "ケース一覧") [📁](published/plain/rtx5090-128g/2026-11-04-q8-t3/ "エビデンス") |
+| 2026-11-04 18:20 | プレーン（ハーネスなし） | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-q8-t3` | 3 | 9 / 9 | unsloth Q8_0 の Tier 3（thinking の有無とコーディング）。当初の計画では Q8_0 を Tier 3 から外していたので、計画に足して追加で測った | [📈](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-q8-t3/?env=rtx5090-128g "グラフ") [📋](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-q8-t3/cases/plain/rtx5090-128g/README.md "ケース一覧") [📁](published/plain/rtx5090-128g/2026-11-04-q8-t3/ "エビデンス") |
 | 2026-11-04 15:25 | プレーン（ハーネスなし） | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-iq3s-mtp` | 0, 1, 2, 3, 4a, 5 | 159 / 159 | qwen IQ3_S の測り直し（2026-11-03-main では MTP の draft layer が読み込まれていなかった）。DFlash2 のケースも含めて同じ Tier を流し直した | [📈](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-iq3s-mtp/?env=rtx5090-128g "グラフ") [📋](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/plain/rtx5090-128g/README.md "ケース一覧") [📁](published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/ "エビデンス") |
 
 <details>
@@ -60,7 +60,7 @@
 | 0 | 計測そのものが正しいか、ばらつきはどの程度か | 一部のモデル |
 | 1 | 各モデルの素の速さ（prefill・decode、文章の種類別、temperature 別、drafter 別） | 全モデル |
 | 2 | Strata 同梱のベンチ standard-v1 での速さと sanity の正答 | 全モデル |
-| 3 | thinking の有無で、回答までの時間・正答・ゲーム作成の出来がどう変わるか | 全モデル |
+| 3 | thinking の有無で、回答までの時間・正答・コーディングの出来がどう変わるか | 全モデル |
 | 4 | コンテキスト長の確保コスト（4a）と、実際の長文の処理（4b〜4d、〜1M token） | 4a は全モデル、4b〜4d は代表モデル |
 | 5 | 起動オプションを1つずつ変えたときの変化（自動 tune を含む） | 代表3モデル |
 
@@ -91,7 +91,7 @@
 
 | 何 | どこ |
 | --- | --- |
-| ケースごとの結果 | `cases/<case id>/summary.json`（集計）、`requests.jsonl`（送ったリクエスト）、`responses/`（応答の本文）、`artifact/`（ゲーム作成などの成果物） |
+| ケースごとの結果 | `cases/<case id>/summary.json`（集計）、`requests.jsonl`（送ったリクエスト）、`responses/`（応答の本文）、`artifact/`（コーディングの成果物） |
 | 起動ごとの記録 | `sessions/<session>/start-N/`（`strata launch` の出力、エンジンのログ、/settings・/config・/props、telemetry.csv） |
 | standard-v1 の出力 | `standard/` |
 | 温度・電力の推移 | `stats/thermal.csv`（5秒ごと） |
@@ -116,31 +116,34 @@
 | `results/…/<RUN_ID>/raw/` | `scripts/bench_runner.py` | ストリームの生データ（SSE と思考の全文）。`published/` へは移しません |
 | `results/…/<RUN_ID>/stats/snapshots.jsonl.gz`、`last.json` | `scripts/stats_watch.py` | **計測中の PC 全体のスナップショット**。セッション開始・起動・ケース終了・失敗・Tier の切り替わりと 5 分ごとに、動いている全プロセス（PID、ユーザー名、コマンドライン全体、CPU・メモリ・ディスク IO）、GPU を使っているプロセス、CPU・メモリ・PSI・温度を記録します。並走する処理が計測を乱していないか後で確かめるためのもので、他のプログラムのコマンドライン（引数に書いたパスや値を含む）が残るため、`published/` へは移しません |
 | `preview/` | `scripts/build_cases.py`、`scripts/build_results.py` | `results/` も読んで作る確認用のグラフとケース一覧 |
-| `run-status/` | `scripts/start_pipeline.sh`、`scripts/healthcheck.py`、`scripts/preflight.py` | 無人実行の状態（`STATUS.md`、`ALERTS.log`、`current-run.json`、`preflight.json`） |
+| `run-status/` | `scripts/bench.py`、`scripts/healthcheck.py`、`scripts/preflight.py` | 無人実行の状態（`STATUS.md`、`ALERTS.log`、`current-run.json`、`preflight.json`） |
 | `downloads/` | `scripts/download_models.py`、`scripts/overnight.py` | モデル取得の状態とログ（`manifest.json` に SHA-256） |
 | `work/` | `scripts/overnight.py`（NVFP4-QAD の変換） | NVFP4-QAD 変換用の作業フォルダ。長文コーパスの元データ（`work/corpus/raw/`、手で取得）もここに置き、`scripts/long_corpus.py` が読みます |
 
-スナップショットを取りたくないときは、`scripts/start_pipeline.sh` が起動する `strata-jbench-stats` ユニットを止めてください
-（`systemctl --user stop strata-jbench-stats`。計測そのものは続きます）。いらなくなったら `results/` の中を消してかまいません。
+スナップショットを取りたくないときは、`bench.json` に `"stats": false` と書いてから始めてください。
+いらなくなったら `results/` の中を消してかまいません。リポのいちばん上の `bench.json`（計測の設定）も Git の対象外です。
 
 リポの外では、モデルの重みが `~/.local/share/strata/Strata-data/models` に、Strata の起動プロファイル
-（`launch-<model>-<context>`）と Tier 5 の tune のプリセットが Strata の設定に書かれます。計測中は systemd のユーザーユニット
-（`strata-jbench-*`、`systemd-run` による一時的なもの）が動きます。
+（`launch-<model>-<context>`）と Tier 5 の tune のプリセットが Strata の設定に書かれます。計測中は、端末から切り離された
+見張り役のプロセス（`scripts/supervise.py`）とその子プロセスが動きます。systemd のユニットは作りません。
 
 ## 追試する
 
-計測は長時間かかるので、systemd のユーザーユニットとして無人で動かします。手順（環境の用意、preflight、開始、監視、異常時の復旧、結果の確定）は
+計測は長時間かかるので、端末から切り離した見張り役のプロセスで無人で動かします（止まったケースの再起動や状態の記録もそのプロセスがします）。手順（環境の用意、preflight、開始、監視、異常時の復旧、結果の確定）は
 [AGENTS.md](AGENTS.md)（英語）に、環境の定義の書き方は [envs/README.md](envs/README.md) にあります。
 
 前提として、Strata（デスクトップアプリ）を入れて一度モデルをインストールしておくことと、Strata のソースを `~/Strata` に
 置いておくことが要ります（取得するファイルとその SHA-256 はソースの `setup.py` が決めます）。ダウンロード用と NVFP4-QAD 変換用の
-Python 環境は `scripts/setup_acquire.py` が作り、`scripts/start_pipeline.sh` が自動で呼びます。
+Python 環境は `scripts/setup_acquire.py` が作り、`scripts/bench.py start` が自動で呼びます。
+計測の設定（RUN_ID、部門、回す Tier・モデル・ケースなど）は `bench.json` に書きます。項目と既定値は `scripts/bench.py config` で一覧できます。
 
 ```bash
-python3 -I scripts/envs.py list                                     # いまのハードウェアに合う環境
-python3 -I scripts/build_cases.py                                    # 計画とケース一覧（ケース数と見積もり時間）
-python3 scripts/preflight.py --phase all --steps "0,1,2,3,4a,4b,4c,4d,5"      # 始める前の確認
-RUN_ID=<run id> STEPS="0 1 2 3 4a 4b 4c 4d 5" scripts/start_pipeline.sh       # 開始
+python3 -I scripts/envs.py list          # いまのハードウェアに合う環境
+python3 -I scripts/bench.py config        # 設定の一覧（bench.json に書いた値と既定値）
+python3 -I scripts/bench.py plan          # 選んだ範囲のケース数と見積もり時間
+python3 -I scripts/bench.py start         # 確認してから開始（見張り役が端末から切り離されて動く）
+python3 -I scripts/bench.py status        # 状況
+python3 -I scripts/bench.py stop          # 止める（同じ run_id でもう一度 start すると続きから）
 ```
 
 ## ライセンス

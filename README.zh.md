@@ -37,7 +37,7 @@
 | 测量完成 | 部门 | 环境 | RUN_ID | Tier | 用例（done / 全部） | 内容 | 查看 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2026-11-04 22:51 | 纯模型（无 harness） | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-long` | 4b, 4c, 4d | 112 / 112 | Tier 4b・4c・4d（32K〜1M 的长文阅读与 YaRN 检查）。2026-11-03-main 因长文 fixture 尚未制作而省略，之后用青空文库与 Project Gutenberg 的日英 10 部作品制作长文补测 | [📈](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-long/?env=rtx5090-128g "图表") [📋](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-long/cases/plain/rtx5090-128g/README.zh.md "用例一览") [📁](published/plain/rtx5090-128g/2026-11-04-long/ "证据") |
-| 2026-11-04 18:20 | 纯模型（无 harness） | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-q8-t3` | 3 | 9 / 9 | unsloth Q8_0 的 Tier 3（有无 thinking 与游戏制作）。最初的计划把 Q8_0 排除在 Tier 3 之外，因此加入计划后补测 | [📈](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-q8-t3/?env=rtx5090-128g "图表") [📋](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-q8-t3/cases/plain/rtx5090-128g/README.zh.md "用例一览") [📁](published/plain/rtx5090-128g/2026-11-04-q8-t3/ "证据") |
+| 2026-11-04 18:20 | 纯模型（无 harness） | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-q8-t3` | 3 | 9 / 9 | unsloth Q8_0 的 Tier 3（有无 thinking 与编程）。最初的计划把 Q8_0 排除在 Tier 3 之外，因此加入计划后补测 | [📈](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-q8-t3/?env=rtx5090-128g "图表") [📋](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-q8-t3/cases/plain/rtx5090-128g/README.zh.md "用例一览") [📁](published/plain/rtx5090-128g/2026-11-04-q8-t3/ "证据") |
 | 2026-11-04 15:25 | 纯模型（无 harness） | GeForce RTX 5090 · 128 GB RAM | `2026-11-04-iq3s-mtp` | 0, 1, 2, 3, 4a, 5 | 159 / 159 | qwen IQ3_S 的重测（2026-11-03-main 中 MTP 的 draft layer 未加载）。包括 DFlash2 用例在内重跑了相同的 Tier | [📈](https://jun76.github.io/strata-jbench/snapshots/plain/rtx5090-128g/2026-11-04-iq3s-mtp/?env=rtx5090-128g "图表") [📋](https://github.com/jun76/strata-jbench/blob/run/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/plain/rtx5090-128g/README.zh.md "用例一览") [📁](published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/ "证据") |
 
 <details>
@@ -59,7 +59,7 @@
 | 0 | 测量本身是否正确、波动有多大 | 部分模型 |
 | 1 | 各模型的基本速度（prefill・decode，按文章种类、temperature、drafter） | 全部模型 |
 | 2 | Strata 自带基准 standard-v1 的速度与 sanity 正确率 | 全部模型 |
-| 3 | 有无 thinking 对到回答的时间、正确率和游戏制作的影响 | 全部模型 |
+| 3 | 有无 thinking 对到回答的时间、正确率和编程结果的影响 | 全部模型 |
 | 4 | 预留上下文长度的代价（4a）与实际长文处理（4b〜4d，至 1M token） | 4a 为全部模型，4b〜4d 为代表模型 |
 | 5 | 逐个改变启动选项时的变化（含自动 tune） | 3 个代表模型 |
 
@@ -89,7 +89,7 @@
 
 | 内容 | 位置 |
 | --- | --- |
-| 各用例的结果 | `cases/<case id>/summary.json`（汇总）、`requests.jsonl`（所发请求）、`responses/`（回答正文）、`artifact/`（游戏制作等的产物） |
+| 各用例的结果 | `cases/<case id>/summary.json`（汇总）、`requests.jsonl`（所发请求）、`responses/`（回答正文）、`artifact/`（编程任务的产物） |
 | 每次启动的记录 | `sessions/<session>/start-N/`（`strata launch` 的输出、引擎日志、/settings・/config・/props、telemetry.csv） |
 | standard-v1 的输出 | `standard/` |
 | 温度・功耗的变化 | `stats/thermal.csv`（每 5 秒） |
@@ -112,30 +112,33 @@
 | `results/…/<RUN_ID>/raw/` | `scripts/bench_runner.py` | 流的原始数据（SSE 与思考全文），不移到 `published/` |
 | `results/…/<RUN_ID>/stats/snapshots.jsonl.gz`、`last.json` | `scripts/stats_watch.py` | **测量期间整台 PC 的快照**。在会话开始、启动、用例结束、失败、Tier 切换时以及每 5 分钟，记录所有运行中的进程（PID、用户名、完整命令行、CPU・内存・磁盘 IO）、使用 GPU 的进程，以及 CPU・内存・PSI・温度。用于事后确认并行的处理是否干扰了测量。由于会留下其他程序的命令行（包括作为参数写入的路径和值），不移到 `published/` |
 | `preview/` | `scripts/build_cases.py`、`scripts/build_results.py` | 同时读取 `results/` 生成的检查用图表与用例一览 |
-| `run-status/` | `scripts/start_pipeline.sh`、`scripts/healthcheck.py`、`scripts/preflight.py` | 无人值守运行的状态（`STATUS.md`、`ALERTS.log`、`current-run.json`、`preflight.json`） |
+| `run-status/` | `scripts/bench.py`、`scripts/healthcheck.py`、`scripts/preflight.py` | 无人值守运行的状态（`STATUS.md`、`ALERTS.log`、`current-run.json`、`preflight.json`） |
 | `downloads/` | `scripts/download_models.py`、`scripts/overnight.py` | 模型下载的状态与日志（`manifest.json` 含 SHA-256） |
 | `work/` | `scripts/overnight.py`（NVFP4-QAD 转换） | NVFP4-QAD 转换用的工作文件夹。长文语料的原始数据（`work/corpus/raw/`，手动获取）也放在这里，由 `scripts/long_corpus.py` 读取 |
 
-不想记录快照时，请停止 `scripts/start_pipeline.sh` 启动的 `strata-jbench-stats` 单元
-（`systemctl --user stop strata-jbench-stats`，测量本身会继续）。不再需要时，可以删除 `results/` 中的内容。
+不想记录快照时，请在开始前于 `bench.json` 写入 `"stats": false`。不再需要时，可以删除 `results/` 中的内容。
+仓库顶层的 `bench.json`（测量设置）也不在 Git 中。
 
 在仓库之外，模型权重存放在 `~/.local/share/strata/Strata-data/models`，Strata 的启动配置
-（`launch-<model>-<context>`）和 Tier 5 tune 的预设写入 Strata 的设置。测量期间会运行 systemd 用户单元
-（`strata-jbench-*`，由 `systemd-run` 创建的临时单元）。
+（`launch-<model>-<context>`）和 Tier 5 tune 的预设写入 Strata 的设置。测量期间会运行与终端分离的
+监视进程（`scripts/supervise.py`）及其子进程，不创建 systemd 单元。
 
 ## 复现
 
-测量耗时很长，因此作为 systemd 用户单元无人值守运行。步骤（准备环境、preflight、开始、监视、异常恢复、确定结果）见
+测量耗时很长，因此在与终端分离的监视进程下无人值守运行（失败或卡住的运行器的重启与状态记录也由它负责）。步骤（准备环境、preflight、开始、监视、异常恢复、确定结果）见
 [AGENTS.md](AGENTS.md)（英语），环境定义的写法见 [envs/README.md](envs/README.md)。
 
 前提是已安装 Strata（桌面应用）并安装过一次模型，且 Strata 的源码位于 `~/Strata`（下载哪些文件及其 SHA-256 由源码的
-`setup.py` 决定）。下载用和 NVFP4-QAD 转换用的 Python 环境由 `scripts/setup_acquire.py` 创建，`scripts/start_pipeline.sh` 会自动调用它。
+`setup.py` 决定）。下载用和 NVFP4-QAD 转换用的 Python 环境由 `scripts/setup_acquire.py` 创建，`scripts/bench.py start` 会自动调用它。
+测量设置（RUN_ID、部门、要运行的 Tier・模型・用例等）写在 `bench.json` 中，`scripts/bench.py config` 可列出全部项目及默认值。
 
 ```bash
-python3 -I scripts/envs.py list                                     # 与当前硬件匹配的环境
-python3 -I scripts/build_cases.py                                    # 计划与用例一览（用例数与预估时间）
-python3 scripts/preflight.py --phase all --steps "0,1,2,3,4a,4b,4c,4d,5"      # 开始前的检查
-RUN_ID=<run id> STEPS="0 1 2 3 4a 4b 4c 4d 5" scripts/start_pipeline.sh       # 开始
+python3 -I scripts/envs.py list          # 与当前硬件匹配的环境
+python3 -I scripts/bench.py config        # 全部设置（bench.json 中的值与默认值）
+python3 -I scripts/bench.py plan          # 所选范围的用例数与预估时间
+python3 -I scripts/bench.py start         # 检查后开始（监视进程与终端分离运行）
+python3 -I scripts/bench.py status        # 运行状况
+python3 -I scripts/bench.py stop          # 停止（以同一 run_id 再次 start 会接着运行）
 ```
 
 ## 许可证

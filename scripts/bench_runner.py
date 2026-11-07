@@ -4,7 +4,7 @@
 
 The environment (envs/<id>/env.json) is the one this hardware matches (scripts/envs.py); --env or $BENCH_ENV names it,
 and a run under an environment the hardware does not match is refused (a dry run may name any). The division
-($BENCH_DIVISION, default plain: divisions/README.md) must be one that is measured. In plain the runner calls the engine's
+($BENCH_DIVISION, else bench.json "division", default plain: divisions/README.md) must be one that is measured. In plain the runner calls the engine's
 API itself. In a harness division (division.json "harness") it hands each case's prompt to the harness in one shot
 (scripts/harnesses.py), inside a sandbox and a fresh work folder, with the recording proxy (scripts/agent_proxy.py)
 between the harness and the engine; the proxy puts the case's sampling, thinking, seed and cap into every request.
@@ -17,7 +17,7 @@ Per case: results/<division>/<env>/<run-id>/cases/<case id>/
   summary.json      medians and the counts build_cases.py shows
   requests.jsonl    one line per request (timings, usage, client times, check result)
   responses/        the final answer text per request
-  artifact/seed-N/  game cases: the files taken from the answer (or the harness's work folder), manifest.json, screenshot.png
+  artifact/seed-N/  coding cases: the files taken from the answer (or the harness's work folder), manifest.json, screenshot.png
   harness/seed-N/   harness divisions: the harness's output (events.jsonl, stderr.txt) and proxy.jsonl (one line per request)
   raw/              the SSE stream and thinking text; in a harness division also each seed's work folder, the harness's
                     folder and the requests as the harness sent them (kept out of Git)
@@ -75,9 +75,10 @@ def log(run_dir, msg):
 
 
 def thinking_budget(cap, fixture_name=''):
-    """Strata's answer_room value for this cap, sent explicitly. The game case gets half the cap: a whole game is
-    10K+ tokens of code, and with three quarters spent thinking two of three test answers were cut off."""
-    if fixture_name.startswith('game-'):
+    """Strata's answer_room value for this cap, sent explicitly. The coding cases (coding-shuri; game-minecraft, named
+    before 2026-11-07) get half the cap: a whole page is 10K+ tokens of code, and with three quarters spent thinking two
+    of three test answers were cut off."""
+    if fixture_name.startswith(('coding-', 'game-')):
         return cap // 2
     return cap - min(max(512, cap // 4), cap // 2)
 

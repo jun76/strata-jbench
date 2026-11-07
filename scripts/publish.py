@@ -40,7 +40,7 @@ import envs  # noqa: E402
 
 ROOT = envs.ROOT
 KEEP_LOCAL = {'raw'}                                     # folder names, anywhere in the run
-KEEP_LOCAL_FILES = {'stats/snapshots.jsonl.gz', 'stats/last.json', 'queue.pid'}
+KEEP_LOCAL_FILES = {'stats/snapshots.jsonl.gz', 'stats/last.json', 'queue.pid', 'supervisor.json', 'supervise.err'}
 
 
 def local_only(rel):

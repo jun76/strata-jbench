@@ -2,7 +2,7 @@
 
 [← 用例一览](README.zh.md)
 
-# Tier 4d: YaRN 的影响（IQ3_S，相同输入只改设置）
+# Tier 4d: YaRN 的影响（基准模型，相同输入只改设置）
 
 GeForce RTX 5090 · 128 GB RAM · 16 个用例 / 48 个请求。其他参数（输入内容、测量内容、备注、seed、timeout、启动会话）见 [tier-4d.csv](tier-4d.csv)。
 

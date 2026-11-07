@@ -2,9 +2,9 @@
 
 [← 用例一览](README.zh.md)
 
-# Tier 0: 验证测量工具（IQ3_S × 启动 3 次、用 Gyro-S 对照作者的数值、确认游戏成果的展开）
+# Tier 0: 验证测量工具（基准模型 × 启动 3 次、用 Gyro-S 对照作者的数值、确认编程成果的展开）
 
-GeForce RTX 5090 · 128 GB RAM · 25 个用例 / 183 个请求。其他参数（输入内容、测量内容、备注、seed、timeout、启动会话）见 [tier-0.csv](tier-0.csv)。
+GeForce RTX 5090 · 128 GB RAM · 26 个用例 / 186 个请求。其他参数（输入内容、测量内容、备注、seed、timeout、启动会话）见 [tier-0.csv](tier-0.csv)。
 
 | 状态 | case id | model | context | 配置 | 启动选项（相对默认） | fixture | effort | temp | 并发 | 输入 token | 输出 cap | 次数 | 结果 | 证据 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -32,4 +32,5 @@ GeForce RTX 5090 · 128 GB RAM · 25 个用例 / 183 个请求。其他参数（
 | done | `T0-gyro-Gyro-S-author-decode-copy` | gyro Gyro-S | 128K | author-protocol |  | decode-copy | none | 0.7 | 1 | 短文 | 512 | 3 | prefill 1440.9 / decode 488.1 / TTFT ms 288.8 / 接受率 1.0 | [2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/cases/T0-gyro-Gyro-S-author-decode-copy/) |
 | done | `T0-gyro-Gyro-S-author-prefill-4k` | gyro Gyro-S | 128K | author-protocol |  | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 | prefill 4453.4 / decode 258.0 / TTFT ms 931.1 / 接受率 0.712 | [2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/cases/T0-gyro-Gyro-S-author-prefill-4k/) |
 | done | `T0-gyro-Gyro-S-author-prefill-16k` | gyro Gyro-S | 128K | author-protocol |  | prefill-16k | none | 0.7 | 1 | 16,384 | 128 | 3 | prefill 6031.7 / decode 233.1 / TTFT ms 2734.9 / 接受率 0.63 | [2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/cases/T0-gyro-Gyro-S-author-prefill-16k/) |
+| planned | `T0-qwen-IQ3_S-coding-shuri-none` | qwen IQ3_S | 128K | baseline |  | coding-shuri | none | 0.7 | 1 | 短文 | 16,384 | 3 |  |  |
 | done | `T0-qwen-IQ3_S-game-minecraft-none` | qwen IQ3_S | 128K | baseline |  | game-minecraft | none | 0.7 | 1 | 短文 | 16,384 | 3 | prefill 168.8 / decode 260.1 / TTFT ms 332.5 / 接受率 0.785 | [2026-11-04-iq3s-mtp](../../../published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/T0-qwen-IQ3_S-game-minecraft-none/) |

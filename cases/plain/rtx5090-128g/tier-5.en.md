@@ -2,9 +2,9 @@
 
 [← cases](README.en.md)
 
-# Tier 5: changing one launch option at a time (3 models, auto tune included)
+# Tier 5: changing one launch option at a time (the reference model, the largest and the smallest; auto tune included)
 
-GeForce RTX 5090 · 128 GB RAM · 240 cases / 720 requests. The other parameters (input, measures, notes, seeds, timeout, launch session) are in [tier-5.csv](tier-5.csv).
+GeForce RTX 5090 · 128 GB RAM · 400 cases / 1,200 requests. The other parameters (input, measures, notes, seeds, timeout, launch session) are in [tier-5.csv](tier-5.csv).
 
 | status | case id | model | context | config | launch options (vs. default) | fixture | effort | temp | concurrency | input tokens | output cap | runs | result | evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -88,6 +88,166 @@ GeForce RTX 5090 · 128 GB RAM · 240 cases / 720 requests. The other parameters
 | done | `T5-qwen-IQ3_S-tune-thorough-decode-code` | qwen IQ3_S | 128K | tune=thorough | --tune thorough --retune | decode-code | none | 0.7 | 1 | short | 512 | 3 | prefill 314.8 / decode 262.6 / TTFT ms 325.6 / acceptance 0.769 | [2026-11-04-iq3s-mtp](../../../published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/T5-qwen-IQ3_S-tune-thorough-decode-code/) |
 | done | `T5-qwen-IQ3_S-tune-thorough-prefill-4k` | qwen IQ3_S | 128K | tune=thorough | --tune thorough --retune | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 | prefill 2932.2 / decode 261.2 / TTFT ms 1411.3 / acceptance 0.814 | [2026-11-04-iq3s-mtp](../../../published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/T5-qwen-IQ3_S-tune-thorough-prefill-4k/) |
 | done | `T5-qwen-IQ3_S-tune-thorough-prefill-32k` | qwen IQ3_S | 128K | tune=thorough | --tune thorough --retune | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 | prefill 5542.2 / decode 264.1 / TTFT ms 5938.2 / acceptance 0.78 | [2026-11-04-iq3s-mtp](../../../published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/T5-qwen-IQ3_S-tune-thorough-prefill-32k/) |
+| planned | `T5-unsloth-Q8_0-baseline-default-decode-prose-ja` | unsloth Q8_0 | 128K | baseline=default |  | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-baseline-default-decode-code` | unsloth Q8_0 | 128K | baseline=default |  | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-baseline-default-prefill-4k` | unsloth Q8_0 | 128K | baseline=default |  | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-baseline-default-prefill-32k` | unsloth Q8_0 | 128K | baseline=default |  | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-drafter-off-decode-prose-ja` | unsloth Q8_0 | 128K | drafter=off | --drafting off | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-drafter-off-decode-code` | unsloth Q8_0 | 128K | drafter=off | --drafting off | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-drafter-off-prefill-4k` | unsloth Q8_0 | 128K | drafter=off | --drafting off | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-drafter-off-prefill-32k` | unsloth Q8_0 | 128K | drafter=off | --drafting off | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-spec-2-decode-prose-ja` | unsloth Q8_0 | 128K | spec=2 | --set spec=2 | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-spec-2-decode-code` | unsloth Q8_0 | 128K | spec=2 | --set spec=2 | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-spec-2-prefill-4k` | unsloth Q8_0 | 128K | spec=2 | --set spec=2 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-spec-2-prefill-32k` | unsloth Q8_0 | 128K | spec=2 | --set spec=2 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-spec-6-decode-prose-ja` | unsloth Q8_0 | 128K | spec=6 | --set spec=6 | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-spec-6-decode-code` | unsloth Q8_0 | 128K | spec=6 | --set spec=6 | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-spec-6-prefill-4k` | unsloth Q8_0 | 128K | spec=6 | --set spec=6 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-spec-6-prefill-32k` | unsloth Q8_0 | 128K | spec=6 | --set spec=6 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-spec-min-p-0.7-decode-prose-ja` | unsloth Q8_0 | 128K | spec-min-p=0.7 | --set spec-min-p=0.7 | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-spec-min-p-0.7-decode-code` | unsloth Q8_0 | 128K | spec-min-p=0.7 | --set spec-min-p=0.7 | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-spec-min-p-0.7-prefill-4k` | unsloth Q8_0 | 128K | spec-min-p=0.7 | --set spec-min-p=0.7 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-spec-min-p-0.7-prefill-32k` | unsloth Q8_0 | 128K | spec-min-p=0.7 | --set spec-min-p=0.7 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-kv-fp16-decode-prose-ja` | unsloth Q8_0 | 128K | kv=fp16 | --kv fp16 | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-kv-fp16-decode-code` | unsloth Q8_0 | 128K | kv=fp16 | --kv fp16 | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-kv-fp16-prefill-4k` | unsloth Q8_0 | 128K | kv=fp16 | --kv fp16 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-kv-fp16-prefill-32k` | unsloth Q8_0 | 128K | kv=fp16 | --kv fp16 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-kv-q4_0-decode-prose-ja` | unsloth Q8_0 | 128K | kv=q4_0 | --kv q4_0 | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-kv-q4_0-decode-code` | unsloth Q8_0 | 128K | kv=q4_0 | --kv q4_0 | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-kv-q4_0-prefill-4k` | unsloth Q8_0 | 128K | kv=q4_0 | --kv q4_0 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-kv-q4_0-prefill-32k` | unsloth Q8_0 | 128K | kv=q4_0 | --kv q4_0 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-prefill-chunk-1024-decode-prose-ja` | unsloth Q8_0 | 128K | prefill-chunk=1024 | --set prefill=1024 | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-prefill-chunk-1024-decode-code` | unsloth Q8_0 | 128K | prefill-chunk=1024 | --set prefill=1024 | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-prefill-chunk-1024-prefill-4k` | unsloth Q8_0 | 128K | prefill-chunk=1024 | --set prefill=1024 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-prefill-chunk-1024-prefill-32k` | unsloth Q8_0 | 128K | prefill-chunk=1024 | --set prefill=1024 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-prefill-chunk-2048-decode-prose-ja` | unsloth Q8_0 | 128K | prefill-chunk=2048 | --set prefill=2048 | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-prefill-chunk-2048-decode-code` | unsloth Q8_0 | 128K | prefill-chunk=2048 | --set prefill=2048 | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-prefill-chunk-2048-prefill-4k` | unsloth Q8_0 | 128K | prefill-chunk=2048 | --set prefill=2048 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-prefill-chunk-2048-prefill-32k` | unsloth Q8_0 | 128K | prefill-chunk=2048 | --set prefill=2048 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-prefill-chunk-4096-decode-prose-ja` | unsloth Q8_0 | 128K | prefill-chunk=4096 | --set prefill=4096 | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-prefill-chunk-4096-decode-code` | unsloth Q8_0 | 128K | prefill-chunk=4096 | --set prefill=4096 | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-prefill-chunk-4096-prefill-4k` | unsloth Q8_0 | 128K | prefill-chunk=4096 | --set prefill=4096 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-prefill-chunk-4096-prefill-32k` | unsloth Q8_0 | 128K | prefill-chunk=4096 | --set prefill=4096 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-512-decode-prose-ja` | unsloth Q8_0 | 128K | vram-reserve=512 | --set vram-reserve-mib=512 | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-512-decode-code` | unsloth Q8_0 | 128K | vram-reserve=512 | --set vram-reserve-mib=512 | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-512-prefill-4k` | unsloth Q8_0 | 128K | vram-reserve=512 | --set vram-reserve-mib=512 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-512-prefill-32k` | unsloth Q8_0 | 128K | vram-reserve=512 | --set vram-reserve-mib=512 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-6512-decode-prose-ja` | unsloth Q8_0 | 128K | vram-reserve=6512 | --set vram-reserve-mib=6512 | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-6512-decode-code` | unsloth Q8_0 | 128K | vram-reserve=6512 | --set vram-reserve-mib=6512 | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-6512-prefill-4k` | unsloth Q8_0 | 128K | vram-reserve=6512 | --set vram-reserve-mib=6512 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-6512-prefill-32k` | unsloth Q8_0 | 128K | vram-reserve=6512 | --set vram-reserve-mib=6512 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vision-gpu-decode-prose-ja` | unsloth Q8_0 | 128K | vision=gpu | --vision gpu | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vision-gpu-decode-code` | unsloth Q8_0 | 128K | vision=gpu | --vision gpu | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vision-gpu-prefill-4k` | unsloth Q8_0 | 128K | vision=gpu | --vision gpu | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vision-gpu-prefill-32k` | unsloth Q8_0 | 128K | vision=gpu | --vision gpu | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-pool-workers-8-decode-prose-ja` | unsloth Q8_0 | 128K | pool-workers=8 | --set pool-workers=8 | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-pool-workers-8-decode-code` | unsloth Q8_0 | 128K | pool-workers=8 | --set pool-workers=8 | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-pool-workers-8-prefill-4k` | unsloth Q8_0 | 128K | pool-workers=8 | --set pool-workers=8 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-pool-workers-8-prefill-32k` | unsloth Q8_0 | 128K | pool-workers=8 | --set pool-workers=8 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-cpu-pin-pcore-decode-prose-ja` | unsloth Q8_0 | 128K | cpu-pin=P-cores only | --pool-cores <the P-cores' logical CPUs> | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-cpu-pin-pcore-decode-code` | unsloth Q8_0 | 128K | cpu-pin=P-cores only | --pool-cores <the P-cores' logical CPUs> | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-cpu-pin-pcore-prefill-4k` | unsloth Q8_0 | 128K | cpu-pin=P-cores only | --pool-cores <the P-cores' logical CPUs> | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-cpu-pin-pcore-prefill-32k` | unsloth Q8_0 | 128K | cpu-pin=P-cores only | --pool-cores <the P-cores' logical CPUs> | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-ple-io-mmap-decode-prose-ja` | unsloth Q8_0 | 128K | ple-io=mmap | --set ple-io=mmap | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-ple-io-mmap-decode-code` | unsloth Q8_0 | 128K | ple-io=mmap | --set ple-io=mmap | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-ple-io-mmap-prefill-4k` | unsloth Q8_0 | 128K | ple-io=mmap | --set ple-io=mmap | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-ple-io-mmap-prefill-32k` | unsloth Q8_0 | 128K | ple-io=mmap | --set ple-io=mmap | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-parallel-2-decode-prose-ja` | unsloth Q8_0 | 128K | parallel=2 | --parallel 2 | decode-prose-ja | none | 0.7 | 2 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-parallel-2-decode-code` | unsloth Q8_0 | 128K | parallel=2 | --parallel 2 | decode-code | none | 0.7 | 2 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-parallel-2-prefill-4k` | unsloth Q8_0 | 128K | parallel=2 | --parallel 2 | prefill-4k | none | 0.7 | 2 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-parallel-2-prefill-32k` | unsloth Q8_0 | 128K | parallel=2 | --parallel 2 | prefill-32k | none | 0.7 | 2 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-parallel-4-decode-prose-ja` | unsloth Q8_0 | 128K | parallel=4 | --parallel 4 | decode-prose-ja | none | 0.7 | 4 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-parallel-4-decode-code` | unsloth Q8_0 | 128K | parallel=4 | --parallel 4 | decode-code | none | 0.7 | 4 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-parallel-4-prefill-4k` | unsloth Q8_0 | 128K | parallel=4 | --parallel 4 | prefill-4k | none | 0.7 | 4 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-parallel-4-prefill-32k` | unsloth Q8_0 | 128K | parallel=4 | --parallel 4 | prefill-32k | none | 0.7 | 4 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-tune-quick-decode-prose-ja` | unsloth Q8_0 | 128K | tune=quick | --tune quick --retune | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-tune-quick-decode-code` | unsloth Q8_0 | 128K | tune=quick | --tune quick --retune | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-tune-quick-prefill-4k` | unsloth Q8_0 | 128K | tune=quick | --tune quick --retune | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-tune-quick-prefill-32k` | unsloth Q8_0 | 128K | tune=quick | --tune quick --retune | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-tune-thorough-decode-prose-ja` | unsloth Q8_0 | 128K | tune=thorough | --tune thorough --retune | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-tune-thorough-decode-code` | unsloth Q8_0 | 128K | tune=thorough | --tune thorough --retune | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-tune-thorough-prefill-4k` | unsloth Q8_0 | 128K | tune=thorough | --tune thorough --retune | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-tune-thorough-prefill-32k` | unsloth Q8_0 | 128K | tune=thorough | --tune thorough --retune | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-baseline-default-decode-prose-ja` | gyro Gyro-S | 128K | baseline=default |  | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-baseline-default-decode-code` | gyro Gyro-S | 128K | baseline=default |  | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-baseline-default-prefill-4k` | gyro Gyro-S | 128K | baseline=default |  | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-baseline-default-prefill-32k` | gyro Gyro-S | 128K | baseline=default |  | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-drafter-off-decode-prose-ja` | gyro Gyro-S | 128K | drafter=off | --drafting off | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-drafter-off-decode-code` | gyro Gyro-S | 128K | drafter=off | --drafting off | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-drafter-off-prefill-4k` | gyro Gyro-S | 128K | drafter=off | --drafting off | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-drafter-off-prefill-32k` | gyro Gyro-S | 128K | drafter=off | --drafting off | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-spec-2-decode-prose-ja` | gyro Gyro-S | 128K | spec=2 | --set spec=2 | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-spec-2-decode-code` | gyro Gyro-S | 128K | spec=2 | --set spec=2 | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-spec-2-prefill-4k` | gyro Gyro-S | 128K | spec=2 | --set spec=2 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-spec-2-prefill-32k` | gyro Gyro-S | 128K | spec=2 | --set spec=2 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-spec-6-decode-prose-ja` | gyro Gyro-S | 128K | spec=6 | --set spec=6 | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-spec-6-decode-code` | gyro Gyro-S | 128K | spec=6 | --set spec=6 | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-spec-6-prefill-4k` | gyro Gyro-S | 128K | spec=6 | --set spec=6 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-spec-6-prefill-32k` | gyro Gyro-S | 128K | spec=6 | --set spec=6 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-spec-min-p-0.7-decode-prose-ja` | gyro Gyro-S | 128K | spec-min-p=0.7 | --set spec-min-p=0.7 | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-spec-min-p-0.7-decode-code` | gyro Gyro-S | 128K | spec-min-p=0.7 | --set spec-min-p=0.7 | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-spec-min-p-0.7-prefill-4k` | gyro Gyro-S | 128K | spec-min-p=0.7 | --set spec-min-p=0.7 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-spec-min-p-0.7-prefill-32k` | gyro Gyro-S | 128K | spec-min-p=0.7 | --set spec-min-p=0.7 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-kv-fp16-decode-prose-ja` | gyro Gyro-S | 128K | kv=fp16 | --kv fp16 | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-kv-fp16-decode-code` | gyro Gyro-S | 128K | kv=fp16 | --kv fp16 | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-kv-fp16-prefill-4k` | gyro Gyro-S | 128K | kv=fp16 | --kv fp16 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-kv-fp16-prefill-32k` | gyro Gyro-S | 128K | kv=fp16 | --kv fp16 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-kv-q4_0-decode-prose-ja` | gyro Gyro-S | 128K | kv=q4_0 | --kv q4_0 | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-kv-q4_0-decode-code` | gyro Gyro-S | 128K | kv=q4_0 | --kv q4_0 | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-kv-q4_0-prefill-4k` | gyro Gyro-S | 128K | kv=q4_0 | --kv q4_0 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-kv-q4_0-prefill-32k` | gyro Gyro-S | 128K | kv=q4_0 | --kv q4_0 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-prefill-chunk-1024-decode-prose-ja` | gyro Gyro-S | 128K | prefill-chunk=1024 | --set prefill=1024 | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-prefill-chunk-1024-decode-code` | gyro Gyro-S | 128K | prefill-chunk=1024 | --set prefill=1024 | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-prefill-chunk-1024-prefill-4k` | gyro Gyro-S | 128K | prefill-chunk=1024 | --set prefill=1024 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-prefill-chunk-1024-prefill-32k` | gyro Gyro-S | 128K | prefill-chunk=1024 | --set prefill=1024 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-prefill-chunk-2048-decode-prose-ja` | gyro Gyro-S | 128K | prefill-chunk=2048 | --set prefill=2048 | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-prefill-chunk-2048-decode-code` | gyro Gyro-S | 128K | prefill-chunk=2048 | --set prefill=2048 | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-prefill-chunk-2048-prefill-4k` | gyro Gyro-S | 128K | prefill-chunk=2048 | --set prefill=2048 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-prefill-chunk-2048-prefill-32k` | gyro Gyro-S | 128K | prefill-chunk=2048 | --set prefill=2048 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-prefill-chunk-4096-decode-prose-ja` | gyro Gyro-S | 128K | prefill-chunk=4096 | --set prefill=4096 | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-prefill-chunk-4096-decode-code` | gyro Gyro-S | 128K | prefill-chunk=4096 | --set prefill=4096 | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-prefill-chunk-4096-prefill-4k` | gyro Gyro-S | 128K | prefill-chunk=4096 | --set prefill=4096 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-prefill-chunk-4096-prefill-32k` | gyro Gyro-S | 128K | prefill-chunk=4096 | --set prefill=4096 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-512-decode-prose-ja` | gyro Gyro-S | 128K | vram-reserve=512 | --set vram-reserve-mib=512 | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-512-decode-code` | gyro Gyro-S | 128K | vram-reserve=512 | --set vram-reserve-mib=512 | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-512-prefill-4k` | gyro Gyro-S | 128K | vram-reserve=512 | --set vram-reserve-mib=512 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-512-prefill-32k` | gyro Gyro-S | 128K | vram-reserve=512 | --set vram-reserve-mib=512 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-6512-decode-prose-ja` | gyro Gyro-S | 128K | vram-reserve=6512 | --set vram-reserve-mib=6512 | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-6512-decode-code` | gyro Gyro-S | 128K | vram-reserve=6512 | --set vram-reserve-mib=6512 | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-6512-prefill-4k` | gyro Gyro-S | 128K | vram-reserve=6512 | --set vram-reserve-mib=6512 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-6512-prefill-32k` | gyro Gyro-S | 128K | vram-reserve=6512 | --set vram-reserve-mib=6512 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vision-gpu-decode-prose-ja` | gyro Gyro-S | 128K | vision=gpu | --vision gpu | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vision-gpu-decode-code` | gyro Gyro-S | 128K | vision=gpu | --vision gpu | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vision-gpu-prefill-4k` | gyro Gyro-S | 128K | vision=gpu | --vision gpu | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vision-gpu-prefill-32k` | gyro Gyro-S | 128K | vision=gpu | --vision gpu | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-pool-workers-8-decode-prose-ja` | gyro Gyro-S | 128K | pool-workers=8 | --set pool-workers=8 | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-pool-workers-8-decode-code` | gyro Gyro-S | 128K | pool-workers=8 | --set pool-workers=8 | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-pool-workers-8-prefill-4k` | gyro Gyro-S | 128K | pool-workers=8 | --set pool-workers=8 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-pool-workers-8-prefill-32k` | gyro Gyro-S | 128K | pool-workers=8 | --set pool-workers=8 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-cpu-pin-pcore-decode-prose-ja` | gyro Gyro-S | 128K | cpu-pin=P-cores only | --pool-cores <the P-cores' logical CPUs> | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-cpu-pin-pcore-decode-code` | gyro Gyro-S | 128K | cpu-pin=P-cores only | --pool-cores <the P-cores' logical CPUs> | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-cpu-pin-pcore-prefill-4k` | gyro Gyro-S | 128K | cpu-pin=P-cores only | --pool-cores <the P-cores' logical CPUs> | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-cpu-pin-pcore-prefill-32k` | gyro Gyro-S | 128K | cpu-pin=P-cores only | --pool-cores <the P-cores' logical CPUs> | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-ple-io-mmap-decode-prose-ja` | gyro Gyro-S | 128K | ple-io=mmap | --set ple-io=mmap | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-ple-io-mmap-decode-code` | gyro Gyro-S | 128K | ple-io=mmap | --set ple-io=mmap | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-ple-io-mmap-prefill-4k` | gyro Gyro-S | 128K | ple-io=mmap | --set ple-io=mmap | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-ple-io-mmap-prefill-32k` | gyro Gyro-S | 128K | ple-io=mmap | --set ple-io=mmap | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-parallel-2-decode-prose-ja` | gyro Gyro-S | 128K | parallel=2 | --parallel 2 | decode-prose-ja | none | 0.7 | 2 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-parallel-2-decode-code` | gyro Gyro-S | 128K | parallel=2 | --parallel 2 | decode-code | none | 0.7 | 2 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-parallel-2-prefill-4k` | gyro Gyro-S | 128K | parallel=2 | --parallel 2 | prefill-4k | none | 0.7 | 2 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-parallel-2-prefill-32k` | gyro Gyro-S | 128K | parallel=2 | --parallel 2 | prefill-32k | none | 0.7 | 2 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-parallel-4-decode-prose-ja` | gyro Gyro-S | 128K | parallel=4 | --parallel 4 | decode-prose-ja | none | 0.7 | 4 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-parallel-4-decode-code` | gyro Gyro-S | 128K | parallel=4 | --parallel 4 | decode-code | none | 0.7 | 4 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-parallel-4-prefill-4k` | gyro Gyro-S | 128K | parallel=4 | --parallel 4 | prefill-4k | none | 0.7 | 4 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-parallel-4-prefill-32k` | gyro Gyro-S | 128K | parallel=4 | --parallel 4 | prefill-32k | none | 0.7 | 4 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-tune-quick-decode-prose-ja` | gyro Gyro-S | 128K | tune=quick | --tune quick --retune | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-tune-quick-decode-code` | gyro Gyro-S | 128K | tune=quick | --tune quick --retune | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-tune-quick-prefill-4k` | gyro Gyro-S | 128K | tune=quick | --tune quick --retune | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-tune-quick-prefill-32k` | gyro Gyro-S | 128K | tune=quick | --tune quick --retune | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-tune-thorough-decode-prose-ja` | gyro Gyro-S | 128K | tune=thorough | --tune thorough --retune | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-tune-thorough-decode-code` | gyro Gyro-S | 128K | tune=thorough | --tune thorough --retune | decode-code | none | 0.7 | 1 | short | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-tune-thorough-prefill-4k` | gyro Gyro-S | 128K | tune=thorough | --tune thorough --retune | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-tune-thorough-prefill-32k` | gyro Gyro-S | 128K | tune=thorough | --tune thorough --retune | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
 | done | `T5-unsloth-UD-Q6_K_XL-baseline-default-decode-prose-ja` | unsloth UD-Q6_K_XL | 128K | baseline=default |  | decode-prose-ja | none | 0.7 | 1 | short | 512 | 3 | prefill 152.9 / decode 93.6 / TTFT ms 641.9 / acceptance 0.514 | [2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/cases/T5-unsloth-UD-Q6_K_XL-baseline-default-decode-prose-ja/) |
 | done | `T5-unsloth-UD-Q6_K_XL-baseline-default-decode-code` | unsloth UD-Q6_K_XL | 128K | baseline=default |  | decode-code | none | 0.7 | 1 | short | 512 | 3 | prefill 166.9 / decode 99.6 / TTFT ms 639.4 / acceptance 0.746 | [2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/cases/T5-unsloth-UD-Q6_K_XL-baseline-default-decode-code/) |
 | done | `T5-unsloth-UD-Q6_K_XL-baseline-default-prefill-4k` | unsloth UD-Q6_K_XL | 128K | baseline=default |  | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 | prefill 1072.9 / decode 69.7 / TTFT ms 3847.9 / acceptance 0.697 | [2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/cases/T5-unsloth-UD-Q6_K_XL-baseline-default-prefill-4k/) |

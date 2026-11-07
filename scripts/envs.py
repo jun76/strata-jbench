@@ -16,7 +16,7 @@ and the runner and preflight refuse to measure under an environment that does no
     python3 -I scripts/envs.py run-dir <run id>    # results/<division>/<env>/<run id> for the detected environment
     python3 -I scripts/envs.py divisions           # every division and whether it is measured yet
 
-The division is $BENCH_DIVISION, "plain" when unset; only a division whose division.json says "status": "active" can be
+The division is $BENCH_DIVISION, else bench.json "division" ("plain" by default: scripts/config.py); only a division whose division.json says "status": "active" can be
 measured (the others are planned: their harness is not set up, or its adapter in scripts/harnesses.py has not been run yet).
 """
 import json
@@ -27,6 +27,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'scripts'))
+import config  # noqa: E402
 ENVS = ROOT / 'envs'
 DIVISIONS = ROOT / 'divisions'
 RAM_TOLERANCE = 0.03      # MemTotal moves a little between kernels and firmware settings, not by a whole module
@@ -111,8 +113,9 @@ def detect(hw=None):
 
 
 def current(explicit=None):
-    """The environment to use: --env / $BENCH_ENV if given (it must match the hardware), else the detected one."""
-    want = explicit or os.environ.get('BENCH_ENV') or None
+    """The environment to use: --env / $BENCH_ENV / bench.json "env" if given (it must match the hardware), else the
+    detected one."""
+    want = explicit or os.environ.get('BENCH_ENV') or config.get('env') or None
     env_id, found, hw = detect()
     if want:
         if want not in found:
@@ -139,8 +142,9 @@ def load_division(div_id):
 
 
 def division(explicit=None, measuring=False):
-    """The division to use: --division / $BENCH_DIVISION if given, else "plain". measuring=True: it must be active."""
-    div_id = explicit or os.environ.get('BENCH_DIVISION') or 'plain'
+    """The division to use: --division / $BENCH_DIVISION if given, else bench.json "division" (default plain).
+    measuring=True: it must be active."""
+    div_id = explicit or os.environ.get('BENCH_DIVISION') or config.get('division') or 'plain'
     cfg = load_division(div_id)
     if measuring and cfg.get('status') != 'active':
         raise SystemExit(f'division {div_id!r} is {cfg.get("status")!r}, not measured yet (divisions/{div_id}/division.json)')

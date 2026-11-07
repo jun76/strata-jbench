@@ -17,8 +17,7 @@ The CPU's own power (RAPL energy_uj) is readable by root only, so it is not reco
 It holds the command lines of every program on the PC, so it stays out of Git (.gitignore).
 Reading /proc for ~1 s per snapshot is light; nothing heavy runs beside a measurement.
 
-Normally started by scripts/start_pipeline.sh as the systemd user unit strata-jbench-stats; it exits once the
-queue unit (strata-jbench-queue) is no longer active.
+Normally started by the run's supervisor (scripts/supervise.py); it exits once the supervisor (queue.pid) is gone.
 
     python3 -I scripts/stats_watch.py --run-id 2026-11-03-main
     python3 -I scripts/stats_watch.py --run-id test-x --once       one snapshot, then exit
@@ -387,8 +386,13 @@ def classify(msg):
     return None
 
 
-def queue_active():
-    return subprocess.run(['systemctl', '--user', 'is-active', '--quiet', 'strata-jbench-queue']).returncode == 0
+def queue_active(run_dir):
+    """The run's supervisor (its recorded PID, scripts/supervise.py) is alive."""
+    try:
+        os.kill(int((run_dir / 'queue.pid').read_text()), 0)
+        return True
+    except (OSError, ValueError):
+        return False
 
 
 def main():
@@ -397,7 +401,7 @@ def main():
     ap.add_argument('--every', type=int, default=300, help='seconds between periodic snapshots')
     ap.add_argument('--thermal-every', type=int, default=5, help='seconds between rows of thermal.csv')
     ap.add_argument('--once', action='store_true', help='one snapshot, then exit')
-    ap.add_argument('--no-exit', action='store_true', help='keep going when the queue unit is not active')
+    ap.add_argument('--no-exit', action='store_true', help='keep going when the run\'s supervisor is not alive')
     ap.add_argument('--env', default=os.environ.get('BENCH_ENV', ''), help='default: the one this hardware matches')
     a = ap.parse_args()
     sys.path.insert(0, str(ROOT / 'scripts'))
@@ -453,7 +457,7 @@ def main():
         elif time.time() - last_periodic >= a.every:
             write('periodic', [], False)
             last_periodic = time.time()
-        if not a.no_exit and not queue_active():
+        if not a.no_exit and not queue_active(run_dir):
             idle_since = idle_since or time.time()
             if time.time() - idle_since > 60:   # let the last lines arrive first
                 write('watch-end', [], True)

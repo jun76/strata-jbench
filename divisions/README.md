@@ -4,7 +4,7 @@
 ハードウェアの「環境」（[envs/](../envs/)）とは独立した区分で、部門ごとに環境があります。
 
 *English: results are split into divisions by how the models are driven. "plain" is the models and the engine alone,
-called through the engine's API with no agent harness. Each agentic division hands the game task (Minecraft) to one
+called through the engine's API with no agent harness. Each agentic division hands the coding task (Minecraft) to one
 agent harness in one shot, with a recording proxy between the harness and the engine that keeps the engine-side
 conditions (sampling, thinking, seed, output cap) the same for every harness.*
 
@@ -17,18 +17,18 @@ conditions (sampling, thinking, seed, output cap) the same for every harness.*
 | [`hermes`](hermes/division.json) | 計測できる（未計測） | エージェント: Hermes Agent v0.21.5（タグ 2026.9.24、`hermes chat --oneshot`） |
 | [`pi`](pi/division.json) | 計測できる（未計測） | エージェント: pi 0.74.2（`pi --mode json`） |
 
-ハーネスの版は、Strata が `strata connect` で試験した版です（dsh は単体の CLI の版、strata はアプリの版）。どれもゲーム作成（マイクラ）を one shot で渡します。
+ハーネスの版は、Strata が `strata connect` で試験した版です（dsh は単体の CLI の版、strata はアプリの版）。どれもコーディング（マイクラ）を one shot で渡します。
 
 「計測できる」は `division.json` の `status` が `active` の部門です。`planned` の部門は計測を始めません。
 ハーネスの部門は、そのハーネスを入れ、[scripts/harnesses.py](../scripts/harnesses.py) のアダプタを模擬エンジンで動かして確かめてから `active` にします。
 
 ## ハーネス部門の測り方
 
-- **ケース**: ゲーム作成（マイクラ、「マイクラ風3D箱庭ゲーム作って」）だけ。形式の指示を足さずに、ハーネスに one shot で渡す（非対話）。各3回。
-  プレーンの Tier 3 のゲームは、2026-11-07 から首里城（単一の HTML ファイルで答えるよう指定する英文）です。マイクラはハーネス部門へ移しました（それより前のプレーンの結果はそのまま）。
+- **ケース**: コーディング（マイクラ、「マイクラ風3D箱庭ゲーム作って」）だけ。形式の指示を足さずに、ハーネスに one shot で渡す（非対話）。各3回。
+  プレーンの Tier 3 のコーディングは、2026-11-07 から首里城（単一の HTML ファイルで答えるよう指定する英文）です。マイクラはハーネス部門へ移しました（それより前のプレーンの結果はそのまま）。
 - **エンジン**: プレーンの基準と同じ起動（コンテキスト 128K、`--vision off --parallel 1 --tune skip --drafting mtp`）。
 - **記録プロキシ**（[scripts/agent_proxy.py](../scripts/agent_proxy.py)）: ハーネスはエンジンに直接つながず、ランナーのプロキシを通す。
-  プロキシは各リクエストの sampling・thinking・seed・出力 cap をケースの値（プレーンの Tier 3 のゲームと同じ）にそろえ、ハーネスが送った元の値を記録する。
+  プロキシは各リクエストの sampling・thinking・seed・出力 cap をケースの値（プレーンの Tier 3 のコーディングと同じ）にそろえ、ハーネスが送った元の値を記録する。
   送らない項目を Strata が共有の Chat 設定や model card で埋めるので、そろえないとハーネスごとに条件が変わってしまうため。
   測る差は、ハーネスが足すもの（system prompt と tool の定義、ターン数、tool の実行、ハーネスの起動）。
 - **ハーネスの設定**: 版を固定し（`division.json` の `pin`）、ユーザーの設定とは別のフォルダに作る。窓 131,072 / 出力上限 32,768。自動の compaction とタイトル生成などの副次リクエストは切る。
@@ -47,4 +47,4 @@ conditions (sampling, thinking, seed, output cap) the same for every harness.*
 | ケース一覧 | `cases/<部門>/<環境>/` |
 | jbench が入れたハーネス | `tools/harness/<部門>/<版>/`（Git 管理外。`scripts/acquire.py fetch harness:<部門>`） |
 
-計測する部門は環境変数 `BENCH_DIVISION` で選びます（省略すると `plain`）。
+計測する部門は `bench.json` の `division` で選びます（省略すると `plain`。項目の一覧は `python3 -I scripts/bench.py config`）。

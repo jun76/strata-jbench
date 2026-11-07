@@ -17,7 +17,7 @@
 3. The presets the tuner saved in Strata's preset store during the run (tune-presets.json of each tune session): these
    are active for their choices, the desktop app's included, so the run lists them.
 
-scripts/overnight_bench.sh runs it after the last Tier; it is published with the run.
+The run's supervisor (scripts/supervise.py) runs it after the last Tier; it is published with the run.
 """
 import argparse
 import importlib.util

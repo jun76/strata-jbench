@@ -3,7 +3,7 @@
 Run with Strata's own Python (the active Control's, named in ~/.local/share/strata/components/control/active.json)
 so the token counts use the tokenizer and chat template the server uses, for example:
   ~/.local/share/strata/components/control/0.1.56/python/bin/python3 scripts/build_fixtures.py
-  ~/.local/share/strata/components/control/0.1.57/python/bin/python3 scripts/build_fixtures.py --only game-shuri
+  ~/.local/share/strata/components/control/0.1.57/python/bin/python3 scripts/build_fixtures.py --only coding-shuri
 (--only rewrites the named fixtures and their MANIFEST lines, and leaves the others as they are)
 
 The prefill records follow standard-v1 (tools/build_standard_corpus.py), sized here for thinking-off requests.
@@ -235,7 +235,7 @@ def main():
     def tokens_of(text):
         return len(counter.ids([{'role': 'user', 'content': MARKER_SAMPLE + '\n' + text}], None))
 
-    chats = {'game-minecraft': GAME_PROMPT, 'game-shuri': SHURI_PROMPT}
+    chats = {'game-minecraft': GAME_PROMPT, 'coding-shuri': SHURI_PROMPT}
     if only:
         unknown = only - set(chats)
         if unknown:

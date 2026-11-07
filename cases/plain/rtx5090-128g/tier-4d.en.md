@@ -2,7 +2,7 @@
 
 [← cases](README.en.md)
 
-# Tier 4d: the effect of YaRN (IQ3_S, same input, only the setting changes)
+# Tier 4d: the effect of YaRN (the reference model, same input, only the setting changes)
 
 GeForce RTX 5090 · 128 GB RAM · 16 cases / 48 requests. The other parameters (input, measures, notes, seeds, timeout, launch session) are in [tier-4d.csv](tier-4d.csv).
 

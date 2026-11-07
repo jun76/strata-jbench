@@ -2,9 +2,9 @@
 
 [← cases](README.en.md)
 
-# Tier 0: validating the harness (IQ3_S × 3 launches, Gyro-S against the author's figures, unpacking the game result)
+# Tier 0: validating the harness (the reference model × 3 launches, Gyro-S against the author's figures, unpacking the coding result)
 
-GeForce RTX 5090 · 128 GB RAM · 25 cases / 183 requests. The other parameters (input, measures, notes, seeds, timeout, launch session) are in [tier-0.csv](tier-0.csv).
+GeForce RTX 5090 · 128 GB RAM · 26 cases / 186 requests. The other parameters (input, measures, notes, seeds, timeout, launch session) are in [tier-0.csv](tier-0.csv).
 
 | status | case id | model | context | config | launch options (vs. default) | fixture | effort | temp | concurrency | input tokens | output cap | runs | result | evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -32,4 +32,5 @@ GeForce RTX 5090 · 128 GB RAM · 25 cases / 183 requests. The other parameters 
 | done | `T0-gyro-Gyro-S-author-decode-copy` | gyro Gyro-S | 128K | author-protocol |  | decode-copy | none | 0.7 | 1 | short | 512 | 3 | prefill 1440.9 / decode 488.1 / TTFT ms 288.8 / acceptance 1.0 | [2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/cases/T0-gyro-Gyro-S-author-decode-copy/) |
 | done | `T0-gyro-Gyro-S-author-prefill-4k` | gyro Gyro-S | 128K | author-protocol |  | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 | prefill 4453.4 / decode 258.0 / TTFT ms 931.1 / acceptance 0.712 | [2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/cases/T0-gyro-Gyro-S-author-prefill-4k/) |
 | done | `T0-gyro-Gyro-S-author-prefill-16k` | gyro Gyro-S | 128K | author-protocol |  | prefill-16k | none | 0.7 | 1 | 16,384 | 128 | 3 | prefill 6031.7 / decode 233.1 / TTFT ms 2734.9 / acceptance 0.63 | [2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/cases/T0-gyro-Gyro-S-author-prefill-16k/) |
+| planned | `T0-qwen-IQ3_S-coding-shuri-none` | qwen IQ3_S | 128K | baseline |  | coding-shuri | none | 0.7 | 1 | short | 16,384 | 3 |  |  |
 | done | `T0-qwen-IQ3_S-game-minecraft-none` | qwen IQ3_S | 128K | baseline |  | game-minecraft | none | 0.7 | 1 | short | 16,384 | 3 | prefill 168.8 / decode 260.1 / TTFT ms 332.5 / acceptance 0.785 | [2026-11-04-iq3s-mtp](../../../published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/T0-qwen-IQ3_S-game-minecraft-none/) |

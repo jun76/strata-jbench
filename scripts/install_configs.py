@@ -9,7 +9,7 @@ setup.py `strata launch` runs itself), with the choices the runner launches with
 finish marks) and writes the config and the start script; it downloads nothing that is already on disk.
 
 It changes Strata's saved settings (the run configs), so it runs only with the user's agreement (AGENTS.md 3);
-scripts/overnight_bench.sh runs it after downloads/READY, before preflight.
+The run's supervisor (scripts/supervise.py) runs it once the run's models are on disk, before preflight.
 
     python3 -I scripts/install_configs.py [--env <id>] [--dry-run]
 """
