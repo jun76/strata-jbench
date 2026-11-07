@@ -25,7 +25,7 @@ sys.path.insert(0, str(ROOT / 'scripts'))
 import envs  # noqa: E402
 DL = ROOT / 'downloads'
 OUT = ROOT / 'run-status'
-STALE = {'download': 20 * 60, 'download-q8': 20 * 60, 'qad': 45 * 60, 'bench': 75 * 60, 'launch': 3 * 3600 + 20 * 60}
+STALE = {'download': 45 * 60, 'download-q8': 45 * 60, 'qad': 45 * 60, 'bench': 75 * 60, 'launch': 3 * 3600 + 20 * 60}
 
 
 def alive(pid):
@@ -60,7 +60,8 @@ def acquire_state():
     if not alive(st.get('pid')):
         return {'phase': f'acquire/{phase}', 'state': 'FAILED',
                 'detail': f'scripts/overnight.py ended without READY (error: {st.get("error")}); see downloads/overnight.log'}
-    # status.json is written per file (a 50 GB shard takes most of an hour); download.log gets the byte progress
+    # status.json is written per file, and the hf CLI writes download.log only as a file starts and ends (a 50 GB shard
+    # takes 10-30 min); scripts/overnight.py restarts a downloader silent for 20 min, which writes download.log again
     files = [DL / 'qad-prepare.log'] if phase == 'qad' else [DL / 'status.json', DL / 'download.log']
     ages = [(age(f), f) for f in files if age(f) is not None]
     a, progress = min(ages, key=lambda t: t[0]) if ages else (None, files[0])

@@ -31,7 +31,9 @@ QAD_ROOT = ROOT / 'work/qad-root'
 GGUF_PY = Path.home() / '.local/share/strata/install/third_party/llama.cpp/gguf-py'
 QAD_PYTHON = ROOT / '.venv-qad/bin/python'
 DL_PYTHON = ROOT / '.venv-hf/bin/python'
-STALL_S = 8 * 60          # no growth on disk and no change of file for this long: restart the downloader
+# no growth on disk, no data received and no change of file for this long: restart the downloader. The hf CLI's Xet
+# download can write nothing for minutes, and starts a file over after a restart (no resume), so this waits long.
+STALL_S = 20 * 60
 MAX_RESTARTS = 30
 
 
@@ -53,6 +55,15 @@ def set_state(**kw):
 
 def manifest():
     return json.loads((STATE_DIR / 'manifest.json').read_text())
+
+
+def received():
+    """Bytes received on every network interface but lo (/proc/net/dev)."""
+    try:
+        rows = Path('/proc/net/dev').read_text().splitlines()[2:]
+    except OSError:
+        return 0
+    return sum(int(r.split(':', 1)[1].split()[0]) for r in rows if r.split(':', 1)[0].strip() != 'lo')
 
 
 def models_root():
@@ -92,16 +103,16 @@ def download(extra_args, done_check, label):
         (STATE_DIR / 'pid').write_text(f'{proc.pid}\n')
         log(f'{label}: downloader started pid {proc.pid} args {extra_args}')
         set_state(phase=label, downloader_pid=proc.pid, restarts=restarts)
-        last_used, last_current, last_change = -1, None, time.time()
+        last_used, last_rx, last_current, last_change = -1, -1, None, time.time()
         while proc.poll() is None:
             time.sleep(30)
-            used = shutil.disk_usage(models_root()).used
+            used, rx = shutil.disk_usage(models_root()).used, received()
             try:
                 current = json.loads((STATE_DIR / 'status.json').read_text()).get('current')
             except (OSError, ValueError):
                 current = last_current
-            if abs(used - last_used) > 50_000_000 or current != last_current:
-                last_used, last_current, last_change = used, current, time.time()
+            if abs(used - last_used) > 50_000_000 or rx - last_rx > 50_000_000 or current != last_current:
+                last_used, last_rx, last_current, last_change = used, rx, current, time.time()
             elif time.time() - last_change > STALL_S:
                 log(f'{label}: no progress for {STALL_S}s on {current}; restarting')
                 stop(proc)
