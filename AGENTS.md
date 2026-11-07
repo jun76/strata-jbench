@@ -21,10 +21,16 @@ measurer's choices) and builds its plan from it. The runner keeps the env.json i
 the newest published run's copy. An env.json lost on a PC can be taken back from there.
 
 **Division:** how the models are driven. It is independent of the environment; `divisions/<division>/division.json` is
-one division ([divisions/README.md](divisions/README.md)). Everything measured so far is `plain` (no harness: the runner
-calls the engine's API directly, no tool calls). `strata`, `dsh` and `opencode` (divisions through an agent harness) are
-planned and cannot be measured while their `status` is `planned` (picked with `BENCH_DIVISION`; `plain` when unset).
-Plans, results and case lists are kept in a folder per division.
+one division ([divisions/README.md](divisions/README.md)), picked with `BENCH_DIVISION` (`plain` when unset). `plain`
+has no harness: the runner calls the engine's API directly (Tiers 0–5). The harness divisions (`dsh`, `strata`,
+`opencode`, `hermes`, `pi`) hand one case, the Minecraft game, to an agent harness in one shot (step `G`): the runner
+starts the harness inside bubblewrap in a fresh work folder, with the recording proxy (`scripts/agent_proxy.py`, port
+18601) between it and the engine, which puts the case's sampling, thinking, seed and cap into every request. The
+harness's pinned version, its models and its status are in its division.json; only a division whose `status` is
+`active` can be measured (all five: each harness installed at its pinned version and its adapter in
+`scripts/harnesses.py` run against the mock engine). `strata` drives the Strata desktop app's own agent code
+(`scripts/strata_agent.mjs` on the extracted app in `tools/harness/strata/<version>/`). Plans, results and case lists are kept in a folder per division, and each
+division has its own pages (`preview/RESULTS-<division>.html`, `snapshots/<division>/...`).
 
 **Working and published:** measurements are written to `results/` (not in Git), and only the RUN_IDs made final are
 moved to `published/` (in Git) by `scripts/publish.py`. What is committed is built from `published/` alone: the case
@@ -92,6 +98,26 @@ the NVFP4 ready-made packs need Strata's setup once with `--no-start` to write t
 6. From 2.2 on, everything is the same. RUN_IDs live in a folder per environment, so the same name in another
    environment does not clash.
 
+### 2.0a When a model or a harness is missing
+`python3 -I scripts/acquire.py check` lists what the run needs on disk (the models of the plan, the DFlash2 drafter, a
+harness division's pinned harness, bubblewrap) and whether each is there; it changes nothing (and writes
+`run-status/acquire.json`). `scripts/start_pipeline.sh` runs it first and starts nothing while something is missing,
+unless started with `FETCH=yes`. For each missing piece, the user chooses before anything is fetched:
+1. **jbench fetches it**: `python3 -I scripts/acquire.py fetch <item>` (`models`, `dflash2`, `harness:<division>`, or
+   `--all`), which shows the size and the source and asks first. Models are the files Strata's setup.py pins (hf CLI, as
+   the `strata-jbench-acquire` unit; hours, not waited for); a harness is its pinned version installed into
+   `tools/harness/<division>/<version>/` with npm, never into the user's global packages.
+2. **Bring it back from the archive**: a model that `check` reports "in the archive" (env.json `model_archive`, a folder
+   on another disk) is faster to copy back than to download. It is a move of large files: confirm what goes where.
+3. **The user installs it**: what needs root (bubblewrap), a harness without an npm package (Hermes Agent's installer is
+   a shell script; the Strata desktop app), or Strata itself. Then run `check` again.
+4. **Leave it out**: remove the model from env.json `models` (or from the division's `models`), or do not measure that
+   division. It changes the plan: 2.1.
+
+A harness already in its own default place at another version is neither used nor touched (updating or removing it is
+the user's call); the pinned version goes into `tools/harness/` beside it. Nothing is fetched while a measurement runs
+(1.8): `acquire.py fetch` refuses while the queue of the run started last is alive.
+
 ### 2.1 When the plan changes
 1. Edit `scripts/build_cases.py` (the only place cases are defined; differences between environments go in env.json).
 2. Run `python3 -I scripts/build_cases.py` and check the number of cases and the estimated hours per environment.
@@ -101,7 +127,10 @@ the NVFP4 ready-made packs need Strata's setup once with `--no-start` to write t
    string, add its English and Chinese to `TR` in `scripts/i18n.py` (strings without a translation are listed when the
    script runs, and shown in Japanese).
 3. If a new fixture is needed, change `scripts/build_fixtures.py` and run it with the Python that ships with Strata (see
-   the docstring at the top of the file).
+   the docstring at the top of the file; `--only <fixture>` rewrites one chat fixture without counting the long ones again).
+   The game cases: plain's Tiers 0 and 3 ask for Shuri Castle as one HTML file (`game-shuri`, since 2026-11-07); the
+   Minecraft prompt (`game-minecraft`) is the harness divisions' case. Plain's Minecraft cases measured before stay in
+   the lists and the charts as retired cases (never planned again).
    The long document of Tiers 4b–4d comes from ten works of Aozora Bunko and Project Gutenberg (five Japanese, five
    English), cleaned by `scripts/long_corpus.py` into `prompts/long-corpus.txt`, Japanese and English chunks in turns.
    Sources, editions, SHA-256 and Aozora's colophons are in `prompts/long-sources.json`; the downloads are in
@@ -120,12 +149,20 @@ the NVFP4 ready-made packs need Strata's setup once with `--no-start` to write t
      `loginctl enable-linger` is needed (a system setting: the user does it).
    - Whether anything in section 3 ("Ask first") may become necessary during the run; if so, have the user decide
      beforehand what to do.
+   - What `python3 -I scripts/acquire.py check` reports missing, and which choice of 2.0a the user takes for each
+     (`FETCH=yes` only when the user agreed to jbench fetching them).
+   - For a harness division: which division (`BENCH_DIVISION`), and that the model will run shell commands and write
+     files inside the sandboxed work folder (the network is not cut off: a harness reaches the proxy over it).
    - That the hourly watch task will be registered at the start (step 3 of 2.3) and deleted at the end (2.6).
 2. After changing the runner or a fixture, run the affected cases under a RUN_ID starting with `test-` (`test-` results
    appear neither in the case lists nor in the charts):
    `python3 scripts/bench_runner.py --run-id test-xxx --steps 1 --ids <case id>,...`
 3. `python3 scripts/preflight.py --phase all --steps "0,1,2,3,4a,4b,4c,4d,5"` (`--phase acquire` before every model is
    on disk). If anything is NG, fix it and run it again. The result is `run-status/preflight.json`.
+   A harness division: `BENCH_DIVISION=<division> python3 scripts/preflight.py --phase bench --steps G`. It also checks
+   the pinned harness and runs it once against the mock engine (`scripts/mock_engine.py`) through the proxy, in the
+   sandbox (no GPU); the smoke launch is plain's case. A harness case under a `test-` RUN_ID:
+   `BENCH_DIVISION=<division> python3 scripts/bench_runner.py --run-id test-xxx --steps G --ids <case id>`.
    Preflight also checks the environment (which env.json this hardware is, that the plan is newer than env.json, and
    that the power limit is env.json's).
 
@@ -133,14 +170,16 @@ the NVFP4 ready-made packs need Strata's setup once with `--no-start` to write t
 1. Start it:
    ```bash
    RUN_ID=<run id> STEPS="0 1 2 3 4a 4b 4c 4d 5" scripts/start_pipeline.sh
+   BENCH_DIVISION=dsh RUN_ID=<run id> scripts/start_pipeline.sh          # a harness division (STEPS defaults to G)
    ```
+   Add `FETCH=yes` only when the user agreed to jbench fetching what is missing (2.0a, 2.2).
    The environment is found automatically, and the first line printed is
    `division: <division>, environment: <env>, run: results/<division>/<env>/<RUN_ID>`. With no matching environment,
    nothing starts. To measure only some models, add `MODELS="qwen:IQ3_S,..."` (for a re-run, say; the healthcheck's
    "cases without a result" then looks at those models only). The environment, RUN_ID, STEPS and MODELS started are
    kept in `run-status/current-run.json` (the watch task reads it, so a new RUN_ID needs no change to the task).
    - `strata-jbench-acquire`: `scripts/setup_acquire.py` first, then `scripts/overnight.py` (fetch the models → convert NVFP4-QAD → delete the conversion source
-     → fetch the last model). Not started when `downloads/READY` exists.
+     → fetch the last model). Started only with `FETCH=yes`, and not when `downloads/READY` exists.
    - `strata-jbench-queue`: `scripts/overnight_bench.sh` (wait for READY → Strata's run configs for the downloaded models,
      `scripts/install_configs.py` → preflight → `scripts/bench_runner.py` Tier by Tier). The run configs change Strata's
      saved settings (section 3): agree on it in 2.2.
@@ -229,6 +268,8 @@ The watch task keeps firing every hour after the queue ends, so remove it as soo
 Even if one of these becomes necessary during a run, do not do it yourself: follow the policy decided in 2.2. With no
 policy, report the cause and a proposal, and stop.
 - Deleting models or results (except the converted QAD source, which `scripts/overnight.py` deletes)
+- Downloading or installing anything: models, the drafter, a harness (`FETCH=yes`, `scripts/acquire.py fetch`), and
+  copying models back from the archive
 - Stopping a Strata engine other than the measuring one, or changing Strata's saved settings or presets
 - Changing the case plan
 - Publishing, such as `git push`
@@ -241,12 +282,15 @@ policy, report the cause and a proposal, and stop.
 | The models | `~/.local/share/strata/Strata-data/models` (`downloads/manifest.json` lists them with SHA-256) |
 | Fetching state | `downloads/` (not in Git); `READY` marks that every model is on disk |
 | Fixed prompts | `prompts/` (SHA-256 in `MANIFEST.json`); the long document's source is `prompts/long-corpus.txt` and `long-sources.json` |
+| What a run needs on disk | `run-status/acquire.json` (`scripts/acquire.py check`) |
+| Harnesses | the pinned version per division in `divisions/<division>/division.json` "pin"; installed by jbench in `tools/harness/<division>/<version>/` (not in Git), or found at the pinned version in its default place; adapters in `scripts/harnesses.py`; the one a run drove in the run's `harness.json` |
+| A harness case's record | `cases/<case id>/harness/seed-N/` (the harness's events and stderr, its config, the command, `proxy.jsonl`: one line per request with what the harness sent and what was forwarded); the work folder, the harness's folder and the request bodies stay in `raw/` |
 | Divisions | `divisions/<division>/division.json` (only a division whose `status` is `active` can be measured; see [divisions/README.md](divisions/README.md)) |
 | Environments | `envs/<env>/env.json` (written by hand on each PC, not in Git; fields in [envs/README.md](envs/README.md); matching and templates in `scripts/envs.py`); the copy a run measured with is `results/` or `published/<division>/<env>/<RUN_ID>/env.json` |
 | The plan | `plan/<division>/<env>/cases.jsonl` and `cases.csv` (written per environment by `scripts/build_cases.py`, also by the queue before preflight; the runner reads them; not in Git, and each case's definition is kept in its `summary.json`) |
 | Case lists | `cases/README*.md` (the environments) → `cases/<division>/<env>/README*.md` (the Tiers, models and shared conditions) → `tier-<Tier>*.md` (every case, with its result and a link to its record) and `tier-<Tier>.csv` (every parameter; a CSV per Tier because GitHub shows a CSV as a table only up to 512 KB); committed, from `published/` alone |
 | Charts | `snapshots/<division>/<env>/<RUN_ID>/index.html` (every environment, switched and compared, as of that run) and `summary.csv` (every case of every environment, with an `env` column); committed, served by GitHub Pages |
-| Pages to check | `preview/` (cases/, RESULTS.html, summary.csv, built with `results/` too; not in Git) |
+| Pages to check | `preview/` (cases/, RESULTS.html, summary.csv, built with `results/` too; another division's: RESULTS-<division>.html, summary-<division>.csv; not in Git) |
 | Results (working) | `results/<division>/<env>/<RUN_ID>/cases/<case id>/` (summary.json, requests.jsonl, responses/, artifact/, raw/); all of `results/` is outside Git |
 | Results (final, published) | `published/<division>/<env>/<RUN_ID>/` (moved by `scripts/publish.py`; no raw/ and no machine snapshots) |
 | Session records | `results/<division>/<env>/<RUN_ID>/sessions/<session>/start-N/` (launch output, /settings, /config, /props, telemetry.csv, engine.log) |

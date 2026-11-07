@@ -160,6 +160,24 @@ th.sort:hover::after, th.sort:focus-visible::after { content: " ⇅"; color: var
 #tip .n { color: var(--muted); margin-top: 4px; white-space: normal; }
 .hit { fill: transparent; cursor: default; outline: none; }
 .hit:focus-visible { stroke: var(--text); stroke-width: 1; }
+[hidden] { display: none !important; }   /* over the display of .filters, .tiles and the like */
+/* the games' gallery and the sandboxed viewer */
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-top: 10px; }
+.shot { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.shot .thumb { display: block; width: 100%; padding: 0; border: 0; background: var(--surface-2); cursor: pointer; aspect-ratio: 16 / 10; }
+.shot .thumb:disabled { cursor: default; }
+.shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.shot .noimg { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--muted); font-size: 12px; }
+.shot .meta { padding: 6px 8px 8px; font-size: 12px; color: var(--text-2); line-height: 1.5; }
+.shot .meta b { color: var(--text); }
+.shot .meta a { margin-right: 8px; }
+dialog#viewer { width: min(1200px, 96vw); height: min(840px, 92vh); padding: 0; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface); color: var(--text); }
+dialog#viewer::backdrop { background: rgba(0, 0, 0, .55); }
+#viewer header { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--grid); font-size: 13px; }
+#viewer header .grow { flex: 1; min-width: 120px; }
+#viewer header button { font: inherit; padding: 4px 12px; border-radius: 7px; border: 1px solid var(--axis); background: var(--surface-2); color: var(--text); cursor: pointer; }
+#viewer iframe { display: block; width: 100%; height: calc(100% - 46px); border: 0; background: #fff; }
 @media (max-width: 640px) { h1 { font-size: 19px; } .tile .v { font-size: 22px; } .filters { position: static; } .chart { padding: 12px 12px 10px; } }
 </style>
 </head>
@@ -176,7 +194,7 @@ th.sort:hover::after, th.sort:focus-visible::after { content: " ⇅"; color: var
 {{env}}
 <div id="runs" class="runs"></div>
 <nav class="toc">
-  <a href="#s-cmp" id="toc-cmp"><span class="L ja">環境の比較</span><span class="L en">Across environments</span><span class="L zh">环境比较</span></a><a href="#s-speed"><span class="L ja">モデル別の速度</span><span class="L en">Speed by model</span><span class="L zh">各模型速度</span></a><a href="#s-long"><span class="L ja">入力の長さ</span><span class="L en">Input length</span><span class="L zh">输入长度</span></a><a href="#s-std">standard-v1</a><a href="#s-think">thinking</a><a href="#s-ctx"><span class="L ja">コンテキスト長</span><span class="L en">Context length</span><span class="L zh">上下文长度</span></a><a href="#s-doc"><span class="L ja">長文</span><span class="L en">Long documents</span><span class="L zh">长文</span></a><a href="#s-yarn">YaRN</a><a href="#s-opts"><span class="L ja">起動オプション</span><span class="L en">Launch options</span><span class="L zh">启动选项</span></a><a href="#s-env"><span class="L ja">計測時の環境</span><span class="L en">Conditions</span><span class="L zh">测量时的环境</span></a><a href="#s-table"><span class="L ja">一覧表</span><span class="L en">Table</span><span class="L zh">一览表</span></a>
+  <a href="#s-cmp" id="toc-cmp"><span class="L ja">環境の比較</span><span class="L en">Across environments</span><span class="L zh">环境比较</span></a><a href="#s-speed"><span class="L ja">モデル別の速度</span><span class="L en">Speed by model</span><span class="L zh">各模型速度</span></a><a href="#s-long"><span class="L ja">入力の長さ</span><span class="L en">Input length</span><span class="L zh">输入长度</span></a><a href="#s-std">standard-v1</a><a href="#s-think">thinking</a><a href="#s-ctx"><span class="L ja">コンテキスト長</span><span class="L en">Context length</span><span class="L zh">上下文长度</span></a><a href="#s-doc"><span class="L ja">長文</span><span class="L en">Long documents</span><span class="L zh">长文</span></a><a href="#s-yarn">YaRN</a><a href="#s-opts"><span class="L ja">起動オプション</span><span class="L en">Launch options</span><span class="L zh">启动选项</span></a><a href="#s-harness"><span class="L ja">ハーネス</span><span class="L en">Harness</span><span class="L zh">harness</span></a><a href="#s-games"><span class="L ja">ゲームの成果物</span><span class="L en">Games</span><span class="L zh">游戏成果</span></a><a href="#s-env"><span class="L ja">計測時の環境</span><span class="L en">Conditions</span><span class="L zh">测量时的环境</span></a><a href="#s-table"><span class="L ja">一覧表</span><span class="L en">Table</span><span class="L zh">一览表</span></a>
 </nav>
 
 <div class="filters" id="filters">
@@ -240,6 +258,15 @@ th.sort:hover::after, th.sort:focus-visible::after { content: " ⇅"; color: var
 <p class="lead"><span class="L ja">代表3モデルで起動オプションを1つずつ変え、既定（baseline）からの変化を見る。</span><span class="L en">One launch option changed at a time on 3 representative models, against the default (baseline).</span><span class="L zh">在 3 个代表模型上每次只改一个启动选项，观察相对默认（baseline）的变化。</span></p>
 <div class="sample" id="x-opts"></div>
 <div id="c-opts"></div>
+
+<h2 id="s-harness"><span class="L ja">ハーネス越しの実行</span><span class="L en">Through the harness</span><span class="L zh">经由 harness 的运行</span></h2>
+<p class="lead"><span class="L ja">ゲーム作成をハーネスに one shot で渡したときの、終わるまでの時間とその内訳。エンジンの条件（sampling・thinking・seed・出力 cap）は記録プロキシがそろえているので、差はハーネスが足したもの（system prompt と tool の定義、ターン数、tool の実行、起動）から来る。値は3回の中央値。</span><span class="L en">The game handed to the harness in one shot: the time until it ends and what that time is made of. The recording proxy keeps the engine-side conditions (sampling, thinking, seed, output cap) the same, so the differences come from what the harness adds (its system prompt and tool definitions, the turns, running the tools, its start). Medians of 3 runs.</span><span class="L zh">把游戏制作一次性交给 harness 时，到结束为止的时间及其构成。记录代理统一了引擎侧的条件（sampling、thinking、seed、输出 cap），因此差异来自 harness 增加的部分（system prompt 与 tool 定义、轮数、tool 执行、启动）。数值为 3 次的中位数。</span></p>
+<div id="c-harness"></div>
+
+<h2 id="s-games"><span class="L ja">ゲーム作成の成果物</span><span class="L en">The games made</span><span class="L zh">游戏制作的成果</span></h2>
+<p class="lead"><span class="L ja">ゲーム作成ケースの成果物を seed ごとに並べる。サムネイルを押すと、そのページを画面の中で開く（sandbox 付きの枠で動かし、このページには触れさせない。外部のライブラリは CDN から読むので、ネットワークが要る）。</span><span class="L en">The result of every game case, per seed. Click a thumbnail to open the page here (it runs in a sandboxed frame that cannot reach this page; libraries load from CDNs, so it needs the network).</span><span class="L zh">按 seed 排列游戏制作用例的成果。点击缩略图即在本页内打开该页面（在带 sandbox 的框中运行，不能访问本页；外部库从 CDN 加载，需要网络）。</span></p>
+<div id="c-games"></div>
+<dialog id="viewer" aria-label="viewer"><header><span class="grow" id="viewer-title"></span><a id="viewer-tab" target="_blank" rel="noopener noreferrer"></a><a id="viewer-folder"></a><button type="button" id="viewer-close"></button></header><iframe id="viewer-frame" sandbox="allow-scripts allow-pointer-lock" allow="fullscreen" title="game"></iframe></dialog>
 
 <h2 id="s-env"><span class="L ja">計測時の環境</span><span class="L en">Conditions during the measurements</span><span class="L zh">测量时的环境</span></h2>
 <p class="lead"><span class="L ja">各モデルの Tier 1 を測っていた間の温度・電力・メモリ。CPU が熱で抑えられていたモデルは、その分だけ遅く出ている可能性がある。</span><span class="L en">Temperature, power and memory while each model's Tier 1 ran. A model measured while the CPU was held back by heat may show as slower by that much.</span><span class="L zh">测量各模型 Tier 1 期间的温度、功耗和内存。测量时 CPU 因过热降频的模型，结果可能相应偏慢。</span></p>
@@ -1034,13 +1061,15 @@ function sThink() {
       let ok = 0, all = 0; for (const c of cs) if (c.correct) { const [a, b] = c.correct.split('/').map(Number); ok += a; all += b; }
       if (cs.length) notes.push(`${e.k}: ${L('正答', 'correct', '正确')} ${all ? ok + '/' + all : '–'}`);
     }
-    const game = (byModel[r.key] || []).find(c => c.step === '3' && c.effort === 'high' && c.fixture.startsWith('game') && done(c));
+    const games = (byModel[r.key] || []).filter(c => c.step === '3' && c.effort === 'high' && c.fixture.startsWith('game') && done(c));
+    const game = games.find(c => c.fixture === 'game-shuri') || games[0];   // Minecraft: runs before 2026-11-07
+    if (game && game.fixture !== 'game-shuri') notes.push(L('ゲームはマイクラ（2026-11-07 より前）', 'game: Minecraft (before 2026-11-07)', '游戏为 Minecraft（2026-11-07 之前）'));
     return { ...r, vals, toks, game: game ? game.total_ms / 1000 : null, note: notes.join(' / '), missing: planned('3', r.key) ? null : L('対象外（計画で除外）', 'not in the plan', '不在计划内') };
   });
   dots(k, data, KEYS, { fmt: fmtS, tick: fmtTick, x: L('回答が終わるまでの時間（s）', 'time until the answer is complete (s)', '回答完成所需时间（s）'), y: MODEL_AXIS(), emptyMsg: NO_RESULT('3'), aria: L('thinking の有無と回答時間', 'thinking and answer time', '有无 thinking 与回答时间') });
   const tok = v => v == null ? '–' : Math.round(v).toLocaleString();
   table(k, [MODEL(), 'none', 'high', L('出力 token none', 'output tokens, none', '输出 token none'), L('出力 token high', 'output tokens, high', '输出 token high'),
-            L('ゲーム作成（high）', 'game (high)', '游戏制作（high）'), L('正答', 'correct', '正确')],
+            L('ゲーム作成（首里城、high）', 'game (Shuri Castle, high)', '游戏制作（首里城，high）'), L('正答・注', 'correct, notes', '正确・注')],
     data.map(r => [r.label, fmtS(r.vals.none), fmtS(r.vals.high), tok(r.toks.none), tok(r.toks.high), fmtS(r.game), r.note || '–']), i => i >= 1 && i <= 5);
 }
 
@@ -1284,11 +1313,133 @@ function filters() {
   content.addEventListener('change', () => { state.content = content.value; save(); draw(); });
   addEventListener('langchange', () => { fill(); envSwitch(); runs(); draw(); });
 }
+// A table with a bar in each number cell, sorted by a click on a heading (a first click puts the better end first).
+// cols: [heading, value(item), format, better ('↑' / '↓' / ''), bar]
+function barTable(box, cols, items, order) {
+  let col = 0, dir = 1;
+  const wrap = h('div', { class: 'tbl' }, box);
+  const draw = () => {
+    wrap.replaceChildren();
+    const t = h('table', {}, wrap), tr = h('tr', {}, h('thead', {}, t));
+    cols.forEach(([name, , , better], i) => {
+      const th = h('th', { class: 'sort' + (i ? ' num' : ''), tabindex: '0' }, tr, name + (better ? ' ' + better : ''));
+      const go = () => { dir = col === i ? -dir : (better === '↑' ? -1 : 1); col = i; draw(); };
+      th.addEventListener('click', go); th.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+    });
+    const list = items.map(it => ({ it, v: cols.map(c => c[1](it)) }));
+    list.sort((a, b) => { if (col === 0) return order(a.it, b.it) * dir;
+      const x = a.v[col], y = b.v[col]; if (x == null) return 1; if (y == null) return -1;
+      return (typeof x === 'string' ? x.localeCompare(y) : x - y) * dir || order(a.it, b.it); });
+    const max = cols.map((c, i) => c[4] ? Math.max(0, ...list.map(r => typeof r.v[i] === 'number' ? r.v[i] : 0)) : 0);
+    const tb = h('tbody', {}, t);
+    for (const r of list) { const row = h('tr', {}, tb);
+      cols.forEach(([, , fm], i) => {
+        const bar = max[i] > 0 && typeof r.v[i] === 'number';
+        const td = h('td', { class: (i ? 'num' : '') + (bar ? ' bar' : '') }, row, r.v[i] == null ? '–' : fm(r.v[i]));
+        if (bar) td.style.setProperty('--f', (r.v[i] / max[i]).toFixed(4)); }); }
+  };
+  draw();
+}
+
+const modelOrder = (a, b) => MODELS.findIndex(m => m.key === a.family + ' ' + a.model) - MODELS.findIndex(m => m.key === b.family + ' ' + b.model);
+
+function sHarness() {
+  const box = $('c-harness'); box.replaceChildren();
+  const cs = CASES.filter(c => c.harness && done(c) && modelsShown().some(m => m.key === c.family + ' ' + c.model));
+  const c = h('section', { class: 'chart' }, box);
+  h('h3', {}, c, L(`${D.harness} の one shot（ゲーム作成）`, `${D.harness} in one shot (the game)`, `${D.harness} 的一次性运行（游戏制作）`));
+  if (!cs.length) { h('div', { class: 'empty' }, c, NO_RESULT('G')); return; }
+  const n = v => v == null ? '–' : Math.round(v).toLocaleString();
+  barTable(c, [
+    [MODEL(), x => `${x.family} ${x.model}`, String, '', false],
+    [L('終わるまで', 'time to the end', '到结束'), x => x.total_ms == null ? null : x.total_ms / 1000, fmtS, '↓', true],
+    [L('ハーネスの起動', 'harness start', 'harness 启动'), x => x.harness_start_ms, fmtMs, '↓', true],
+    [L('エンジンの時間の割合', 'engine share of the time', '引擎时间占比'), x => x.engine_share, fmtPct, '', true],
+    [L('リクエスト', 'requests', '请求'), x => x.requests, n, '', true],
+    ['tool call', x => x.tool_calls_n, n, '', true],
+    [L('前置き token（1回目）', 'preamble tokens (first)', '前置 token（第 1 次）'), x => x.preamble_tokens, n, '↓', true],
+    [L('定義された tool', 'tools offered', '提供的 tool'), x => x.tools_offered, n, '', false],
+    [L('cache 再利用', 'cache reuse', 'cache 复用'), x => x.cached_share, fmtPct, '↑', true],
+    ['decode', x => x.decode_tps, fmtTps, '↑', true], ['prefill', x => x.prefill_tps, fmtTps, '↑', true],
+    [L('出力 token', 'output tokens', '输出 token'), x => x.completion_tokens, n, '', true],
+    [L('単一 HTML', 'one HTML file', '单个 HTML'), x => x.single_file, String, '', false],
+    [L('版', 'version', '版本'), x => x.harness_version, String, '', false]], cs, modelOrder);
+  h('p', { class: 'foot' }, c, L('前置き token は最初のリクエストの入力 token（ハーネスの system prompt と tool の定義と依頼文）。cache 再利用は全リクエストの入力のうち prefix cache から読んだ割合。decode / prefill は全ターンの token と時間の合計から。エンジンの時間の割合の残りは、ハーネス自身と tool の実行の時間。',
+    'Preamble tokens: the input tokens of the first request (the harness\'s system prompt, its tool definitions and the task). Cache reuse: the share of all the requests\' input read from the prefix cache. Decode / prefill: from the tokens and time summed over every turn. What the engine share leaves is the harness itself and the tools it ran.',
+    '前置 token 是第 1 次请求的输入 token（harness 的 system prompt、tool 定义与任务文）。cache 复用是所有请求的输入中从 prefix cache 读取的比例。decode / prefill 由所有轮次的 token 与时间之和计算。引擎时间占比之外的部分是 harness 自身和 tool 执行的时间。'));
+}
+
+const GAME_NAME = { 'game-shuri': ['首里城', 'Shuri Castle', '首里城'], 'game-minecraft': ['マイクラ', 'Minecraft', 'Minecraft'] };
+function openViewer(c, a) {
+  const d = $('viewer');
+  $('viewer-title').textContent = `${L(...(GAME_NAME[c.fixture] || [c.fixture, c.fixture, c.fixture]))} · ${c.family} ${c.model} · seed ${a.seed} · RUN_ID ${c.run_id}`;
+  const tab = $('viewer-tab'); tab.href = a.page; tab.textContent = L('新しいタブで開く（sandbox なし）', 'open in a new tab (no sandbox)', '在新标签页打开（无 sandbox）');
+  const folder = $('viewer-folder'); folder.href = a.folder; folder.textContent = L('ファイル', 'files', '文件');
+  const close = $('viewer-close'); close.textContent = L('閉じる', 'Close', '关闭');
+  close.onclick = () => d.close();
+  d.onclose = () => { $('viewer-frame').src = 'about:blank'; };
+  d.showModal();
+  $('viewer-frame').src = a.page;   // after the dialog is shown: a frame loaded while it was hidden stayed blank
+}
+
+function sGames() {
+  const box = $('c-games'); box.replaceChildren();
+  const shown = new Set(modelsShown().map(m => m.key));
+  const games = CASES.filter(c => c.fixture.startsWith('game-') && (c.artifacts || []).length && shown.has(c.family + ' ' + c.model));
+  if (!games.length) { h('div', { class: 'empty' }, box, NO_RESULT(D.harness ? 'G' : '3')); return; }
+  const groups = {};
+  for (const c of games) (groups[[c.fixture, c.step, c.effort].join('|')] ||= []).push(c);
+  // the current game first (Shuri Castle in plain), then by Tier
+  const rank = k => (k.startsWith('game-shuri') ? 0 : 1);
+  for (const key of Object.keys(groups).sort((a, b) => rank(a) - rank(b) || b.localeCompare(a))) {
+    const [fx, step, effort] = key.split('|');
+    h('h3', { class: 'opt-h' }, box, `${L(...(GAME_NAME[fx] || [fx, fx, fx]))} · Tier ${step} · effort ${effort}`);
+    const g = h('div', { class: 'gallery' }, box);
+    for (const c of groups[key].sort(modelOrder)) for (const a of c.artifacts) {
+      const card = h('div', { class: 'shot' }, g);
+      const btn = h('button', { type: 'button', class: 'thumb', 'aria-label': `${c.family} ${c.model} seed ${a.seed}` }, card);
+      if (a.screenshot) h('img', { src: a.screenshot, alt: '', loading: 'lazy' }, btn);
+      else h('div', { class: 'noimg' }, btn, a.page ? L('スクリーンショットなし', 'no screenshot', '无截图') : L('HTML なし', 'no HTML', '无 HTML'));
+      if (a.page) btn.addEventListener('click', () => openViewer(c, a)); else btn.disabled = true;
+      const meta = h('div', { class: 'meta' }, card);
+      h('b', {}, meta, `${c.family} ${c.model}`); meta.append(` · seed ${a.seed}`);
+      const bits = [a.total_ms != null ? fmtS(a.total_ms / 1000) : '',
+        a.single_file === true ? L('単一 HTML', 'one HTML file', '单个 HTML') : a.single_file === false ? L('複数ファイル', 'several files', '多个文件') : '',
+        a.console_errors ? L(`コンソールのエラー ${a.console_errors}`, `${a.console_errors} console errors`, `控制台错误 ${a.console_errors}`) : '',
+        a.truncated ? L('途中で切れた', 'cut off', '被截断') : '',
+        c.harness ? (a.source === 'workspace' ? L('作業ディレクトリから', 'from the work folder', '取自工作目录') : L('回答から', 'from the answer', '取自回答')) : '',
+        c.harness && a.requests != null ? L(`${a.requests} リクエスト・tool ${a.tool_calls_n}`, `${a.requests} requests, ${a.tool_calls_n} tool calls`, `${a.requests} 个请求、tool ${a.tool_calls_n}`) : '',
+        a.error ? `${L('エラー', 'error', '错误')}: ${a.error}` : ''].filter(Boolean);
+      if (bits.length) { h('br', {}, meta); meta.append(bits.join(' · ')); }
+      h('br', {}, meta);
+      h('a', { href: a.folder }, meta, L('ファイル', 'files', '文件'));
+    }
+  }
+}
+
+// A harness division's page shows only its own sections; plain's page has no harness section.
+function sections() {
+  const keep = D.harness ? new Set(['s-harness', 's-games']) : null;
+  let cur = null;
+  for (const el of [...document.querySelector('main').children]) {
+    if (el.tagName === 'H2') cur = el.id;
+    if (!cur || el.tagName === 'NAV' || el.id === 'tip') continue;
+    if (D.harness ? !keep.has(cur) : cur === 's-harness') el.hidden = true;
+  }
+  for (const a of document.querySelectorAll('nav.toc a')) {
+    const id = a.getAttribute('href').slice(1);
+    if (D.harness ? !keep.has(id) : id === 's-harness') a.hidden = true;
+  }
+  if (D.harness) { $('filters').hidden = true; $('tiles').hidden = true; $('s-cmp-wrap').hidden = true;
+    for (const id of ['f-temp', 'f-content']) $(id).closest('label').hidden = true; }
+}
+
 function draw() {
   hideTip();
-  tiles(); sCompare(); sDecode(); sPrefillTtft(); sTemp(); sSize(); sDrafter(); sLong(); sDoc(); sYarn(); sCtx(); sStd(); sThink(); sOpts(); sEnv(); sTable();
+  if (D.harness) { sHarness(); sGames(); return; }
+  tiles(); sCompare(); sDecode(); sPrefillTtft(); sTemp(); sSize(); sDrafter(); sLong(); sDoc(); sYarn(); sCtx(); sStd(); sThink(); sOpts(); sGames(); sEnv(); sTable();
 }
-envSwitch(); runs(); filters(); draw();
+sections(); envSwitch(); runs(); filters(); draw();
 // the sticky filters' height, for the headings' scroll margin
 const stick = () => { const f = $('filters');
   document.documentElement.style.setProperty('--stick', (getComputedStyle(f).position === 'sticky' ? f.offsetHeight : 0) + 'px'); };

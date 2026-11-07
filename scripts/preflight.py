@@ -10,6 +10,7 @@ Writes run-status/preflight.json.
 """
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -155,16 +156,34 @@ def bench_checks(steps, env_id):
           f'{free / 1e9:.0f} GB')
 
 
+def harness_checks(div):
+    """A harness division: what scripts/acquire.py checks (the pinned harness, bubblewrap), then the harness once against
+    the mock engine through the proxy (no GPU): its configuration, the sandbox and the reading of its output."""
+    import harnesses
+    found = harnesses.find(div)
+    check(f'harness {div}: the pinned version is installed (python3 -I scripts/acquire.py check)', found['ok'], found['reason'])
+    check('bubblewrap (bwrap) for the harness sandbox', shutil.which('bwrap'), 'not found')
+    if found['ok'] and shutil.which('bwrap'):
+        import tempfile
+        with tempfile.TemporaryDirectory(prefix='jbench-harness-') as tmp:
+            try:
+                ok, detail = harnesses.selfcheck(div, tmp)
+            except SystemExit as e:
+                ok, detail = False, str(e)
+        check(f'harness {div}: one task against the mock engine through the proxy, in the sandbox', ok, detail)
+
+
 def smoke(env_id):
     """One real session: launch the environment's smallest model, three short requests, stop. The runner fails the
-    case when the MTP draft layer it asked for did not load, so this also checks the drafter pinning."""
-    rows = [json.loads(l) for l in (envs.plan_dir(env_id) / 'cases.jsonl').read_text().splitlines()]
+    case when the MTP draft layer it asked for did not load, so this also checks the drafter pinning. It is plain's
+    Tier 1 case whatever the division (the engine side is the same)."""
+    rows = [json.loads(l) for l in (envs.plan_dir(env_id, 'plain') / 'cases.jsonl').read_text().splitlines()]
     sizes = {(f, m): gb for f, m, gb, _ in overnight_models()}
     case = min((r for r in rows if r['step'] == '1' and r['fixture'] == 'decode-prose-en' and r['config'] == 'baseline'
                 and r['temperature'] == 0.7), key=lambda r: sizes.get((r['family'], r['model']), 1e9))
     rc, out = run([sys.executable, 'scripts/bench_runner.py', '--run-id', 'test-preflight', '--steps', '1', '--env', env_id,
-                   '--ids', case['id']], timeout=1800, cwd=ROOT)
-    run_dir = envs.run_dir(env_id, 'test-preflight')
+                   '--ids', case['id']], timeout=1800, cwd=ROOT, env={**os.environ, 'BENCH_DIVISION': 'plain'})
+    run_dir = envs.run_dir(env_id, 'test-preflight', 'plain')
     s = run_dir / 'cases' / case['id'] / 'summary.json'
     ok = s.exists() and json.loads(s.read_text()).get('status') == 'done'
     check(f'smoke: launch (MTP loaded) + 3 requests + stop on {case["family"]} {case["model"]}', ok, out[-400:])
@@ -190,6 +209,8 @@ def main():
         env_id = env_check(a.env)
         if env_id:
             bench_checks(a.steps.split(','), env_id)
+            if envs.load_division(envs.division()).get('harness'):
+                harness_checks(envs.division())
             if not a.no_smoke and all(r['ok'] for r in results):
                 smoke(env_id)
     out = ROOT / 'run-status'

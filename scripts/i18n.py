@@ -136,6 +136,49 @@ TR = {
         '检查成果的展开和截图机制。thinking off：reasoning_effort "none" + chat_template_kwargs.enable_thinking false。'
         '成果展开到 artifact/（response.md、files/、manifest.json，静态 HTML 另有 screenshot.png）。'
         '形式（单个 HTML / 需要服务器 / 有无 README）记录在 manifest 中'),
+    # the game since 2026-11-07: Shuri Castle in plain, Minecraft in the harness divisions
+    '首里城の情景を単一の HTML ファイルで（実用的なコーディング）': (
+        'a scene of Shuri Castle as one HTML file (practical coding)', '用单个 HTML 文件呈现首里城的场景（实用编码）'),
+    'thinking on: reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true、reasoning_budget_tokens 16,384'
+    '（明示。ゲームは cap の半分: 3/4 だと回答のコードが途中で切れたため）。成果物は artifact/ に展開'
+    '（response.md、files/、manifest.json、静的 HTML なら screenshot.png）。単一の HTML ファイルか、形式（単体 HTML / 要サーバー / README の有無）は manifest に記録': (
+        'thinking on: reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true, reasoning_budget_tokens 16,384 '
+        '(explicit; half the cap for the game, since at 3/4 the answer\'s code was cut off). The result is unpacked into '
+        'artifact/ (response.md, files/, manifest.json, and screenshot.png for static HTML). Whether it is one HTML file, and its '
+        'form (single HTML / needs a server / has a README), are recorded in the manifest',
+        'thinking on：reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true，reasoning_budget_tokens 16,384'
+        '（显式指定；游戏取 cap 的一半，因为 3/4 时回答中的代码会被截断）。成果展开到 artifact/（response.md、files/、'
+        'manifest.json，静态 HTML 另有 screenshot.png）。是否为单个 HTML 文件及其形式（单个 HTML / 需要服务器 / 有无 README）记录在 manifest 中'),
+    '成果物の展開・スクリーンショットの仕組みを確かめる。thinking off: reasoning_effort "none" + '
+    'chat_template_kwargs.enable_thinking false。成果物は artifact/ に展開（response.md、files/、manifest.json、'
+    '静的 HTML なら screenshot.png）。単一の HTML ファイルか、形式（単体 HTML / 要サーバー / README の有無）は manifest に記録': (
+        'checks the unpacking and screenshot of the result. thinking off: reasoning_effort "none" + '
+        'chat_template_kwargs.enable_thinking false. The result is unpacked into artifact/ (response.md, files/, '
+        'manifest.json, and screenshot.png for static HTML). Whether it is one HTML file, and its form (single HTML / needs a '
+        'server / has a README), are recorded in the manifest',
+        '检查成果的展开和截图机制。thinking off：reasoning_effort "none" + chat_template_kwargs.enable_thinking false。'
+        '成果展开到 artifact/（response.md、files/、manifest.json，静态 HTML 另有 screenshot.png）。'
+        '是否为单个 HTML 文件及其形式（单个 HTML / 需要服务器 / 有无 README）记录在 manifest 中'),
+    '2026-11-07 にハーネス部門へ移したケース（プレーンでは首里城に置き換え）。結果のある run だけ載せる': (
+        'moved to the harness divisions on 2026-11-07 (replaced by Shuri Castle in plain); listed only for the runs that have it',
+        '2026-11-07 移到 harness 部门的用例（纯模型部门改为首里城）；只列出有结果的 run'),
+    '「マイクラ風3D箱庭ゲーム作って」（ハーネス越しの実用的なコーディング）': (
+        '“マイクラ風3D箱庭ゲーム作って” (“make a Minecraft-like 3D sandbox game”; practical coding through the harness)',
+        '“マイクラ風3D箱庭ゲーム作って”（“做一个类似 Minecraft 的 3D 沙盒游戏”；经由 harness 的实用编码）'),
+    '完了時間, ターン数, tool call, ハーネスの前置き token, cached の割合, 成果物が動くか': (
+        'time to finish, turns, tool calls, the harness\'s preamble tokens, cached share, whether the result runs',
+        '完成时间、轮数、tool call、harness 前置部分的 token、cached 占比、成果是否能运行'),
+    'thinking on: reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true、reasoning_budget_tokens 16,384'
+    '（明示。ゲームは cap の半分: 3/4 だと回答のコードが途中で切れたため）。ハーネスに one shot で渡す（形式の指示なし）。'
+    '成果物は作業ディレクトリに書かれた HTML、なければ回答のコードブロックから artifact/ に展開。'
+    'sampling・thinking・seed・出力 cap は記録プロキシがリクエストごとに入れる': (
+        'thinking on: reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true, reasoning_budget_tokens 16,384 '
+        '(explicit; half the cap for the game, since at 3/4 the answer\'s code was cut off). Handed to the harness in one shot '
+        '(no format instructions). The result is the HTML written into the work folder, else the answer\'s code blocks, unpacked '
+        'into artifact/. Sampling, thinking, seed and output cap are put into every request by the recording proxy',
+        'thinking on：reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true，reasoning_budget_tokens 16,384'
+        '（显式指定；游戏取 cap 的一半，因为 3/4 时回答中的代码会被截断）。一次性交给 harness（不附加格式要求）。'
+        '成果取写入工作目录的 HTML，否则取回答的代码块，展开到 artifact/。sampling、thinking、seed、输出 cap 由记录代理写入每个请求'),
 }
 
 
@@ -162,7 +205,7 @@ def division_html(div, up=''):
     link to the list of divisions. up: the way from the page to the repository root."""
     lab, summ = div['label'], div['summary']
     head = L('部門', 'Division', '部门')
-    more = L('部門の一覧（エージェント部門は予定）', 'All divisions (the agentic ones are planned)', '部门一览（智能体部门在计划中）')
+    more = L('部門の一覧', 'All divisions', '部门一览')
     return (f'<p class="sub division"><b>{head}: {L(lab["ja"], lab["en"], lab["zh"])}</b> — '
             f'{L(summ["ja"], summ["en"], summ["zh"])} <a href="{html.escape(up)}divisions/README.md">{more}</a></p>')
 

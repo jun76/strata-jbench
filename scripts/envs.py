@@ -17,7 +17,7 @@ and the runner and preflight refuse to measure under an environment that does no
     python3 -I scripts/envs.py divisions           # every division and whether it is measured yet
 
 The division is $BENCH_DIVISION, "plain" when unset; only a division whose division.json says "status": "active" can be
-measured (the others are planned: the runner does not drive a harness yet).
+measured (the others are planned: their harness is not set up, or its adapter in scripts/harnesses.py has not been run yet).
 """
 import json
 import os

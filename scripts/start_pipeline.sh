@@ -8,7 +8,12 @@
 #
 #   RUN_ID=2026-11-05-main STEPS="0 1" scripts/start_pipeline.sh
 #   RUN_ID=2026-11-05-redo MODELS="qwen:IQ3_S" scripts/start_pipeline.sh     only these models (family:model,...)
+#   RUN_ID=... FETCH=yes scripts/start_pipeline.sh     also fetch what is missing (agreed beforehand: AGENTS.md 2.2)
 #   scripts/start_pipeline.sh --stop      stop all of them
+#
+# What the run needs on disk (models, the drafter, the harness) is checked first (scripts/acquire.py check). When
+# something is missing nothing starts, unless FETCH=yes: then the harness and the drafter are fetched here and the
+# models by strata-jbench-acquire. The choices for a missing piece are in AGENTS.md 2.0a.
 #
 # The run belongs to the environment this hardware matches (scripts/envs.py detect; BENCH_ENV=<id> names it, and it
 # must match) and to a division (BENCH_DIVISION, default plain: divisions/README.md): results/<division>/<env>/<RUN_ID>/.
@@ -18,7 +23,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
-STEPS="${STEPS:-0 1 2 3 4a 4b 4c 4d 5}"
+STEPS="${STEPS:-}"   # default: every Tier of the division (plain 0 1 2 3 4a 4b 4c 4d 5; a harness division G)
 MODELS="${MODELS:-}"
 
 if [ "${1:-}" = "--stop" ]; then
@@ -36,10 +41,9 @@ else
 fi
 BENCH_DIVISION=$(python3 -I -c 'import sys; sys.path.insert(0, "scripts"); import envs; print(envs.division(measuring=True))') || exit 1
 echo "division: $BENCH_DIVISION, environment: $BENCH_ENV, run: results/$BENCH_DIVISION/$BENCH_ENV/$RUN_ID"
-# What was started last, for the hourly watch task and anyone resuming it (run-status/ is outside Git).
-mkdir -p run-status
-printf '{"division": "%s", "env": "%s", "run_id": "%s", "steps": "%s", "models": "%s", "run_dir": "results/%s/%s/%s", "started_at": "%s"}\n' \
-  "$BENCH_DIVISION" "$BENCH_ENV" "$RUN_ID" "$STEPS" "$MODELS" "$BENCH_DIVISION" "$BENCH_ENV" "$RUN_ID" "$(date -Is)" > run-status/current-run.json
+if [ -z "$STEPS" ]; then
+  STEPS=$(python3 -I -c 'import sys; sys.path.insert(0, "scripts"); import envs; print("G" if envs.load_division(envs.division()).get("harness") else "0 1 2 3 4a 4b 4c 4d 5")')
+fi
 UNIT=(--setenv=PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin" --setenv=RUN_ID="$RUN_ID" --setenv=STEPS="$STEPS"
       --setenv=MODELS="$MODELS" --setenv=BENCH_ENV="$BENCH_ENV" --setenv=BENCH_DIVISION="$BENCH_DIVISION" --working-directory="$ROOT" --collect)
 
@@ -48,6 +52,23 @@ running() { systemctl --user is-active --quiet "$1"; }
 # the venvs, the download list and the NVFP4-QAD converter (each skipped when there); it writes the list again and
 # removes READY when env.json "models" no longer matches it
 python3 -I scripts/setup_acquire.py || exit 1
+python3 -I scripts/build_cases.py > /dev/null || exit 1   # the plan acquire.py reads (this division's)
+if ! python3 -I scripts/acquire.py check; then
+  if [ "${FETCH:-}" != yes ]; then
+    echo "not started: something the run needs is missing (above). Choose what to do with it (AGENTS.md 2.0a);"
+    echo "to let jbench fetch it, start again with FETCH=yes"
+    exit 1
+  fi
+  python3 -I scripts/acquire.py fetch --all --yes --skip-models || exit 1
+fi
+if [ ! -f downloads/READY ] && [ "${FETCH:-}" != yes ]; then
+  echo "not started: downloads/READY is missing (the models are not all fetched); start again with FETCH=yes to fetch them"
+  exit 1
+fi
+# What was started last, for the hourly watch task and anyone resuming it (run-status/ is outside Git).
+mkdir -p run-status
+printf '{"division": "%s", "env": "%s", "run_id": "%s", "steps": "%s", "models": "%s", "run_dir": "results/%s/%s/%s", "started_at": "%s"}\n' \
+  "$BENCH_DIVISION" "$BENCH_ENV" "$RUN_ID" "$STEPS" "$MODELS" "$BENCH_DIVISION" "$BENCH_ENV" "$RUN_ID" "$(date -Is)" > run-status/current-run.json
 if [ ! -f downloads/READY ]; then
   python3 scripts/preflight.py --phase acquire
   if running strata-jbench-acquire; then

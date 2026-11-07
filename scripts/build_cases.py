@@ -112,11 +112,17 @@ TIER5_CASES = ['decode-prose-ja', 'decode-code', 'prefill-4k', 'prefill-32k']
 DFLASH2_FAMILIES = {'qwen', 'gyro', 'unsloth'}
 DFLASH2_NOTE = '0.2.10 から Auto はこのモデルで DFlash2 を選ぶ（ほかのケースは MTP に固定）。drafter（1.2 GB）は計測前に取得しておく'
 
-# Practical coding case: the prompt is sent verbatim, with no format instructions.
-GAME_FIXTURE = 'game-minecraft'
-GAME_PROMPT = 'マイクラ風3D箱庭ゲーム作って'
+# Practical coding cases. Plain Tiers 0 and 3 ask for Shuri Castle as one HTML file (since 2026-11-07); the Minecraft prompt,
+# sent verbatim with no format instructions, is the harness divisions' case (docs: divisions/README.md).
+GAME_FIXTURE = 'game-shuri'
+GAME_PROMPT = ('Design and create a very creative, elaborate, and detailed scene of Shuri Castle and its surrounding '
+               'landscape in Okinawa, Japan. … make sure I can paste it all into a single HTML file and open it in Chrome.')
 GAME_NOTE = ('成果物は artifact/ に展開（response.md、files/、manifest.json、静的 HTML なら screenshot.png）。'
-             '形式（単体 HTML / 要サーバー / README の有無）は manifest に記録')
+             '単一の HTML ファイルか、形式（単体 HTML / 要サーバー / README の有無）は manifest に記録')
+HARNESS_FIXTURE = 'game-minecraft'
+HARNESS_PROMPT = 'マイクラ風3D箱庭ゲーム作って'
+HARNESS_NOTE = ('ハーネスに one shot で渡す（形式の指示なし）。成果物は作業ディレクトリに書かれた HTML、なければ回答のコードブロックから '
+                'artifact/ に展開。sampling・thinking・seed・出力 cap は記録プロキシがリクエストごとに入れる')
 
 # Time model for the estimate. Seconds and tokens/s. Fitted to the first full run on rtx5090-128g (2026-11-03-main:
 # medians of the measured requests and launches); another card overrides what differs in its env.json "assume".
@@ -175,7 +181,7 @@ def effort_note(effort, cap, game=False):
 
 def game_case(tier, step, fam, model, effort, temperature, cap, timeout):
     return base(tier, step, fam, model, _key=f'{GAME_FIXTURE}-{effort}', fixture=GAME_FIXTURE,
-                content=f'「{GAME_PROMPT}」（実用的なコーディング）', input_tokens='短文', output_cap=cap,
+                content='首里城の情景を単一の HTML ファイルで（実用的なコーディング）', input_tokens='短文', output_cap=cap,
                 effort=effort, temperature=temperature, timeout_s=timeout, artifact=True,
                 measures='完了時間, 出力 token, cap 到達, 成果物が動くか',
                 note=effort_note(effort, cap, game=True) + '。' + GAME_NOTE)
@@ -196,6 +202,9 @@ def tier1_cases(tier, step, fam, model, **kw):
 
 def build(cfg):
     use_env(cfg)
+    division = envs.load_division(envs.division())
+    if division.get('harness'):
+        return finish(harness_build(division), cfg)
     names = {(f, m) for f, m, *_ in env_models()}
     rows = []
     # Tier 0: instrument check on IQ3_S across 3 engine restarts, plus the author's protocol on Gyro-S.
@@ -298,7 +307,38 @@ def build(cfg):
                                  measures='prefill tok/s, TTFT' if is_prefill else 'decode tok/s, MTP 採用率',
                                  note=note))
 
+    # The Minecraft game of Tiers 0 and 3 before 2026-11-07, kept so that its results stay in the lists and the charts:
+    # never planned again (write_plan leaves retired cases out) and listed only where a run has them (main).
+    old = [game_case('0', '0', *REF, 'none', 0.7, 16384, 1800)]
+    old += [game_case('3', '3', fam, model, eff, 1.0, 32768, 3600) for fam, model, *_ in env_models() for eff in GAME_EFFORTS]
+    for r in old:
+        r['id'] = r['id'].replace(GAME_FIXTURE, HARNESS_FIXTURE)
+        r.update(fixture=HARNESS_FIXTURE, content=f'「{HARNESS_PROMPT}」（実用的なコーディング）', retired=True,
+                 note='2026-11-07 にハーネス部門へ移したケース（プレーンでは首里城に置き換え）。結果のある run だけ載せる')
+    rows += old
     rows = [r for r in rows if (r['family'], r['model']) in names]   # Tiers 0, 4 and 5 name their models directly
+    return finish(rows, cfg)
+
+
+def harness_build(division):
+    """A harness division (divisions/<division>/division.json "harness"): the Minecraft game only, handed to the harness in
+    one shot, on the division's models ("models", "family model") that this environment has, at the plain baseline's
+    context (128K) and launch. The engine-side conditions (sampling, thinking, seed, cap) are those of plain Tier 3's game."""
+    keep = division.get('models')
+    rows = []
+    for fam, model, *_ in env_models():
+        if keep and f'{fam} {model}' not in keep:
+            continue
+        rows.append(base('G', 'G', fam, model, _key=f'{HARNESS_FIXTURE}-high', fixture=HARNESS_FIXTURE,
+                         content=f'「{HARNESS_PROMPT}」（ハーネス越しの実用的なコーディング）', input_tokens='短文',
+                         output_cap=32768, effort='high', temperature=1.0, timeout_s=3600, artifact=True,
+                         harness=division['harness'],
+                         measures='完了時間, ターン数, tool call, ハーネスの前置き token, cached の割合, 成果物が動くか',
+                         note=effort_note('high', 32768, game=True) + '。' + HARNESS_NOTE))
+    return rows
+
+
+def finish(rows, cfg):
     ids = [r['id'] for r in rows]
     assert len(ids) == len(set(ids)), 'duplicate case id'
     for r in rows:
@@ -378,7 +418,7 @@ def request_seconds(r):
     tokens_in = r['input_tokens'] if isinstance(r['input_tokens'], int) else 300
     out = r['output_cap'] or 512
     fx = r['fixture']
-    if fx == GAME_FIXTURE:
+    if fx.startswith('game-'):
         out = min(out, a['game_reasoning_tokens'][r['effort']] + a['game_answer_tokens'])
     elif r['step'] == '3':
         out = min(out, a['reasoning_tokens'][r['effort']] + a['task_answer_tokens'])
@@ -404,6 +444,7 @@ def launch_seconds(r):
 
 
 def estimate(rows):
+    rows = [r for r in rows if not r.get('retired')]
     # Every Tier starts its own sessions (sessions/<session>-T<step>), even one another Tier also uses.
     # Tier 2 has no runner sessions: strata bench starts an engine for each of the suite's runs.
     launches = {}
@@ -488,9 +529,12 @@ TIER_INFO = {
     '2': ('公式 standard-v1（thinking xhigh、temperature 1.0）をスイートごと3回',
           'the official standard-v1 (thinking xhigh, temperature 1.0), the whole suite 3 times',
           '官方 standard-v1（thinking xhigh，temperature 1.0），整个套件 3 次'),
-    '3': ('推論エフォート none / high × 4問、ゲーム作成は high のみ（全モデル）',
-          'reasoning effort none / high × 4 tasks, the game at high only (every model)',
-          '推理 effort none / high × 4 题，游戏制作仅 high（所有模型）'),
+    '3': ('推論エフォート none / high × 4問、ゲーム作成（首里城）は high のみ（全モデル）',
+          'reasoning effort none / high × 4 tasks, the game (Shuri Castle) at high only (every model)',
+          '推理 effort none / high × 4 题，游戏制作（首里城）仅 high（所有模型）'),
+    'G': ('ゲーム作成（マイクラ）をハーネスに one shot で渡す',
+          'the game (Minecraft) handed to the harness in one shot',
+          '把游戏制作（Minecraft）一次性交给 harness'),
     '4a': ('容量の確保コスト（128K / 256K / 1M に同じ 4K 入力）',
            'the cost of reserving context (the same 4K input at 128K / 256K / 1M)',
            '预留上下文的代价（128K / 256K / 1M 下相同的 4K 输入）'),
@@ -617,7 +661,7 @@ COMMON = {
 }
 GAME_LAYOUT = {
     'ja': ('ゲーム作成ケースの成果物の置き場所',
-           f'プロンプト「{GAME_PROMPT}」をそのまま送る（形式の指示は足さない）。出力の形がケースごとに違っても、必ず次の形に展開する。',
+           'Tier 0・3 のゲームは首里城の情景（英文のプロンプトで、単一の HTML ファイルで答えるよう指定する。全文は prompts/game-shuri.json）。2026-11-07 より前の run はマイクラ（「マイクラ風3D箱庭ゲーム作って」、形式の指示なし）。出力の形がケースごとに違っても、必ず次の形に展開する。',
            '''<run-id>/cases/<case id>/artifact/
   response.md     最終回答の全文（thinking は requests.jsonl 側）
   files/          コードブロックから取り出したファイル（ファイル名が書かれていればその名前、なければ言語ごとの既定名）
@@ -625,7 +669,7 @@ GAME_LAYOUT = {
   screenshot.png  単体 HTML か静的サーバーで開けた場合のみ。headless ブラウザで撮る''',
            '3回分は `artifact/` の下に seed ごとのフォルダ（`seed-1/` など）で分ける。'),
     'en': ('Where the game cases\' results go',
-           f'The prompt “{GAME_PROMPT}” (Japanese for “make a Minecraft-like 3D sandbox game”) is sent as is, with no format instructions. Whatever shape each answer takes, it is always unpacked like this:',
+           'The game of Tiers 0 and 3 is a scene of Shuri Castle (an English prompt that asks for the answer as one HTML file; the whole text is in prompts/game-shuri.json). Runs before 2026-11-07 had the Minecraft prompt (“マイクラ風3D箱庭ゲーム作って”, Japanese for “make a Minecraft-like 3D sandbox game”, with no format instructions). Whatever shape each answer takes, it is always unpacked like this:',
            '''<run-id>/cases/<case id>/artifact/
   response.md     the whole final answer (the thinking is in requests.jsonl)
   files/          files taken from the code blocks (named as the answer names them, else a default per language)
@@ -633,13 +677,60 @@ GAME_LAYOUT = {
   screenshot.png  only if it opens as a single HTML file or from a static server; taken with a headless browser''',
            'The 3 runs go in one folder per seed under `artifact/` (`seed-1/` and so on).'),
     'zh': ('游戏制作用例的成果存放位置',
-           f'原样发送提示“{GAME_PROMPT}”（日语，意为“做一个类似 Minecraft 的 3D 沙盒游戏”），不附加格式要求。无论每个用例的输出形式如何，都按以下结构展开：',
+           'Tier 0、3 的游戏是首里城的场景（英文提示，要求用单个 HTML 文件回答；全文见 prompts/game-shuri.json）。2026-11-07 之前的 run 是 Minecraft（“マイクラ風3D箱庭ゲーム作って”，日语，意为“做一个类似 Minecraft 的 3D 沙盒游戏”，不附加格式要求）。无论每个用例的输出形式如何，都按以下结构展开：',
            '''<run-id>/cases/<case id>/artifact/
   response.md     最终回答全文（thinking 在 requests.jsonl 中）
   files/          从代码块中取出的文件（写了文件名就用该名称，否则用各语言的默认名）
   manifest.json   取出的文件、命名方式、形式（单个 HTML / 需要服务器 / 其他）、有无 README、运行方法
   screenshot.png  仅当能以单个 HTML 或静态服务器打开时。用 headless 浏览器截图''',
            '3 次的结果在 `artifact/` 下按 seed 分文件夹（`seed-1/` 等）。'),
+}
+# A harness division's shared conditions and where its game's results go (divisions/<division>/division.json "harness").
+HARNESS_COMMON = {
+    'ja': '''- ケースはゲーム作成（マイクラ、「マイクラ風3D箱庭ゲーム作って」）だけ。形式の指示を足さずに、ハーネスに one shot で渡す（非対話、プロンプトは stdin かファイル）。各3回（seed 1 / 2 / 3）。
+- エンジンの起動はプレーンの基準と同じ: コンテキスト 128K、`--vision off --parallel 1 --tune skip --drafting mtp`。
+- ハーネスはエンジンに直接つながず、ランナーの記録プロキシを通す。プロキシは各リクエストの sampling（temperature 1.0、top_p 0.95 / top_k 20 / min_p 0 / presence_penalty 0 / repetition_penalty 1.0）、thinking（xhigh、思考の上限 16,384）、seed、出力 cap 32,768 をケースの値にそろえ、ハーネスが送った元の値は記録する。ハーネスの差だけが残るようにするため（送らない項目は Strata が共有の Chat 設定や model card で埋めるので、ハーネスごとに条件がずれる）。
+- ハーネスの設定は、版を固定し、ユーザーの設定とは分けたディレクトリに作る。窓 131,072 / 出力上限 32,768。自動の compaction と、タイトル生成などの副次リクエストは切る（切れないものは記録して本筋と分けて数える）。tool は作業ディレクトリの中では承認なしで実行し、閉じ込めは外側（bubblewrap）で行う。
+- 作業ディレクトリはケースと seed ごとの使い捨て。測るのは完了までの壁時計、その内訳（ハーネスの起動、ターン数、tool call、ハーネスの前置きの token、prefix cache の再利用）と成果物。
+''',
+    'en': '''- The only case is the game (Minecraft, “マイクラ風3D箱庭ゲーム作って”), handed to the harness in one shot with no format instructions (non-interactive, the prompt on stdin or in a file). 3 runs each (seed 1 / 2 / 3).
+- The engine is launched as for plain's baseline: context 128K, `--vision off --parallel 1 --tune skip --drafting mtp`.
+- The harness does not talk to the engine directly but through the runner's recording proxy. The proxy sets each request's sampling (temperature 1.0, top_p 0.95 / top_k 20 / min_p 0 / presence_penalty 0 / repetition_penalty 1.0), thinking (xhigh, a thinking budget of 16,384), seed and output cap 32,768 to the case's values and records what the harness sent, so that only the harness differs (what a harness leaves out, Strata fills in from the shared Chat settings or the model card, which would differ per harness).
+- Each harness is pinned to a version and configured in a folder of its own, apart from the user's settings: window 131,072 / output limit 32,768. Automatic compaction and side requests such as title generation are off (any that cannot be turned off are recorded and counted apart). Tools run without approval inside the work folder, confined from outside (bubblewrap).
+- A fresh work folder per case and seed. Measured: the wall-clock time to the end, what it is made of (the harness's start, turns, tool calls, the tokens of the harness's own preamble, prefix-cache reuse) and the result.
+''',
+    'zh': '''- 用例只有游戏制作（Minecraft，“マイクラ風3D箱庭ゲーム作って”），不附加格式要求，一次性交给 harness（非交互，提示经 stdin 或文件传入）。各 3 次（seed 1 / 2 / 3）。
+- 引擎启动与纯模型的基准相同：上下文 128K，`--vision off --parallel 1 --tune skip --drafting mtp`。
+- harness 不直接连接引擎，而是经过 runner 的记录代理。代理把每个请求的 sampling（temperature 1.0，top_p 0.95 / top_k 20 / min_p 0 / presence_penalty 0 / repetition_penalty 1.0）、thinking（xhigh，思考上限 16,384）、seed、输出 cap 32,768 统一为用例的值，并记录 harness 原本发送的值，使差异只来自 harness（harness 不发送的项目由 Strata 用共享的 Chat 设置或 model card 填充，各 harness 的条件会不同）。
+- 每个 harness 固定版本，配置放在与用户设置分开的目录中：窗口 131,072 / 输出上限 32,768。关闭自动 compaction 与标题生成等附带请求（无法关闭的另行记录、分开计数）。tool 在工作目录内无需批准即可执行，由外部（bubblewrap）隔离。
+- 每个用例与 seed 使用一次性的工作目录。测量到完成为止的实际时间、其构成（harness 启动、轮数、tool call、harness 自身前置部分的 token、prefix cache 的复用）以及成果物。
+''',
+}
+HARNESS_LAYOUT = {
+    'ja': ('ゲーム作成ケースの成果物の置き場所',
+           'ハーネスが作業ディレクトリに書いた HTML を取る（1つならそれ、複数なら index.html、なければ最後に書かれたもの）。HTML がなければ、最後の回答のコードブロックから取り出す。どちらで取ったかは manifest に残る。',
+           '''<run-id>/cases/<case id>/artifact/seed-N/
+  response.md     ハーネスの最後の回答
+  files/          作業ディレクトリに書かれたファイル（またはコードブロックから取り出したファイル）
+  manifest.json   取ったファイル、取り方（作業ディレクトリ / 回答）、形式、起動方法
+  screenshot.png  単体 HTML か静的サーバーで開けた場合のみ。headless ブラウザで撮る''',
+           'ハーネスの出力（イベント）とプロキシの記録（各リクエスト）は `harness/seed-N/` に残る。'),
+    'en': ('Where the game cases\' results go',
+           'The HTML the harness wrote into its work folder is taken (the one there is, else index.html, else the last one written). With no HTML file, the files come from the code blocks of the last answer. The manifest says which.',
+           '''<run-id>/cases/<case id>/artifact/seed-N/
+  response.md     the harness's last answer
+  files/          the files written into the work folder (or taken from the code blocks)
+  manifest.json   the files, where they came from (work folder / answer), the form, how to run it
+  screenshot.png  only if it opens as a single HTML file or from a static server; taken with a headless browser''',
+           'The harness\'s output (its events) and the proxy\'s record (every request) are kept in `harness/seed-N/`.'),
+    'zh': ('游戏制作用例的成果存放位置',
+           '取 harness 写入工作目录的 HTML（只有一个就取它，多个则取 index.html，否则取最后写入的）。没有 HTML 文件时，从最后回答的代码块中取出。取法记录在 manifest 中。',
+           '''<run-id>/cases/<case id>/artifact/seed-N/
+  response.md     harness 的最后回答
+  files/          写入工作目录的文件（或从代码块中取出的文件）
+  manifest.json   取出的文件、来源（工作目录 / 回答）、形式、运行方法
+  screenshot.png  仅当能以单个 HTML 或静态服务器打开时。用 headless 浏览器截图''',
+           'harness 的输出（事件）和代理的记录（每个请求）保存在 `harness/seed-N/`。'),
 }
 PREVIEW_NOTE = {
     'ja': '> **プレビュー:** 計測中・公開前（`results/`）の結果も含む。コミットする一覧は `scripts/publish.py` で `published/` に移した結果だけから作る。\n',
@@ -691,7 +782,7 @@ def write_md(rows, out, cfg, published_only=False):
         if not published_only:
             text.append(PREVIEW_NOTE[lang])
         text.append(f'**{L("部門", "Division", "部门")}: {division["label"][lang]}** — {division["summary"][lang]} '
-                    f'[{L("部門の一覧（エージェント部門は予定）", "All divisions (the agentic ones are planned)", "部门一览（智能体部门在计划中）")}]({up}divisions/README{suffix if (ROOT / f"divisions/README{suffix}.md").exists() else ""}.md)\n')
+                    f'[{L("部門の一覧", "All divisions", "部门一览")}]({up}divisions/README{suffix if (ROOT / f"divisions/README{suffix}.md").exists() else ""}.md)\n')
         text.append(L('Tier ごとにケースの表がある（1行が1ケース）。全パラメータと結果は Tier ごとの CSV（tier-<Tier>.csv）。'
                       'エビデンス列の RUN_ID は、そのケースの記録（summary.json、送ったリクエスト、応答、成果物）のフォルダ。'
                       f'生成: `scripts/build_cases.py`。',
@@ -726,8 +817,9 @@ def write_md(rows, out, cfg, published_only=False):
                     '| --- | --- | ---: | --- | --- |\n')
         text[-1] += ''.join(f'| {f} | {m} | {gb} | {md(tr(role, lang))} | {versions.get((f, m), "–")} |\n'
                             for f, m, gb, role in env_models())
-        text.append(f'\n## {L("全ケース共通の条件", "Conditions shared by every case", "所有用例的共同条件")}\n\n{COMMON[lang]}')
-        title, intro, tree, after = GAME_LAYOUT[lang]
+        harness = division.get('harness')
+        text.append(f'\n## {L("全ケース共通の条件", "Conditions shared by every case", "所有用例的共同条件")}\n\n{(HARNESS_COMMON if harness else COMMON)[lang]}')
+        title, intro, tree, after = (HARNESS_LAYOUT if harness else GAME_LAYOUT)[lang]
         text.append(f'\n<details><summary>{title}</summary>\n\n{intro}\n\n```\n{tree}\n```\n\n{after}\n\n</details>\n')
         text.append(f'\n<details><summary>{L("見積もりの前提（rtx5090-128g の初回の計測の中央値。ほかの環境は env.json の assume で上書き）", "What the estimate assumes (medians of the first run on rtx5090-128g; other environments override them in env.json \"assume\")", "预估的前提（rtx5090-128g 首次测量的中位数；其他环境在 env.json 的 assume 中覆盖）")}</summary>\n\n'
                     f'```json\n{json.dumps(ASSUME, ensure_ascii=False, indent=2)}\n```\n\n</details>\n')
@@ -778,6 +870,7 @@ def write_md(rows, out, cfg, published_only=False):
 def write_plan(rows, env_id):
     out = envs.plan_dir(env_id)
     out.mkdir(parents=True, exist_ok=True)
+    rows = [r for r in rows if not r.get('retired')]   # measured before; not run again
     with (out / 'cases.jsonl').open('w') as f:
         for r in rows:
             f.write(json.dumps({k: v for k, v in r.items() if k not in ('result', 'evidence', 'status', 'run_id')},
@@ -822,6 +915,7 @@ def main():
         cfg = envs.load(env_id, a.published)
         rows = build(cfg)
         attach_results(rows, env_id, a.published)
+        rows = [r for r in rows if not r.get('retired') or r['status'] != 'planned']
         est = estimate(rows)
         hours = sum(s['total_h'] for s in est.values())
         summaries.append({'id': env_id, 'label': envs.label(cfg), 'cases': len(rows), 'hours': hours,

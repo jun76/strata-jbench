@@ -164,6 +164,10 @@ def main():
     a = ap.parse_args()
     OUT.mkdir(exist_ok=True)
     env_id = a.env or envs.current()
+    # the division: the timer's unit sets BENCH_DIVISION; by hand, the one of the run started last when it is this run
+    current = load(OUT / 'current-run.json')
+    if not os.environ.get('BENCH_DIVISION') and current.get('run_id') == a.run_id and current.get('division'):
+        os.environ['BENCH_DIVISION'] = current['division']
     run_dir = envs.run_dir(env_id, a.run_id)
     parts = [acquire_state(), bench_state(run_dir, env_id)]
     bad = [p for p in parts if p['state'] in ('FAILED', 'STUCK')]

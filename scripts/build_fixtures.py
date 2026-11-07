@@ -3,6 +3,8 @@
 Run with Strata's own Python (the active Control's, named in ~/.local/share/strata/components/control/active.json)
 so the token counts use the tokenizer and chat template the server uses, for example:
   ~/.local/share/strata/components/control/0.1.56/python/bin/python3 scripts/build_fixtures.py
+  ~/.local/share/strata/components/control/0.1.57/python/bin/python3 scripts/build_fixtures.py --only game-shuri
+(--only rewrites the named fixtures and their MANIFEST lines, and leaves the others as they are)
 
 The prefill records follow standard-v1 (tools/build_standard_corpus.py), sized here for thinking-off requests.
 """
@@ -52,6 +54,11 @@ DECODE = {
 }
 
 GAME_PROMPT = 'マイクラ風3D箱庭ゲーム作って'
+# Plain Tier 3's game since 2026-11-07 (the Minecraft prompt moved to the harness divisions); the answer is asked for as one HTML file.
+SHURI_PROMPT = ('Design and create a very creative, elaborate, and detailed scene of Shuri Castle and its surrounding landscape in '
+                'Okinawa, Japan. Include the castle architecture, nearby gates, stone walls, trees, and a rich surrounding '
+                'environment. Make the scene impressive and varied and use beautiful colors. Use whatever libraries you want, '
+                'but make sure I can paste it all into a single HTML file and open it in Chrome.')
 CTXCOST_QUESTION = 'これらのレコードの構造を説明し、ID からレコードを探す手順と、件数が増えたときに速く探す工夫を、できるだけ詳しく書いてください。'
 
 
@@ -218,6 +225,7 @@ def write(name, data):
 
 
 def main():
+    only = set(sys.argv[sys.argv.index('--only') + 1].split(',')) if '--only' in sys.argv else None
     OUT.mkdir(exist_ok=True)
     template = TOKENIZER / 'chat_template.jinja'
     counter = SC.Counter(TOKENIZER, template)
@@ -226,6 +234,18 @@ def main():
 
     def tokens_of(text):
         return len(counter.ids([{'role': 'user', 'content': MARKER_SAMPLE + '\n' + text}], None))
+
+    chats = {'game-minecraft': GAME_PROMPT, 'game-shuri': SHURI_PROMPT}
+    if only:
+        unknown = only - set(chats)
+        if unknown:
+            raise SystemExit(f'--only takes {", ".join(chats)}; not {", ".join(sorted(unknown))}')
+        doc = json.loads((OUT / 'MANIFEST.json').read_text())
+        for name in sorted(only):
+            doc['fixtures'][name] = write(name, {'kind': 'chat', 'prompt': chats[name], 'input_tokens': tokens_of(chats[name])})
+            print(name, 'written')
+        (OUT / 'MANIFEST.json').write_text(json.dumps(doc, ensure_ascii=False, indent=2) + '\n')
+        return
 
     manifest = {}
     for name, target in PREFILL_TARGETS.items():
@@ -253,8 +273,8 @@ def main():
                                                   'thinking': False, 'source': 'standard-v1 records_body'})
     for name, text in DECODE.items():
         manifest[name] = write(name, {'kind': 'chat', 'prompt': text, 'input_tokens': tokens_of(text)})
-    manifest['game-minecraft'] = write('game-minecraft', {'kind': 'chat', 'prompt': GAME_PROMPT,
-                                                          'input_tokens': tokens_of(GAME_PROMPT)})
+    for name, text in chats.items():
+        manifest[name] = write(name, {'kind': 'chat', 'prompt': text, 'input_tokens': tokens_of(text)})
     for name, t in tasks().items():
         manifest[name] = write(name, {'kind': 'task', 'prompt': t['prompt'], 'expected': t['expected'],
                                       'input_tokens': tokens_of(t['prompt'])})

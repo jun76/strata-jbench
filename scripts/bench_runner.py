@@ -4,8 +4,10 @@
 
 The environment (envs/<id>/env.json) is the one this hardware matches (scripts/envs.py); --env or $BENCH_ENV names it,
 and a run under an environment the hardware does not match is refused (a dry run may name any). The division
-($BENCH_DIVISION, default plain: divisions/README.md) must be one that is measured: this runner calls the engine's API
-directly, with no agent harness, which is the plain division.
+($BENCH_DIVISION, default plain: divisions/README.md) must be one that is measured. In plain the runner calls the engine's
+API itself. In a harness division (division.json "harness") it hands each case's prompt to the harness in one shot
+(scripts/harnesses.py), inside a sandbox and a fresh work folder, with the recording proxy (scripts/agent_proxy.py)
+between the harness and the engine; the proxy puts the case's sampling, thinking, seed and cap into every request.
 
 One engine start per session (strata launch on a dedicated port), a warm-up request, then the session's cases in a
 seeded shuffled order. Every request is streamed; the engine's timings and usage are kept as they arrive. A case that
@@ -15,8 +17,10 @@ Per case: results/<division>/<env>/<run-id>/cases/<case id>/
   summary.json      medians and the counts build_cases.py shows
   requests.jsonl    one line per request (timings, usage, client times, check result)
   responses/        the final answer text per request
-  artifact/seed-N/  game cases: the files taken from the answer, manifest.json, screenshot.png
-  raw/              the SSE stream and thinking text (kept out of Git)
+  artifact/seed-N/  game cases: the files taken from the answer (or the harness's work folder), manifest.json, screenshot.png
+  harness/seed-N/   harness divisions: the harness's output (events.jsonl, stderr.txt) and proxy.jsonl (one line per request)
+  raw/              the SSE stream and thinking text; in a harness division also each seed's work folder, the harness's
+                    folder and the requests as the harness sent them (kept out of Git)
 Per session: results/<division>/<env>/<run-id>/sessions/<session>/ (launch output, /settings, /config, /props, telemetry.csv).
 """
 import argparse
@@ -39,7 +43,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import agent_proxy  # noqa: E402
 import envs  # noqa: E402
+import harnesses  # noqa: E402
 import machine_info  # noqa: E402
 import model_files  # noqa: E402
 
@@ -348,12 +354,52 @@ def extract_artifact(content, dest):
                             content)
     kind = ('static-html' if html and not server_hint else 'needs-server' if html or server_hint
             else 'other' if files else 'no-code')
-    manifest = {'files': files, 'entry': html, 'kind': kind, 'truncated': any(f['truncated'] for f in files), 'readme': any(n.lower().startswith('readme') for n in names),
+    manifest = {'source': 'answer', 'files': files, 'entry': html, 'kind': kind, 'truncated': any(f['truncated'] for f in files), 'readme': any(n.lower().startswith('readme') for n in names),
                 'server_hint': server_hint.group(1) if server_hint else None}
     if html:
+        manifest.update(single_file(files_dir / html, sum(n.endswith('.html') for n in names)))
         manifest['screenshot'] = screenshot(files_dir, html, dest)
     (dest / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n')
     return manifest
+
+
+LOCAL_REF = re.compile(r'(?:src|href)\s*=\s*["\']([^"\'#][^"\']*)["\']', re.I)
+
+
+def single_file(entry, html_files):
+    """Whether the page is one self-contained HTML file: the files it loads by a relative path (scripts, styles, images;
+    CDN URLs, data: and anchors do not count)."""
+    try:
+        text = entry.read_text(errors='replace')
+    except OSError:
+        return {'single_file': None}
+    local = sorted({u for u in LOCAL_REF.findall(text) if not re.match(r'(?:[a-z][\w+.-]*:|//)', u, re.I)})
+    return {'single_file': not local, 'local_refs': local[:20], 'html_files': html_files}
+
+
+SERVER_HINT = r'(npm (?:run|start|install)|npx |vite|python3? -m http\.server|localhost:\d+|http-server)'
+
+
+def workspace_artifact(work, final, dest):
+    """A harness's result: the HTML it wrote into the work folder (harnesses.pick_html) with the folder's files, or,
+    when it wrote none, the code blocks of its last answer (extract_artifact)."""
+    entry = harnesses.pick_html(work)
+    if not entry:
+        return extract_artifact(final or '', dest)
+    dest.mkdir(parents=True, exist_ok=True)
+    (dest / 'response.md').write_text(final or '')
+    files_dir = dest / 'files'
+    listed = harnesses.copy_work(work, files_dir)
+    rel = str(entry.relative_to(work))
+    hint = re.search(SERVER_HINT, final or '')
+    m = {'source': 'workspace', 'files': listed, 'entry': rel, 'kind': 'needs-server' if hint else 'static-html',
+         'truncated': not re.search(r'</html\s*>', entry.read_text(errors='replace'), re.I),
+         'readme': any(Path(f['name']).name.lower().startswith('readme') for f in listed),
+         'server_hint': hint.group(1) if hint else None,
+         **single_file(entry, sum(f['name'].lower().endswith(('.html', '.htm')) for f in listed))}
+    m['screenshot'] = screenshot(files_dir, rel, dest)
+    (dest / 'manifest.json').write_text(json.dumps(m, ensure_ascii=False, indent=2) + '\n')
+    return m
 
 
 def free_port():
@@ -423,6 +469,19 @@ def summarize(row, records):
     for key in ('gpu_mem_peak_mib', 'rss_peak_mib', 'disk_read_mib', 'power_peak_w'):
         s[key] = max((r['telemetry'].get(key) for r in ok if r.get('telemetry') and r['telemetry'].get(key) is not None),
                      default=None)
+    if any(r.get('harness') for r in records):
+        # a harness division: per run the harness's requests, tools and preamble (medians), and the result's form
+        for key in ('requests', 'requests_without_tools', 'tool_calls_n', 'steps', 'preamble_tokens', 'tools_offered',
+                    'cached_share', 'engine_share', 'harness_start_ms'):
+            s[key] = median([r.get(key) for r in ok])
+        s['capped'] = sum(1 for r in ok if r.get('capped_requests'))
+        s['harness'] = next(r['harness'] for r in records if r.get('harness'))
+        s['harness_version'] = next((r.get('harness_version') for r in records if r.get('harness')), None)
+        s['per_request'] = [p | {k: r.get(k) for k in ('requests', 'tool_calls_n')} for p, r in zip(s['per_request'], records)]
+    arts = [r['artifact'] for r in ok if r.get('artifact')]
+    if arts:
+        s['single_file'] = f'{sum(1 for a in arts if a.get("single_file"))}/{len(arts)}'
+        s['from_workspace'] = sum(1 for a in arts if a.get('source') == 'workspace')
     return s
 
 
@@ -698,6 +757,116 @@ def run_case(row, case_dir, tel, restart, concurrency_fn=None, seeds=None, doc_n
     return records
 
 
+# ------------------------------------------------------------------ harness divisions
+
+def pins_of(row, seed):
+    """What the proxy puts into every request of a harness case: plain's request body for the same case, without the
+    conversation (sampling, seed, max_tokens, reasoning_effort, chat_template_kwargs, reasoning_budget_tokens)."""
+    body = request_body(row, seed, 'pin')
+    return {k: v for k, v in body.items() if k not in ('model', 'stream', 'stream_options', 'messages')}
+
+
+def iso_ts(text):
+    try:
+        return datetime.fromisoformat(text).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def aggregate(reqs):
+    """The engine's numbers over every request of one harness run: tokens and times summed, so the rates are per token
+    over all the turns (a turn that only calls a tool weighs what it generated)."""
+    t = [r.get('timings') or {} for r in reqs]
+    u = [r.get('usage') or {} for r in reqs]
+    s = lambda xs, k: sum(x.get(k) or 0 for x in xs)  # noqa: E731
+    pn, pms, dn, dms = s(t, 'prompt_n'), s(t, 'prompt_ms'), s(t, 'predicted_n'), s(t, 'predicted_ms')
+    timings = {'prompt_n': pn, 'prompt_ms': round(pms, 1), 'prompt_per_second': round(pn / pms * 1000, 2) if pms else None,
+               'predicted_n': dn, 'predicted_ms': round(dms, 1),
+               'predicted_per_second': round(dn / dms * 1000, 2) if dms else None,
+               'draft_n': s(t, 'draft_n'), 'draft_n_accepted': s(t, 'draft_n_accepted')}
+    cached = sum(((x.get('prompt_tokens_details') or {}).get('cached_tokens') or 0) for x in u)
+    usage = {'prompt_tokens': s(u, 'prompt_tokens'), 'completion_tokens': s(u, 'completion_tokens'),
+             'prompt_tokens_details': {'cached_tokens': cached}}
+    return timings, usage
+
+
+def run_harness_case(row, case_dir, tel, restart, h, proxy):
+    """Every seed of one case through the harness: a fresh work folder and harness folder (raw/<r>-<s>/), the prompt
+    handed over in one shot inside the sandbox, the proxy's record of every request, then the result from the work
+    folder. Returns the request records (one per seed, built from that seed's requests)."""
+    records = []
+    prompt = fixture(row['fixture'])['prompt']
+    for seed in [1, 2, 3][:min(row['reps'], 3)]:
+        tag = f'r{restart}-s{seed}'
+        raw = case_dir / 'raw' / tag
+        work, home = raw / 'work', raw / 'home'
+        for d in (work, home):
+            shutil.rmtree(d, ignore_errors=True)
+            d.mkdir(parents=True)
+        out_dir = case_dir / 'harness' / f'seed-{seed}'
+        shutil.rmtree(out_dir, ignore_errors=True)
+        out_dir.mkdir(parents=True)
+        (home / 'task.txt').write_text(prompt)    # inside the sandbox's binds, for a harness that reads it from a file
+        env = h.prepare(home, f'http://{HOST}:{agent_proxy.PROXY_PORT}/v1')
+        argv = harnesses.sandboxed(h.argv(home / 'task.txt'), work, home, env, h.binds())
+        (out_dir / 'command.txt').write_text(shlex.join(argv).replace(str(ROOT), '<jbench>') + '\n')
+        for f in h.config_files(home):
+            shutil.copyfile(f, out_dir / ('config-' + f.name))
+        proxy.begin(out_dir / 'proxy.jsonl', pins_of(row, seed), raw / 'requests')
+        started_at, t0, timed_out = now(), time.time(), False
+        p = subprocess.Popen(argv, stdin=subprocess.PIPE if h.stdin else subprocess.DEVNULL, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE, text=True, start_new_session=True, cwd=work)
+        try:
+            stdout, stderr = p.communicate(input=prompt if h.stdin else None, timeout=row['timeout_s'])
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            kill_session(p.pid)
+            stdout, stderr = p.communicate()
+        wall = time.time() - t0
+        reqs = [r for r in proxy.end() if 'sent' in r]
+        (out_dir / 'events.jsonl').write_text(stdout)
+        (out_dir / 'stderr.txt').write_text(stderr)
+        parsed = h.parse(stdout)
+        timings, usage = aggregate(reqs)
+        first = reqs[0] if reqs else {}
+        off = (iso_ts(first.get('started_at')) or t0) - t0
+        names = [n for r in reqs for n in r.get('tool_calls') or [] if n]
+        error = ('timeout' if timed_out else f'harness exit {p.returncode}' if p.returncode else
+                 'the harness sent no request' if not reqs else
+                 next((f'engine: {r.get("error") or r.get("status")}' for r in reqs if r.get('error') or r.get('status') != 200), None))
+        rec = {'case': row['id'], 'seed': seed, 'restart': restart, 'harness': h.div, 'harness_version': h.found['version'],
+               'started_at': started_at, 'ended_at': now(), 'exit_code': p.returncode, 'error': error,
+               'total_ms': round(wall * 1000, 1),
+               'ttft_ms': round((off * 1000) + first['ttft_ms'], 1) if first.get('ttft_ms') is not None else None,
+               'first_answer_ms': next((round((iso_ts(r['started_at']) - t0) * 1000 + r['first_answer_ms'], 1)
+                                        for r in reqs if r.get('first_answer_ms') is not None), None),
+               'harness_start_ms': round(off * 1000, 1) if reqs else None,
+               'finish_reason': reqs[-1].get('finish_reason') if reqs else None,
+               'timings': timings, 'usage': usage,
+               'requests': len(reqs), 'requests_without_tools': sum(1 for r in reqs if not r['sent'].get('tools')),
+               'tool_calls': {n: names.count(n) for n in sorted(set(names))}, 'tool_calls_n': len(names),
+               'steps': parsed.get('steps'),
+               'preamble_tokens': (first.get('usage') or {}).get('prompt_tokens'),
+               'tools_offered': first.get('sent', {}).get('tools'), 'system_chars': first.get('sent', {}).get('system_chars'),
+               'cached_share': round(usage['prompt_tokens_details']['cached_tokens'] / usage['prompt_tokens'], 3)
+               if usage['prompt_tokens'] else None,
+               'engine_share': round(sum(r.get('total_ms') or 0 for r in reqs) / 1000 / wall, 3) if wall else None,
+               'capped_requests': sum(1 for r in reqs if r.get('finish_reason') == 'length'),
+               'harness_sent': {k: v for k, v in first.get('sent', {}).items()
+                                if k not in ('messages', 'roles', 'tools', 'system_chars', 'chars')},
+               'reasoning_chars': sum(r.get('reasoning_chars') or 0 for r in reqs),
+               'content_chars': sum(r.get('content_chars') or 0 for r in reqs), 'flags': []}
+        if tel:
+            rec['telemetry'] = tel.window(t0, time.time())
+        resp_dir = case_dir / 'responses'
+        resp_dir.mkdir(parents=True, exist_ok=True)
+        (resp_dir / f'{tag}.md').write_text(parsed.get('final') or '')
+        if row.get('artifact'):
+            rec['artifact'] = workspace_artifact(work, parsed.get('final'), case_dir / 'artifact' / f'seed-{seed}')
+        records.append(rec)
+    return records
+
+
 def write_case(case_dir, row, records):
     case_dir.mkdir(parents=True, exist_ok=True)
     with (case_dir / 'requests.jsonl').open('a') as f:
@@ -829,8 +998,16 @@ def main():
     cfg = envs.load(env_id)
     GPU = envs.gpu_index(cfg)
     div = envs.division(measuring=True)
-    if div != 'plain':
-        raise SystemExit(f'division {div!r}: this runner calls the engine directly (plain); a harness is not driven yet')
+    harness = envs.load_division(div).get('harness')
+    h = proxy = None
+    if harness:
+        if not shutil.which('bwrap'):
+            raise SystemExit('a harness division runs the harness inside bubblewrap (bwrap), which is not installed')
+        try:
+            h = harnesses.adapter(div)
+        except SystemExit:
+            if not a.dry_run:
+                raise
     run_dir = envs.run_dir(env_id, a.run_id, div)
     run_dir.mkdir(parents=True, exist_ok=True)
     steps = a.steps.split(',')
@@ -846,8 +1023,16 @@ def main():
     # the env.json this start measured with (envs/ is outside Git): published with the run, and the pages read it
     if (envs.ENVS / env_id / 'env.json').exists():
         shutil.copyfile(envs.ENVS / env_id / 'env.json', run_dir / 'env.json')
-    log(run_dir, f'start env={env_id} steps={steps} cases={len(rows)} dry={a.dry_run}')
+    log(run_dir, f'start env={env_id} division={div} steps={steps} cases={len(rows)} dry={a.dry_run}')
     log(run_dir, f'models.json: {model_files.record(run_dir)}')
+    if harness:
+        # the harness this start drove (published with the run, beside models.json)
+        hinfo = {'division': div, 'harness': harness, 'pin': harnesses.load_pin(div),
+                'found': h.found if h else harnesses.find(div), 'adapter_tested': bool(h and h.tested), 'recorded_at': now()}
+        (run_dir / 'harness.json').write_text(json.dumps(hinfo, ensure_ascii=False, indent=2).replace(str(Path.home()), '~') + '\n')
+        log(run_dir, f'harness: {harness} {hinfo["found"].get("version")} ({hinfo["found"].get("where") or hinfo["found"].get("reason")})')
+        if h and not a.dry_run:
+            proxy = agent_proxy.Proxy().start()
 
     for step in steps:
         step_rows = [r for r in rows if r['step'] == step]
@@ -906,7 +1091,8 @@ def main():
                     order = [r for r in order if not r['fixture'].startswith('long-')]
                 for r in order:
                     case_dir = run_dir / 'cases' / r['id']
-                    records = run_case(r, case_dir, tel, restart)
+                    records = (run_harness_case(r, case_dir, tel, restart, h, proxy) if h
+                               else run_case(r, case_dir, tel, restart))
                     s = write_case(case_dir, r, records)
                     log(run_dir, f'  {r["id"]}: {s["status"]} prefill={s["prefill_tps"]} decode={s["decode_tps"]} '
                                  f'ttft={s["ttft_ms"]} correct={s["correct"]} flags={s["flags"]}')
@@ -914,6 +1100,8 @@ def main():
                         log(run_dir, f'session {name}: engine not answering; ending session')
                         break
                 end_session(tel, info, session_dir)
+    if proxy:
+        proxy.stop()
     log(run_dir, 'finished')
 
 

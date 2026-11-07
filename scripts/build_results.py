@@ -6,7 +6,8 @@ With --snapshot <env>/<run id> it is the page as of that published run: it reads
 by then (every environment) and writes snapshots/<division>/<env>/<run id>/index.html and summary.csv, which GitHub
 Pages serves; scripts/publish.py writes one per run, and they are never rewritten. Its links into the repository (the
 case lists, models.json, the divisions) go to GitHub at the tag of that publish (envs.tag). Without, it also reads
-results/ (runs still being measured, ignored by Git) and writes preview/RESULTS.html and preview/summary.csv.
+results/ (runs still being measured, ignored by Git) and writes preview/RESULTS.html and preview/summary.csv
+(another division than plain: preview/RESULTS-<division>.html and summary-<division>.csv).
 
 For every environment (envs/<id>/env.json) it reads that environment's case plan (scripts/build_cases.py) and every
 results/<division>/<env>/<run-id>/cases/<case id>/summary.json, with the same rule as the case pages: test- run ids are left out,
@@ -40,11 +41,16 @@ CASE_LINE = re.compile(r'^(\S+) {3}(\S+): \w+ prefill=')
 SESSION_LINE = re.compile(r'^(\S+) session (\S+): ')
 KEEP = ['status', 'n', 'planned', 'prefill_tps', 'decode_tps', 'ttft_ms', 'first_answer_ms', 'total_ms',
         'completion_tokens', 'reasoning_chars', 'accept_rate', 'capped', 'correct', 'gpu_mem_peak_mib', 'rss_peak_mib',
-        'disk_read_mib', 'power_peak_w', 'flags']
+        'disk_read_mib', 'power_peak_w', 'flags', 'single_file', 'from_workspace',
+        # harness divisions (scripts/bench_runner.py run_harness_case)
+        'harness', 'harness_version', 'requests', 'requests_without_tools', 'tool_calls_n', 'steps', 'preamble_tokens',
+        'tools_offered', 'cached_share', 'engine_share', 'harness_start_ms']
 CSV_COLS = ['division', 'env', 'id', 'run_id', 'step', 'family', 'model', 'context_label', 'fixture', 'input_tokens', 'temperature',
             'effort', 'config', 'concurrency', 'status', 'n', 'prefill_tps', 'decode_tps', 'ttft_ms', 'first_answer_ms',
             'total_ms', 'completion_tokens', 'accept_rate', 'capped', 'correct', 'launch_s', 'power_peak_w',
-            'rss_peak_mib', 'gpu_mem_peak_mib', 'cpu_core_throttle_pct', 'cpu_pkg_c_max', 'gpu_power_w']
+            'rss_peak_mib', 'gpu_mem_peak_mib', 'cpu_core_throttle_pct', 'cpu_pkg_c_max', 'gpu_power_w', 'single_file',
+            'harness', 'harness_version', 'requests', 'tool_calls_n', 'preamble_tokens', 'cached_share', 'engine_share',
+            'harness_start_ms']
 
 
 def load(path):
@@ -233,7 +239,30 @@ def samples(rows, found, base):
     return out
 
 
-def collect_env(cfg, run_id, published_only):
+def artifacts(case, rel, per_request=None):
+    """A game case's results per seed, for the gallery: the screenshot and the page itself (opened in a sandboxed frame),
+    as paths relative to the page (GitHub Pages serves them; a blob link would not run them), and the manifest's form."""
+    out = []
+    for d in sorted(case.glob('artifact/seed-*')):
+        m = load(d / 'manifest.json')
+        entry = m.get('entry')
+        page = d / 'files' / entry if entry else None
+        shot = d / 'screenshot.png'
+        seed = d.name.split('-', 1)[1]
+        run = next((x for x in per_request or [] if str(x.get('seed')) == seed), {})
+        out.append({'seed': seed, 'source': m.get('source', 'answer'), 'kind': m.get('kind'),
+                    'total_ms': run.get('total_ms'), 'error': run.get('error'), 'requests': run.get('requests'),
+                    'tool_calls_n': run.get('tool_calls_n'),
+                    'single_file': m.get('single_file'), 'truncated': m.get('truncated'),
+                    'console_errors': len((m.get('screenshot') or {}).get('console_errors') or []),
+                    'files': len(m.get('files') or []),
+                    'screenshot': rel + str(shot.relative_to(ROOT)) if shot.exists() else None,
+                    'page': rel + str(page.relative_to(ROOT)) if page and page.exists() else None,
+                    'folder': rel + str(d.relative_to(ROOT)) + '/'})
+    return out
+
+
+def collect_env(cfg, run_id, published_only, rel=''):
     env_id = cfg['id']
     rows = build_cases.build(cfg)
     found = summaries(env_id, run_id, published_only)
@@ -268,6 +297,8 @@ def collect_env(cfg, run_id, published_only):
         c['cpu_pkg_c_max'] = num(th, 'cpu_pkg_c', 'max')
         c['gpu_c_max'] = num(th, 'gpu_c', 'max')
         c['gpu_power_w'] = num(th, 'gpu_power_avg_w', 'median')
+        if r['fixture'].startswith('game-'):
+            c['artifacts'] = artifacts(path.parent, rel, s.get('per_request'))
         cases.append(c)
     models = [{'key': f'{f} {m}', 'family': f, 'model': m, 'gb': gb, 'role': role,
                'derivative': (f, m) in build_cases.DERIVATIVE, 'ref': (f, m) == build_cases.REF}
@@ -286,13 +317,14 @@ def collect_env(cfg, run_id, published_only):
     return env, cases
 
 
-def collect(run_id, published_only=False):
+def collect(run_id, published_only=False, rel=''):
     here = envs.detect()[0]
     out = {'generated': datetime.now().astimezone().strftime('%Y-%m-%d %H:%M %Z'), 'envs': [], 'cases': [], 'here': here,
            'tr': i18n.TR}
     out['division'] = envs.division()
+    out['harness'] = envs.load_division(out['division']).get('harness')
     for env_id in envs.page_ids(published_only):
-        env, cases = collect_env(envs.load(env_id, published_only), run_id, published_only)
+        env, cases = collect_env(envs.load(env_id, published_only), run_id, published_only, rel)
         out['envs'].append(env)
         out['cases'] += [{'division': out['division'], **c} for c in cases]
     return out
@@ -314,10 +346,15 @@ def main():
         envs.UNTIL = envs.finished_ts(pub)
         snap = {'env': env_id, 'run_id': run, 'division': envs.division(),
                 'finished': envs.finished(pub)[:16].replace('T', ' ')}
-    data = collect(a.run_id, bool(snap))
     if snap:
         out = envs.snapshot_dir(snap['env'], snap['run_id'])
         page_path, csv_path = out / 'index.html', out / 'summary.csv'
+    else:
+        # one preview per division: plain's is RESULTS.html, another's RESULTS-<division>.html
+        tail = '' if envs.division() == 'plain' else '-' + envs.division()
+        page_path, csv_path = envs.PREVIEW / f'RESULTS{tail}.html', envs.PREVIEW / f'summary{tail}.csv'
+    data = collect(a.run_id, bool(snap), os.path.relpath(ROOT, page_path.parent) + '/')
+    if snap:
         # Links into the repository go to GitHub at the tag the publish leaves, so they show the files as they were then
         repo = envs.github()[0]
         if not repo:
@@ -325,7 +362,6 @@ def main():
         base = f'{repo}/blob/{envs.tag(snap["env"], snap["run_id"])}/'
         data['here'] = None
     else:
-        page_path, csv_path = envs.PREVIEW / 'RESULTS.html', envs.PREVIEW / 'summary.csv'
         base = os.path.relpath(ROOT, page_path.parent) + '/'
     data['snapshot'] = snap
     for e in data['envs']:

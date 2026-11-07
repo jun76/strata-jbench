@@ -10,7 +10,8 @@
    prompt's text that the server tokenizes for the first time adds a second or two outside the engine's timings). Only for one request at a time with
    thinking off: with thinking on, the engine's prompt_ms also counts the text it adds when the thinking budget closes the
    thinking (after the first character), and with several requests at once a request also waits for the others in the
-   batch. Those two are counted apart, not checked.
+   batch. Those two are counted apart, not checked, and so are the runs of a harness division (a record there is one
+   harness run of many requests; the proxy keeps each request's own times in harness/seed-N/proxy.jsonl).
 2. Every session's launch choices are on the engine's command line (scripts/bench_runner.py not_applied); the runner
    already refuses a launch that fails this, so here it covers runs measured before that check.
 3. The presets the tuner saved in Strata's preset store during the run (tune-presets.json of each tune session): these
@@ -43,12 +44,15 @@ def runner():
 
 def timing(run_dir):
     first, rest, odd = [], [], []
-    skipped = {'thinking': 0, 'concurrent': 0}
+    skipped = {'thinking': 0, 'concurrent': 0, 'harness': 0}
     for f in sorted(run_dir.glob('cases/*/requests.jsonl')):
         for line in f.read_text().splitlines():
             r = json.loads(line)
             t = r.get('timings') or {}
             if r.get('error') or r.get('ttft_ms') is None or t.get('prompt_ms') is None:
+                continue
+            if r.get('harness'):
+                skipped['harness'] += 1
                 continue
             if r.get('reasoning_chars'):
                 skipped['thinking'] += 1
