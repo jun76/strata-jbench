@@ -38,7 +38,7 @@ python3 -I scripts/envs.py new rtx5070-64g   # いまのハードウェアから
 | `match.ram_gib` | MemTotal（GiB）。判定に使う | `new` が入れる |
 | `hardware.gpu_vram_gib`, `hardware.ram_gib` | 見積もりに使う（モデルの大きさを RAM + VRAM と比べた区分 small / edge / large） | `new` が入れる。まだ無い構成の計画を先に作るなら手で書く |
 | `gpu_power_limit_w` | 電力上限を設定して測るならその W。preflight が確かめる | `null` ならカードの既定で、確かめない |
-| `cpu_power_limit_w` | CPU の電力上限を決めて測るならその W（`{"pl1": 65, "pl2": 65}`）。preflight が Intel RAPL（`/sys/class/powercap/intel-rapl:0`）の値と比べ、machine.json と各ページの「CPU」に出る | `null` ならマザーボードの設定のままで、確かめない（値は machine.json に記録される）。設定は BIOS で（Linux から書くと再起動で戻る） |
+| `cpu_power_limit_w` | CPU の電力上限を決めて測るならその W（`{"pl1": 65, "pl2": 65}`）。preflight が Intel RAPL の値（MSR の `intel-rapl:0` と MCHBAR の `intel-rapl-mmio:0` のうち低いほう。CPU は低いほうに従い、BIOS が片方だけ書くこともある）と比べ、machine.json と各ページの「CPU」に出る | `null` ならマザーボードの設定のままで、確かめない（値は machine.json に記録される）。設定は BIOS で（Linux から書くと再起動で戻る） |
 | `drafters` | 使える drafter。`dflash2` があると Tier 1 に DFlash2 の decode ケースが付く | `new` が `strata launch --plan` で確かめて入れる |
 | `models` | 測るモデル（`"qwen IQ3_S"` の形）。Tier 0・4・5 の代表モデルも、ここに無ければ外れる。ダウンロードするモデルもこれに従う（`scripts/setup_acquire.py`） | `null` なら `scripts/build_cases.py` の `MODELS` の全モデル（増えたモデルも入る）。測るモデルを決めて固定するなら列挙する |
 | `ref` | 基準モデル（`"qwen IQ3_S"` の形）。Tier 0 と 4d、代表モデルを選ぶ Tier（4b・4c・5）の基準、ハーネス部門の `"ref"`、結果ページの「基準」に使う | `new` が、Strata 自身がこの RAM + VRAM に勧めるモデル（Strata のソースの `setup.py` の `MEMORY_TIERS`）を入れる。省くと同じ規則でその場で決める。根拠は Strata の推奨だけで、ほかのモデルを基準にするならここを書き換える。測るモデル（`models`）に無いと、書き換えるまで Tier 0 と 4d は計画に入らない |

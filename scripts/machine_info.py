@@ -55,16 +55,29 @@ def gpu_names():
 
 
 def cpu_power_limits():
-    """The CPU package's power limits now (Intel RAPL, readable without root): {'pl1': W, 'pl2': W}, or None."""
-    base = Path('/sys/class/powercap/intel-rapl:0')
+    """The CPU package's power limits now (Intel RAPL, readable without root): {'pl1': W, 'pl2': W, 'msr': {...},
+    'mmio': {...}}, or None.
+
+    Intel keeps the limits in two registers, the MSR (intel-rapl:0) and the MCHBAR copy (intel-rapl-mmio:0), and the
+    CPU holds to the lower of the two. A BIOS may set only one of them (on the RTX 5070 PC: PL1 65 W in MCHBAR while the
+    MSR said 200 W), so 'pl1' / 'pl2' are the lower non-zero value of the two, and both are kept as read."""
     out = {}
-    for key, name in (('pl1', 'long_term'), ('pl2', 'short_term')):
-        for c in base.glob('constraint_*_name'):
-            if read(c).strip() == name:
-                try:
-                    out[key] = round(int(read(c.with_name(c.name.replace('_name', '_power_limit_uw'))).strip()) / 1e6)
-                except ValueError:
-                    pass
+    for reg, base in (('msr', Path('/sys/class/powercap/intel-rapl:0')), ('mmio', Path('/sys/class/powercap/intel-rapl-mmio:0'))):
+        got = {}
+        for key, name in (('pl1', 'long_term'), ('pl2', 'short_term')):
+            for c in base.glob('constraint_*_name'):
+                if read(c).strip() == name:
+                    try:
+                        got[key] = round(int(read(c.with_name(c.name.replace('_name', '_power_limit_uw'))).strip()) / 1e6)
+                    except ValueError:
+                        pass
+        if got:
+            out[reg] = got
+    regs = list(out.values())
+    for key in ('pl1', 'pl2'):
+        vals = [r[key] for r in regs if r.get(key)]
+        if vals:
+            out[key] = min(vals)
     return out or None
 
 

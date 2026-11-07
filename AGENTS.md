@@ -81,7 +81,8 @@ the NVFP4 ready-made packs need Strata's setup once with `--no-start` to write t
    - `gpu_power_limit_w`: the power limit, if one is set for measuring; `null` to measure at the card's default
    - `cpu_power_limit_w`: the CPU's PL1 / PL2 (`{"pl1": 65, "pl2": 65}`), if set for measuring (in the BIOS; a
      system setting, so the user does it); `null` to measure at the board's setting. Preflight compares it with Intel
-     RAPL, and machine.json records the limits in force either way
+     RAPL (the lower of the MSR and MCHBAR copies, which the CPU holds to; a BIOS may write only one), and machine.json
+     records the limits in force either way
    - `ref`: the reference model (Tier 0, Tier 4d, the base of the representatives of Tiers 4b, 4c and 5, the harness
      divisions' `"ref"`). `new` writes the model Strata itself recommends for that RAM + VRAM (`MEMORY_TIERS` in the
      source's `setup.py`). Strata's recommendation is the only grounds jbench uses: to try another model as the
