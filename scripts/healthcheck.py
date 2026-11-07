@@ -6,7 +6,7 @@ Run every 15 minutes by a systemd user timer (scripts/start_pipeline.sh installs
 session. Writes run-status/status.json and run-status/STATUS.md; when the overall state turns FAILED or STUCK it
 appends to run-status/ALERTS.log and shows a desktop notification, once per new problem.
 
-States: RUNNING (alive and progressing), WAITING (queue waiting for READY), DONE, FAILED (a phase ended without its
+States: RUNNING (alive and progressing), WAITING (queue waiting until what the run needs is on disk), DONE, FAILED (a phase ended without its
 result), STUCK (alive but nothing has changed for longer than the phase ever needs).
 A finished queue is DONE only when no runner exited with an error and every planned case of the steps it ran has a
 result; otherwise FAILED. A runner error while the queue goes on with the next Tier is notified at once.
@@ -57,6 +57,11 @@ def acquire_state():
     if not st:
         return {'phase': 'acquire', 'state': 'NOT_STARTED', 'detail': ''}
     phase = st.get('phase', '?')
+    if not alive(st.get('pid')) and phase == 'done' and not st.get('error'):
+        # it finished; READY went away later because env.json lists models it has not fetched (scripts/setup_acquire.py).
+        # Nothing fetches them until someone chooses to (AGENTS.md 2.0a); a run that does not need them goes ahead
+        return {'phase': 'acquire', 'state': 'NOT_STARTED',
+                'detail': 'not every model of env.json is on disk (python3 -I scripts/acquire.py check)'}
     if not alive(st.get('pid')):
         return {'phase': f'acquire/{phase}', 'state': 'FAILED',
                 'detail': f'scripts/overnight.py ended without READY (error: {st.get("error")}); see downloads/overnight.log'}
@@ -123,8 +128,8 @@ def bench_state(run_dir, env_id):
         return {'phase': 'bench', 'state': 'DONE', 'detail': f'cases {counts}'}
     if not alive(pid):
         return {'phase': 'bench', 'state': 'FAILED', 'detail': f'queue ended: {last[0]}; cases {counts}'}
-    if 'waiting for downloads/READY' in last[0]:
-        return {'phase': 'bench', 'state': 'WAITING', 'detail': 'queue waits for downloads/READY'}
+    if 'waiting for downloads/READY' in last[0] or 'waiting until what the run needs is on disk' in last[0]:
+        return {'phase': 'bench', 'state': 'WAITING', 'detail': 'queue waits until what the run needs is on disk (run-status/acquire.json)'}
     fresh = [age(run_dir / 'runner.log')] + [age(p) for p in run_dir.glob('sessions/*/*/telemetry.csv')]
     fresh = min((a for a in fresh if a is not None), default=None)
     # a launch (with tuning) writes nothing until it is ready or the runner gives up on it (LAUNCH_TIMEOUT in

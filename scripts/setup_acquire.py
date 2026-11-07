@@ -21,6 +21,8 @@ commit is kept in downloads/manifest.json.
 
     python3 -I scripts/setup_acquire.py [--source ~/Strata]
     python3 -I scripts/setup_acquire.py --rebuild      make the venvs and work/qad-root again
+    python3 -I scripts/setup_acquire.py --no-fetch     never install from PyPI: a missing venv is an error (what
+                                                       scripts/start_pipeline.sh runs unless FETCH=yes)
 """
 import argparse
 import json
@@ -59,9 +61,15 @@ def venv_ok(venv, probe):
     return py.is_file() and subprocess.run([str(py), '-c', probe], capture_output=True).returncode == 0
 
 
+NO_FETCH = False   # --no-fetch: installing a venv's packages from PyPI is a download, agreed with FETCH=yes only
+
+
 def make_venv(venv, requirements, probe, rebuild, extra=()):
     if not rebuild and venv_ok(venv, probe):
         return
+    if NO_FETCH:
+        sys.exit(f'setup_acquire: {venv.name} is missing or broken, and making it downloads packages from PyPI: '
+                 'start again with FETCH=yes once agreed (AGENTS.md 2.0a)')
     if venv.exists():
         shutil.rmtree(venv)
     base = bundled_python()
@@ -115,7 +123,10 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--source', type=Path, default=Path.home() / 'Strata', help="Strata's source checkout")
     ap.add_argument('--rebuild', action='store_true', help='make the venvs and work/qad-root again')
+    ap.add_argument('--no-fetch', action='store_true', help='never install from PyPI (a missing venv is an error)')
     a = ap.parse_args()
+    global NO_FETCH
+    NO_FETCH = a.no_fetch
     source = a.source.expanduser().resolve()
     check_source(source)
 

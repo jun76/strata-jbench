@@ -23,6 +23,14 @@ TR = {
     '元重みの量子化 (Unsloth)、品質の参照点': ('quantized from the original weights (Unsloth), the quality reference',
                                        '原始权重量化（Unsloth），质量参照点'),
     '元重みの量子化 (Unsloth v3.1)': ('quantized from the original weights (Unsloth v3.1)', '原始权重量化（Unsloth v3.1）'),
+    '元重みの量子化 (Unsloth、v3.1 前の版)': ('quantized from the original weights (Unsloth, the version before v3.1)',
+                                      '原始权重量化（Unsloth，v3.1 之前的版本）'),
+    '元重みの量子化 (Unsloth、v3.1 でも同じ)': ('quantized from the original weights (Unsloth, unchanged in v3.1)',
+                                       '原始权重量化（Unsloth，v3.1 中未变）'),
+    '元重みの量子化 (Unsloth、v3.1 でも同じ)、品質の参照点': ('quantized from the original weights (Unsloth, unchanged in v3.1), the quality reference',
+                                               '原始权重量化（Unsloth，v3.1 中未变），质量参照点'),
+    '元重みの量子化 (Unsloth v3.1、UD-IQ4_XS の新しい版)': ('quantized from the original weights (Unsloth v3.1, the new version of UD-IQ4_XS)',
+                                                  '原始权重量化（Unsloth v3.1，UD-IQ4_XS 的新版本）'),
     '元重みの量子化 (GPTQ)': ('quantized from the original weights (GPTQ)', '原始权重量化（GPTQ）'),
     '元重みの量子化 (RTN)': ('quantized from the original weights (RTN)', '原始权重量化（RTN）'),
     'expert 半減の剪定版': ('pruned to half the experts', 'expert 减半的剪枝版'),
@@ -159,6 +167,9 @@ TR = {
         '检查成果的展开和截图机制。thinking off：reasoning_effort "none" + chat_template_kwargs.enable_thinking false。'
         '成果展开到 artifact/（response.md、files/、manifest.json，静态 HTML 另有 screenshot.png）。'
         '是否为单个 HTML 文件及其形式（单个 HTML / 需要服务器 / 有无 README）记录在 manifest 中'),
+    '最初の計画の代表モデル（代表は 2026-11-07 から環境ごとに役割で選ぶ）。結果のある run だけ載せる': (
+        'a representative of the first plan (since 2026-11-07 the representatives are chosen per environment by role); listed only for the runs that have it',
+        '最初计划的代表模型（自 2026-11-07 起按环境依角色选择代表）；只列出有结果的 run'),
     '2026-11-07 にハーネス部門へ移したケース（プレーンでは首里城に置き換え）。結果のある run だけ載せる': (
         'moved to the harness divisions on 2026-11-07 (replaced by Shuri Castle in plain); listed only for the runs that have it',
         '2026-11-07 移到 harness 部门的用例（纯模型部门改为首里城）；只列出有结果的 run'),

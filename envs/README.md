@@ -41,7 +41,7 @@ python3 -I scripts/envs.py new rtx5070-64g   # いまのハードウェアから
 | `cpu_power_limit_w` | CPU の電力上限を決めて測るならその W（`{"pl1": 65, "pl2": 65}`）。preflight が Intel RAPL（`/sys/class/powercap/intel-rapl:0`）の値と比べ、machine.json と各ページの「CPU」に出る | `null` ならマザーボードの設定のままで、確かめない（値は machine.json に記録される）。設定は BIOS で（Linux から書くと再起動で戻る） |
 | `drafters` | 使える drafter。`dflash2` があると Tier 1 に DFlash2 の decode ケースが付く | `new` が `strata launch --plan` で確かめて入れる |
 | `models` | 測るモデル（`"qwen IQ3_S"` の形）。Tier 0・4・5 の代表モデルも、ここに無ければ外れる。ダウンロードするモデルもこれに従う（`scripts/setup_acquire.py`） | `null` なら `scripts/build_cases.py` の `MODELS` の全モデル（増えたモデルも入る）。測るモデルを決めて固定するなら列挙する |
-| `model_archive` | モデルの退避先（別のディスクのフォルダ。Strata のモデルフォルダと同じ並び）。`scripts/acquire.py check` は、足りないモデルがここにあれば「退避先にある」と出す（戻すのは手で: 大きなファイルの移動なので） | 省略可。例: `"/run/media/<user>/<disk>/LocalLLM/models/strata-jbench-archive"` |
+| `ref` | 基準モデル（`"qwen IQ3_S"` の形）。Tier 0 と 4d、代表モデルを選ぶ Tier（4b・4c・5）の基準、ハーネス部門の `"ref"`、結果ページの「基準」に使う | `new` が、Strata 自身がこの RAM + VRAM に勧めるモデル（Strata のソースの `setup.py` の `MEMORY_TIERS`）を入れる。省くと同じ規則でその場で決める。根拠は Strata の推奨だけで、ほかのモデルを基準にするならここを書き換える。測るモデル（`models`）に無いと、書き換えるまで Tier 0 と 4d は計画に入らない |
 | `memory` | RAM の種類・速度・枚数（`sudo dmidecode -t memory` の結果を書き写す） | `{"type": "DDR5", "speed_mts": 5600, "configured_mts": 5600, "modules": [{"slot": "...", "size_gib": 64}], "channels": 2, "recorded_at": "YYYY-MM-DD"}` |
 | `assume` | 見積もりの前提の上書き（`scripts/build_cases.py` の `ASSUME` と同じキー） | 遅いカードなら `{"decode_tps": {"small": 40, "edge": 25, "large": 8, "nvfp4": 30}}` など |
 | `notes` | 自由記述（電力上限の設定方法など） | |

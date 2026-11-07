@@ -9,9 +9,7 @@ and fetching the missing ones only after asking (AGENTS.md 2.0a).
 The division is $BENCH_DIVISION (default plain) and the environment the one this hardware matches, as for the runner;
 what is needed comes from the environment's plan (plan/<division>/<env>/cases.jsonl, scripts/build_cases.py).
 Where each thing is looked for:
-  models     Strata's models folder (downloads/manifest.json, pinned by Strata's setup.py: scripts/setup_acquire.py);
-             a model that is missing there but is in env.json "model_archive" (a folder on another disk) is reported
-             as such: copying it back is faster than downloading it, and is done by hand (it is a move of big files)
+  models     Strata's models folder (downloads/manifest.json, pinned by Strata's setup.py: scripts/setup_acquire.py)
   dflash2    strata drafting plan (the drafter Strata fetches with strata drafting fetch)
   harness    tools/harness/<division>/<version>/, then the harness's default place, at the pinned version only
              (divisions/<division>/division.json "pin"; scripts/harnesses.py)
@@ -70,10 +68,9 @@ def needed(env_id, div):
     return models, any('--drafting dflash2' in r['launch_opts'] for r in rows)
 
 
-def model_items(models, cfg):
+def model_items(models):
     m = overnight.manifest()
     root = overnight.models_root()
-    archive = Path(os.path.expanduser(cfg['model_archive'])) if cfg.get('model_archive') else None
     items = []
     for fam, model in models:
         files = [f for f in m['files'] if (f.get('family'), f['model']) == (fam, model)]
@@ -88,11 +85,8 @@ def model_items(models, cfg):
         if not left:
             items.append({'item': 'models', 'what': f'{fam} {model}', 'state': 'ok'})
             continue
-        size = sum(f['bytes'] for f in left)
-        where = archive and all((archive / f['path']).is_file() for f in left)
-        items.append({'item': 'models', 'what': f'{fam} {model}', 'state': 'in the archive' if where else 'missing',
-                      'bytes': size, 'source': str(archive) if where else 'huggingface.co (pinned by Strata setup.py)',
-                      'fix': f'copy back from {archive}' if where else 'python3 -I scripts/acquire.py fetch models'})
+        items.append({'item': 'models', 'what': f'{fam} {model}', 'state': 'missing', 'bytes': sum(f['bytes'] for f in left),
+                      'source': 'huggingface.co (pinned by Strata setup.py)', 'fix': 'python3 -I scripts/acquire.py fetch models'})
     return items
 
 
@@ -132,9 +126,8 @@ def tool_items(div):
 
 
 def check(env_id, div):
-    cfg = envs.load(env_id)
     models, dflash = needed(env_id, div)
-    items = model_items(models, cfg)
+    items = model_items(models)
     if dflash:
         items.append(dflash2_item())
     if envs.load_division(div).get('harness'):

@@ -29,15 +29,18 @@ MODELS = [
     ('qwen', 'Q2_0', 67.3, '元重みの量子化 (ISTA)'),
     ('qwen', 'IQ2_XS', 68.0, '元重みの量子化 (ISTA)'),
     ('qwen', 'IQ3_XXS', 75.8, '元重みの量子化 (ISTA)'),
-    ('qwen', 'IQ3_S', 83.6, '元重みの量子化 (ISTA)、基準モデル'),
+    ('qwen', 'IQ3_S', 83.6, '元重みの量子化 (ISTA)'),
     ('coder', 'IQ1_M', 58.4, 'expert 半減の剪定版'),
     ('gyro', 'Gyro-S', 58.5, '元重みの量子化 (trellis)'),
     ('gyro', 'Gyro-M', 92.0, '元重みの量子化 (trellis)'),
-    ('unsloth', 'UD-IQ4_XS', 93.7, '元重みの量子化 (Unsloth)'),
-    ('unsloth', 'UD-Q4_K_XL', 111.3, '元重みの量子化 (Unsloth)'),
-    ('unsloth', 'UD-Q5_K_XL', 158.3, '元重みの量子化 (Unsloth)'),
-    ('unsloth', 'UD-Q6_K_XL', 169.2, '元重みの量子化 (Unsloth)'),
-    ('unsloth', 'Q8_0', 188.2, '元重みの量子化 (Unsloth)、品質の参照点'),
+    # Unsloth at the commit Strata pinned first (38bb39ee). Dynamic v3.1 (2026-11-04) replaced UD-IQ4_XS only (another file,
+    # 345 of 1224 tensors of another type: UD-IQ4_XS-v31 below); UD-Q4_K_XL (the same tensors, sharded anew), UD-Q5_K_XL,
+    # UD-Q6_K_XL and Q8_0 are the files the repository still has, so these stay models of their own beside the v3.1 sets.
+    ('unsloth', 'UD-IQ4_XS', 93.7, '元重みの量子化 (Unsloth、v3.1 前の版)'),
+    ('unsloth', 'UD-Q4_K_XL', 111.3, '元重みの量子化 (Unsloth、v3.1 でも同じ)'),
+    ('unsloth', 'UD-Q5_K_XL', 158.3, '元重みの量子化 (Unsloth、v3.1 でも同じ)'),
+    ('unsloth', 'UD-Q6_K_XL', 169.2, '元重みの量子化 (Unsloth、v3.1 でも同じ)'),
+    ('unsloth', 'Q8_0', 188.2, '元重みの量子化 (Unsloth、v3.1 でも同じ)、品質の参照点'),
     # Unsloth Dynamic v3.1 (the repository re-published on 2026-11-04, Strata's setup.py UNSLOTH_V31_*; engine 0.1.57 or
     # later). UD-IQ4_XS-v31 is Strata's name for the new UD-IQ4_XS, another file from the one above.
     ('unsloth', 'UD-IQ1_M', 68.0, '元重みの量子化 (Unsloth v3.1)'),
@@ -46,7 +49,7 @@ MODELS = [
     ('unsloth', 'UD-Q2_K_XL', 79.6, '元重みの量子化 (Unsloth v3.1)'),
     ('unsloth', 'UD-IQ3_XXS', 83.6, '元重みの量子化 (Unsloth v3.1)'),
     ('unsloth', 'UD-Q3_K_XL', 89.5, '元重みの量子化 (Unsloth v3.1)'),
-    ('unsloth', 'UD-IQ4_XS-v31', 93.7, '元重みの量子化 (Unsloth v3.1)'),
+    ('unsloth', 'UD-IQ4_XS-v31', 93.7, '元重みの量子化 (Unsloth v3.1、UD-IQ4_XS の新しい版)'),
     ('swift', 'IQ2_XS', 69.1, 'fine-tune（思考が短い）'),
     ('swift', 'IQ3_XXS', 76.0, 'fine-tune（思考が短い）'),
     ('swift', 'IQ3_S', 83.7, 'fine-tune（思考が短い）'),
@@ -56,11 +59,17 @@ MODELS = [
 ]
 DERIVATIVE = {('coder', 'IQ1_M'), ('swift', 'IQ2_XS'), ('swift', 'IQ3_XXS'), ('swift', 'IQ3_S'),
               ('nvfp4', 'NVFP4-QAD')}
-REF = ('qwen', 'IQ3_S')
-TIER4B = [('qwen', 'IQ3_S'), ('qwen', 'Q2_0'), ('gyro', 'Gyro-M'), ('unsloth', 'UD-Q4_K_XL'),
-          ('nvfp4', 'NVFP4'), ('unsloth', 'Q8_0')]
-TIER4C = [('qwen', 'IQ3_S'), ('qwen', 'Q2_0'), ('unsloth', 'UD-Q4_K_XL')]
-TIER5 = [('qwen', 'IQ3_S'), ('unsloth', 'UD-Q6_K_XL'), ('nvfp4', 'NVFP4')]
+# The environment's reference model and the representatives of Tiers 4b, 4c and 5: set per environment by use_env, from
+# env.json "ref" or Strata's own pick for its RAM + VRAM (envs.ref), and from roles (representatives()), never from a
+# lineup named here, so that any card and any set of models gets a plan.
+REF = None
+TIER4B = TIER4C = TIER5 = []
+# The representatives the first plan named (2026-11-02): the cases measured with them stay in the lists and the charts
+# where a run has them (retired, never planned again).
+LEGACY_TIER4B = [('qwen', 'IQ3_S'), ('qwen', 'Q2_0'), ('gyro', 'Gyro-M'), ('unsloth', 'UD-Q4_K_XL'),
+                 ('nvfp4', 'NVFP4'), ('unsloth', 'Q8_0')]
+LEGACY_TIER4C = [('qwen', 'IQ3_S'), ('qwen', 'Q2_0'), ('unsloth', 'UD-Q4_K_XL')]
+LEGACY_TIER5 = [('qwen', 'IQ3_S'), ('unsloth', 'UD-Q6_K_XL'), ('nvfp4', 'NVFP4')]
 
 K = 1024
 CTX_LABEL = {32 * K: '32K', 64 * K: '64K', 128 * K: '128K', 200 * K: '200K', 256 * K: '256K',
@@ -207,8 +216,8 @@ def build(cfg):
         return finish(harness_build(division), cfg)
     names = {(f, m) for f, m, *_ in env_models()}
     rows = []
-    # Tier 0: instrument check on IQ3_S across 3 engine restarts, plus the author's protocol on Gyro-S.
-    for r in tier1_cases('0', '0', *REF):
+    # Tier 0: instrument check on the reference model across 3 engine restarts, plus the author's protocol on Gyro-S.
+    for r in tier1_cases('0', '0', *REF) if REF else []:
         r.update(reps=9, seeds='1,2,3 × 起動 3 回', restarts=3, note='起動間のばらつきを測る。反復回数の決定に使う')
         rows.append(r)
     for fx, content in [('decode-prose-en', 'Prose'), ('decode-json', 'JSON'), ('decode-code', 'Code'),
@@ -222,8 +231,9 @@ def build(cfg):
                          content=PREFILL_CONTENT, input_tokens=n, output_cap=128,
                          measures='prefill tok/s を GYRO.md の 5090 の値と比較',
                          note='sampling は作者の値: top-k 20 / top-p 0.95 / min-p 0.05'))
-    rows.append(game_case('0', '0', *REF, 'none', 0.7, 16384, 1800))
-    rows[-1]['note'] = '成果物の展開・スクリーンショットの仕組みを確かめる。' + rows[-1]['note']
+    if REF:
+        rows.append(game_case('0', '0', *REF, 'none', 0.7, 16384, 1800))
+        rows[-1]['note'] = '成果物の展開・スクリーンショットの仕組みを確かめる。' + rows[-1]['note']
 
     for fam, model, *_ in env_models():
         rows += tier1_cases('1', '1', fam, model)
@@ -278,15 +288,35 @@ def build(cfg):
                                               if first else '正答（文書部分は prefix cache を使う）')))
         return out
 
-    rows += long_rows('4b', TIER4B, [(32 * K, '32K'), (128 * K, '128K'), (TRAINED, '256K')],
-                      lambda n: TRAINED, 1800)
-    rows += long_rows('4c', TIER4C, [(512 * K, '512K'), (1024 * K, '1M')],
-                      lambda n: n, 7200)
+    def tier4b(models):
+        return long_rows('4b', models, [(32 * K, '32K'), (128 * K, '128K'), (TRAINED, '256K')], lambda n: TRAINED, 1800)
+
+    def tier4c(models):
+        return long_rows('4c', models, [(512 * K, '512K'), (1024 * K, '1M')], lambda n: n, 7200)
+
+    def tier5(models):
+        out = []
+        for fam, model in models:
+            for var, slug, level, opts, note in TIER5_VARIANTS:
+                for fx in TIER5_CASES:
+                    is_prefill = fx.startswith('prefill')
+                    n = dict(PREFILL).get(fx, '短文')
+                    conc = int(level) if var == 'parallel' else 1
+                    out.append(base('5', '5', fam, model, _key=f'{var}-{slug}-{fx}',
+                                    config=f'{var}={level}', launch_opts=opts, fixture=fx,
+                                    content=PREFILL_CONTENT if is_prefill else dict(DECODE)[fx],
+                                    input_tokens=n, output_cap=128 if is_prefill else 512, concurrency=conc,
+                                    measures='prefill tok/s, TTFT' if is_prefill else 'decode tok/s, MTP 採用率',
+                                    note=note))
+        return out
+
+    rows += tier4b(TIER4B)
+    rows += tier4c(TIER4C)
     for n, label, arms in [(300 * K, '300K', [(384 * K, 'yarn1.5', '', 'factor 1.5'),
                                               (384 * K, 'none', '--set rope-scaling=none', 'YaRN なし（学習長超え）')]),
                            (200 * K, '200K', [(256 * K, 'none', '', 'YaRN なし'),
                                               (1024 * K, 'yarn4', '', 'factor 4')])]:
-        for ctx, arm_id, opts, arm in arms:
+        for ctx, arm_id, opts, arm in arms if REF else []:
             for q, content in QUESTIONS:
                 extra = {'yarn': 'なし'} if arm_id == 'none' else {}
                 rows.append(base('4', '4d', *REF, _key=f'yarn-{label}-ctx{CTX_LABEL[ctx]}-{arm_id}-{q}',
@@ -294,22 +324,18 @@ def build(cfg):
                                  output_cap=512, timeout_s=7200, measures='正答, prefill / decode tok/s',
                                  note=arm + ('。rope の flag 名は engine の解決済み設定で確認する' if opts else '')))
 
-    for fam, model in TIER5:
-        for var, slug, level, opts, note in TIER5_VARIANTS:
-            for fx in TIER5_CASES:
-                is_prefill = fx.startswith('prefill')
-                n = dict(PREFILL).get(fx, '短文')
-                conc = int(level) if var == 'parallel' else 1
-                rows.append(base('5', '5', fam, model, _key=f'{var}-{slug}-{fx}',
-                                 config=f'{var}={level}', launch_opts=opts, fixture=fx,
-                                 content=PREFILL_CONTENT if is_prefill else dict(DECODE)[fx],
-                                 input_tokens=n, output_cap=128 if is_prefill else 512, concurrency=conc,
-                                 measures='prefill tok/s, TTFT' if is_prefill else 'decode tok/s, MTP 採用率',
-                                 note=note))
+    rows += tier5(TIER5)
+    # the first plan's representatives that the roles no longer pick: listed where a run measured them (retired)
+    have = {r['id'] for r in rows}
+    for r in tier4b(LEGACY_TIER4B) + tier4c(LEGACY_TIER4C) + tier5(LEGACY_TIER5):
+        if r['id'] not in have:
+            r.update(retired=True, note=(r['note'] + '。' if r['note'] else '') + LEGACY_NOTE)
+            rows.append(r)
+            have.add(r['id'])
 
     # The Minecraft game of Tiers 0 and 3 before 2026-11-07, kept so that its results stay in the lists and the charts:
     # never planned again (write_plan leaves retired cases out) and listed only where a run has them (main).
-    old = [game_case('0', '0', *REF, 'none', 0.7, 16384, 1800)]
+    old = [game_case('0', '0', *REF, 'none', 0.7, 16384, 1800)] if REF else []
     old += [game_case('3', '3', fam, model, eff, 1.0, 32768, 3600) for fam, model, *_ in env_models() for eff in GAME_EFFORTS]
     for r in old:
         r['id'] = r['id'].replace(GAME_FIXTURE, HARNESS_FIXTURE)
@@ -320,11 +346,38 @@ def build(cfg):
     return finish(rows, cfg)
 
 
+LEGACY_NOTE = '最初の計画の代表モデル（代表は 2026-11-07 から環境ごとに役割で選ぶ）。結果のある run だけ載せる'
+
+
+def representatives(models):
+    """Tiers 4b, 4c and 5's models, chosen by role from the environment's models (derivatives left out unless there is
+    nothing else), so that every card and lineup gets them: 4b the reference, the largest model of each family and the
+    smallest model; 4c and 5 the reference, the largest and the smallest. Only the file sizes order them: how a model
+    runs on the card is what is measured, not guessed here."""
+    cand = [(f, m, gb) for f, m, gb, _ in models if (f, m) not in DERIVATIVE] or [(f, m, gb) for f, m, gb, _ in models]
+    if not cand:
+        return [], [], []
+    largest = max(cand, key=lambda x: x[2])[:2]
+    smallest = min(cand, key=lambda x: x[2])[:2]
+    families = list(dict.fromkeys(f for f, _, _ in cand))
+    per_family = [max((x for x in cand if x[0] == f), key=lambda x: x[2])[:2] for f in families]
+
+    def uniq(xs):
+        out = []
+        for x in xs:
+            if x and x not in out:
+                out.append(x)
+        return out
+    return uniq([REF, *per_family, smallest]), uniq([REF, smallest, largest]), uniq([REF, largest, smallest])
+
+
 def harness_build(division):
     """A harness division (divisions/<division>/division.json "harness"): the Minecraft game only, handed to the harness in
-    one shot, on the division's models ("models", "family model") that this environment has, at the plain baseline's
+    one shot, on the division's models ("models": "family model", or "ref" for the environment's reference model) that this environment has, at the plain baseline's
     context (128K) and launch. The engine-side conditions (sampling, thinking, seed, cap) are those of plain Tier 3's game."""
-    keep = division.get('models')
+    keep = [(' '.join(REF) if REF else None) if k == 'ref' else k for k in division.get('models') or []]
+    if division.get('models') and not any(keep):
+        return []   # only "ref", and this environment has none (use_env said why)
     rows = []
     for fam, model, *_ in env_models():
         if keep and f'{fam} {model}' not in keep:
@@ -389,9 +442,21 @@ ASSUME_ENV = ASSUME
 
 
 def use_env(cfg):
-    global ENV, ASSUME_ENV
+    """The environment the plan is built for: its models, its estimate's assumptions, its reference model (envs.ref:
+    env.json "ref", else Strata's own recommendation; the only grounds, so when the environment does not measure that
+    model there is none until env.json names one, and Tiers 0 and 4d are left out) and the representatives."""
+    global ENV, ASSUME_ENV, REF, TIER4B, TIER4C, TIER5
     ENV = cfg
     ASSUME_ENV = {**ASSUME, **(cfg.get('assume') or {})}
+    models = env_models()
+    want = tuple((envs.ref(cfg) or '').split()) or None
+    if want not in {(f, m) for f, m, *_ in models}:
+        print(f'{cfg["id"]}: the reference model {" ".join(want) if want else "(none: no Strata source to ask)"} is not '
+              'among the models this environment measures; Tiers 0 and 4d are left out until env.json "ref" names one of them',
+              file=sys.stderr)
+        want = None
+    REF = want
+    TIER4B, TIER4C, TIER5 = representatives(models)
 
 
 def env_models():
@@ -520,9 +585,9 @@ UNTRANSLATED_COLS = {'id', 'session'}
 
 
 TIER_INFO = {
-    '0': ('計測器の検証（IQ3_S × 起動3回、Gyro-S で作者の値と照合、ゲーム作成の展開確認）',
-          'validating the harness (IQ3_S × 3 launches, Gyro-S against the author\'s figures, unpacking the game result)',
-          '验证测量工具（IQ3_S × 启动 3 次、用 Gyro-S 对照作者的数值、确认游戏成果的展开）'),
+    '0': ('計測器の検証（基準モデル × 起動3回、Gyro-S で作者の値と照合、ゲーム作成の展開確認）',
+          'validating the harness (the reference model × 3 launches, Gyro-S against the author\'s figures, unpacking the game result)',
+          '验证测量工具（基准模型 × 启动 3 次、用 Gyro-S 对照作者的数值、确认游戏成果的展开）'),
     '1': ('全モデルの基礎速度（decode 5種 × temperature 3水準、prefill 4K / 32K / 128K）。decode は DFlash2 対応のモデルで DFlash2 でも測る',
           'base speed of every model (5 decode kinds × 3 temperatures, prefill 4K / 32K / 128K); decode also with DFlash2 on the models that have it',
           '所有模型的基础速度（decode 5 种 × temperature 3 档，prefill 4K / 32K / 128K）；支持 DFlash2 的模型的 decode 也用 DFlash2 测量'),
@@ -538,14 +603,15 @@ TIER_INFO = {
     '4a': ('容量の確保コスト（128K / 256K / 1M に同じ 4K 入力）',
            'the cost of reserving context (the same 4K input at 128K / 256K / 1M)',
            '预留上下文的代价（128K / 256K / 1M 下相同的 4K 输入）'),
-    '4b': ('学習範囲の長文（32K / 128K / 256K、代表6）', 'long inputs within the trained length (32K / 128K / 256K, 6 models)',
-           '训练长度内的长文本（32K / 128K / 256K，代表 6 个）'),
-    '4c': ('拡張範囲の長文（512K / 1M、代表3）', 'long inputs in the extended range (512K / 1M, 3 models)',
-           '扩展范围的长文本（512K / 1M，代表 3 个）'),
-    '4d': ('YaRN の影響（IQ3_S、同じ入力で設定だけ変える）', 'the effect of YaRN (IQ3_S, same input, only the setting changes)',
-           'YaRN 的影响（IQ3_S，相同输入只改设置）'),
-    '5': ('起動オプションを1つずつ変える（代表3、自動 tune を含む）', 'changing one launch option at a time (3 models, auto tune included)',
-          '每次只改一个启动选项（代表 3 个，含自动 tune）'),
+    '4b': ('学習範囲の長文（32K / 128K / 256K。基準モデル、系列ごとに最大のモデル、最小のモデル）',
+           'long inputs within the trained length (32K / 128K / 256K; the reference model, the largest of each family, the smallest)',
+           '训练长度内的长文本（32K / 128K / 256K；基准模型、各系列最大的模型、最小的模型）'),
+    '4c': ('拡張範囲の長文（512K / 1M。基準モデル、最小と最大のモデル）', 'long inputs in the extended range (512K / 1M; the reference model, the smallest and the largest)',
+           '扩展范围的长文本（512K / 1M；基准模型、最小与最大的模型）'),
+    '4d': ('YaRN の影響（基準モデル、同じ入力で設定だけ変える）', 'the effect of YaRN (the reference model, same input, only the setting changes)',
+           'YaRN 的影响（基准模型，相同输入只改设置）'),
+    '5': ('起動オプションを1つずつ変える（基準モデル、最大と最小のモデル。自動 tune を含む）', 'changing one launch option at a time (the reference model, the largest and the smallest; auto tune included)',
+          '每次只改一个启动选项（基准模型、最大与最小的模型；含自动 tune）'),
 }
 NUM_COLS = {'input_tokens', 'output_cap', 'temperature', 'concurrency', 'reps', 'timeout_s', 'est_s'}
 WRAP_COLS = {'launch_opts', 'content', 'measures', 'note'}
@@ -622,7 +688,7 @@ def model_versions(rows, env_id, published_only, up, lang):
 
 
 COMMON = {
-    'ja': '''- どのケースも3回測る（seed 1 / 2 / 3）。Tier 0 の IQ3_S は起動しなおしを含めて9回。standard-v1 はスイート全体を3回実行する。
+    'ja': '''- どのケースも3回測る（seed 1 / 2 / 3）。Tier 0 の基準モデルは起動しなおしを含めて9回。standard-v1 はスイート全体を3回実行する。
 - 起動: 専用プロファイル・専用ポート、`--vision off --parallel 1 --tune skip --drafting mtp`、そのほかは Strata の既定（auto）。表の「起動オプションの差分」はこれとの差だけを書く。drafter を MTP に固定するのは、0.2.10 から Auto がモデルによって DFlash2 と MTP を選び分けるため（DFlash2 は Tier 1 の decode を対応する11モデルで測り直し、drafter なしは Tier 5 で測る）。
 - 同じ「起動セッション」のケースは、エンジンを1回起動したまま続けて回す（Tier 1・2・3・4a の 128K は同じセッション）。実行順は記録する。
 - sampling（temperature 以外）: top_p 0.95 / top_k 20 / min_p 0 / presence_penalty 0 / repetition_penalty 1.0 を毎回明示する（Tier 0 の作者条件だけ例外）。
@@ -634,7 +700,7 @@ COMMON = {
 - 各セッションの最初に warm-up を1回（回数には含めない）。prefix cache の再利用を避けるため各リクエストに固有 ID を入れる（Tier 4 の2問目以降は意図的に再利用する）。
 - OOM・起動失敗・timeout・skip も結果として残す。
 ''',
-    'en': '''- Every case is measured 3 times (seed 1 / 2 / 3). Tier 0's IQ3_S runs 9 times, relaunching in between. standard-v1 runs the whole suite 3 times.
+    'en': '''- Every case is measured 3 times (seed 1 / 2 / 3). Tier 0's reference model runs 9 times, relaunching in between. standard-v1 runs the whole suite 3 times.
 - Launch: a dedicated profile and port, `--vision off --parallel 1 --tune skip --drafting mtp`, everything else at Strata's default (auto). The “launch options” column lists only the difference from this. The drafter is pinned to MTP because since 0.2.10 Auto picks DFlash2 for some models and MTP for others (DFlash2 is measured on Tier 1's decode cases for the 11 models that have it, no drafter in Tier 5).
 - Cases in the same “launch session” run one after another on a single engine launch (the 128K cases of Tiers 1, 2, 3 and 4a share one session). The order is recorded.
 - Sampling (besides temperature): top_p 0.95 / top_k 20 / min_p 0 / presence_penalty 0 / repetition_penalty 1.0, sent with every request (except Tier 0's author settings).
@@ -646,7 +712,7 @@ COMMON = {
 - One warm-up at the start of each session (not counted). Each request carries a unique ID so the prefix cache is not reused (Tier 4 reuses it on purpose from the second question).
 - OOM, launch failures, timeouts and skips are kept as results too.
 ''',
-    'zh': '''- 每个用例测 3 次（seed 1 / 2 / 3）。Tier 0 的 IQ3_S 含重新启动共 9 次。standard-v1 整个套件运行 3 次。
+    'zh': '''- 每个用例测 3 次（seed 1 / 2 / 3）。Tier 0 的基准模型含重新启动共 9 次。standard-v1 整个套件运行 3 次。
 - 启动：专用 profile 和专用端口，`--vision off --parallel 1 --tune skip --drafting mtp`，其余为 Strata 默认（auto）。表中“启动选项”只写与此不同之处。将 drafter 固定为 MTP，是因为自 0.2.10 起 Auto 会按模型分别选择 DFlash2 或 MTP（DFlash2 在 Tier 1 的 decode 中对支持它的 11 个模型另行测量，不使用 drafter 在 Tier 5 中测量）。
 - 同一“启动会话”的用例在一次引擎启动中连续运行（Tier 1、2、3、4a 的 128K 共用一个会话）。记录运行顺序。
 - sampling（temperature 以外）：每次都显式指定 top_p 0.95 / top_k 20 / min_p 0 / presence_penalty 0 / repetition_penalty 1.0（仅 Tier 0 的作者条件例外）。
@@ -798,6 +864,9 @@ def write_md(rows, out, cfg, published_only=False):
             (L('本計測リクエスト', 'measured requests', '正式测量请求'), f'{sum(r["requests"] for r in rows):,}'),
             (L('エンジン起動', 'engine launches', '引擎启动'), f'{sum(sessions.values()):,}'),
             (L('見積もり', 'estimate', '预估'), f'{total_h:.0f} ' + L('時間', 'h', '小时')),
+            (L('基準モデル', 'reference model', '基准模型'), (' '.join(REF) if REF else '–') + ' ' + L(
+                '（env.json の ref、なければ Strata がこの RAM + VRAM に勧めるモデル）', '(env.json "ref", else the model Strata recommends for this RAM + VRAM)',
+                '（env.json 的 ref，否则为 Strata 针对此 RAM + VRAM 推荐的模型）')),
             (L('完了', 'done', '完成'), f'{done:,}'), (L('失敗', 'failed', '失败'), f'{failed:,}')]))
         text.append(f'\n## {L("Tier ごとの内訳", "By Tier", "各 Tier 明细")}\n')
         text.append(f'| Tier | {L("内容", "what", "内容")} | {L("モデル", "models", "模型")} | {L("ケース", "cases", "用例")} | '

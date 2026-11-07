@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Wait until every model is on disk (downloads/READY from scripts/overnight.py), check that the benchmark can run
+# Wait until what this run needs is on disk (scripts/acquire.py check: its models, the drafter, the harness; while
+# scripts/overnight.py is fetching, with FETCH=yes), check that the benchmark can run
 # (scripts/preflight.py, including one real launch), then run the benchmark Tiers in order.
 # The runner skips finished cases, so starting this again resumes where it stopped.
 # Normally started by scripts/start_pipeline.sh as the systemd user unit strata-jbench-queue.
@@ -14,17 +15,17 @@ RUN_DIR="results/$BENCH_DIVISION/$BENCH_ENV/$RUN_ID"
 LOG="$RUN_DIR/queue.log"
 mkdir -p "$RUN_DIR"
 echo $$ > "$RUN_DIR/queue.pid"
-echo "$(date -Is) queue start (pid $$), waiting for downloads/READY" >> "$LOG"
-until [ -f downloads/READY ]; do
+echo "$(date -Is) queue start (pid $$), waiting until what the run needs is on disk" >> "$LOG"
+python3 -I scripts/build_cases.py >> "$LOG" 2>&1
+until python3 -I scripts/acquire.py check > /dev/null 2>&1; do
   # the orchestrator's own pid (a pgrep pattern also matched unrelated shells that mention the script name)
   pid=$(python3 -c "import json;print(json.load(open('downloads/overnight-state.json'))['pid'])" 2>/dev/null)
   if ! kill -0 "$pid" 2>/dev/null; then
-    echo "$(date -Is) overnight.py is not running and READY is missing; stopping" >> "$LOG"
+    echo "$(date -Is) something the run needs is missing and nothing is fetching it; stopping (run-status/acquire.json)" >> "$LOG"
     exit 1
   fi
   sleep 60
 done
-python3 -I scripts/build_cases.py >> "$LOG" 2>&1
 # Strata's run configs for the models fetched by scripts/download_models.py (launch --plan counts a model without one as a
 # download); it changes Strata's saved settings, agreed for this when the run was planned (AGENTS.md 2.2)
 echo "$(date -Is) run configs" >> "$LOG"

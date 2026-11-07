@@ -51,7 +51,7 @@ running() { systemctl --user is-active --quiet "$1"; }
 
 # the venvs, the download list and the NVFP4-QAD converter (each skipped when there); it writes the list again and
 # removes READY when env.json "models" no longer matches it
-python3 -I scripts/setup_acquire.py || exit 1
+if [ "${FETCH:-}" = yes ]; then python3 -I scripts/setup_acquire.py || exit 1; else python3 -I scripts/setup_acquire.py --no-fetch || exit 1; fi
 python3 -I scripts/build_cases.py > /dev/null || exit 1   # the plan acquire.py reads (this division's)
 if ! python3 -I scripts/acquire.py check; then
   if [ "${FETCH:-}" != yes ]; then
@@ -61,15 +61,13 @@ if ! python3 -I scripts/acquire.py check; then
   fi
   python3 -I scripts/acquire.py fetch --all --yes --skip-models || exit 1
 fi
-if [ ! -f downloads/READY ] && [ "${FETCH:-}" != yes ]; then
-  echo "not started: downloads/READY is missing (the models are not all fetched); start again with FETCH=yes to fetch them"
-  exit 1
-fi
 # What was started last, for the hourly watch task and anyone resuming it (run-status/ is outside Git).
 mkdir -p run-status
 printf '{"division": "%s", "env": "%s", "run_id": "%s", "steps": "%s", "models": "%s", "run_dir": "results/%s/%s/%s", "started_at": "%s"}\n' \
   "$BENCH_DIVISION" "$BENCH_ENV" "$RUN_ID" "$STEPS" "$MODELS" "$BENCH_DIVISION" "$BENCH_ENV" "$RUN_ID" "$(date -Is)" > run-status/current-run.json
-if [ ! -f downloads/READY ]; then
+# READY: every model of env.json is here. Without it the models this run needs may still all be here (acquire.py check
+# passed above, or FETCH=yes is fetching them): the acquisition unit runs only with FETCH=yes.
+if [ ! -f downloads/READY ] && [ "${FETCH:-}" = yes ]; then
   python3 scripts/preflight.py --phase acquire
   if running strata-jbench-acquire; then
     echo "acquire: already running"

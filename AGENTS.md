@@ -82,6 +82,13 @@ the NVFP4 ready-made packs need Strata's setup once with `--no-start` to write t
    - `cpu_power_limit_w`: the CPU's PL1 / PL2 (`{"pl1": 65, "pl2": 65}`), if set for measuring (in the BIOS; a
      system setting, so the user does it); `null` to measure at the board's setting. Preflight compares it with Intel
      RAPL, and machine.json records the limits in force either way
+   - `ref`: the reference model (Tier 0, Tier 4d, the base of the representatives of Tiers 4b, 4c and 5, the harness
+     divisions' `"ref"`). `new` writes the model Strata itself recommends for that RAM + VRAM (`MEMORY_TIERS` in the
+     source's `setup.py`). Strata's recommendation is the only grounds jbench uses: to try another model as the
+     reference, change `ref` (when `models` leaves the recommended one out, Tiers 0 and 4d stay out of the plan until
+     `ref` names a measured model). The representatives are chosen from the environment's models by role (the reference,
+     the largest, the smallest, the largest of each family: file sizes only), not by name (`scripts/build_cases.py`
+     `representatives`)
    - `models`: the list (in the form `"qwen IQ3_S"`) to measure only some models; `null` for every model of
      `scripts/build_cases.py` (including models added later). The downloads follow it too: `scripts/setup_acquire.py`
      lists only these models in `downloads/manifest.json`, and writes it again (removing `downloads/READY`) when it changes
@@ -106,14 +113,17 @@ unless started with `FETCH=yes`. For each missing piece, the user chooses before
 1. **jbench fetches it**: `python3 -I scripts/acquire.py fetch <item>` (`models`, `dflash2`, `harness:<division>`, or
    `--all`), which shows the size and the source and asks first. Models are the files Strata's setup.py pins (hf CLI, as
    the `strata-jbench-acquire` unit; hours, not waited for); a harness is its pinned version installed into
-   `tools/harness/<division>/<version>/` with npm, never into the user's global packages.
-2. **Bring it back from the archive**: a model that `check` reports "in the archive" (env.json `model_archive`, a folder
-   on another disk) is faster to copy back than to download. It is a move of large files: confirm what goes where.
-3. **The user installs it**: what needs root (bubblewrap), a harness without an npm package (Hermes Agent's installer is
-   a shell script; the Strata desktop app), or Strata itself. Then run `check` again.
-4. **Leave it out**: remove the model from env.json `models` (or from the division's `models`), or do not measure that
+   `tools/harness/<division>/<version>/` (npm, a venv, or the Strata app's AppImage checked and extracted), never into
+   the user's global packages.
+2. **The user puts it in place**: what needs root (bubblewrap), Strata itself, or model files the user already has
+   elsewhere (copied into Strata's models folder by the user). Then run `check` again.
+3. **Leave it out**: remove the model from env.json `models` (or from the division's `models`), or do not measure that
    division. It changes the plan: 2.1.
 
+Nothing is downloaded without that choice: without `FETCH=yes`, `start_pipeline.sh` runs `setup_acquire.py --no-fetch`
+(a missing venv is an error instead of a PyPI install) and starts no acquisition unit, and a run whose own models are
+all on disk starts even while other models of env.json are not (the queue waits on `acquire.py check`, not on
+`downloads/READY`).
 A harness already in its own default place at another version is neither used nor touched (updating or removing it is
 the user's call); the pinned version goes into `tools/harness/` beside it. Nothing is fetched while a measurement runs
 (1.8): `acquire.py fetch` refuses while the queue of the run started last is alive.
@@ -180,7 +190,7 @@ the user's call); the pinned version goes into `tools/harness/` beside it. Nothi
    kept in `run-status/current-run.json` (the watch task reads it, so a new RUN_ID needs no change to the task).
    - `strata-jbench-acquire`: `scripts/setup_acquire.py` first, then `scripts/overnight.py` (fetch the models → convert NVFP4-QAD → delete the conversion source
      → fetch the last model). Started only with `FETCH=yes`, and not when `downloads/READY` exists.
-   - `strata-jbench-queue`: `scripts/overnight_bench.sh` (wait for READY → Strata's run configs for the downloaded models,
+   - `strata-jbench-queue`: `scripts/overnight_bench.sh` (wait until what the run needs is on disk, `acquire.py check` → Strata's run configs for the downloaded models,
      `scripts/install_configs.py` → preflight → `scripts/bench_runner.py` Tier by Tier). The run configs change Strata's
      saved settings (section 3): agree on it in 2.2.
    - `strata-jbench-health.timer`: `scripts/healthcheck.py` every 15 minutes.
@@ -268,8 +278,7 @@ The watch task keeps firing every hour after the queue ends, so remove it as soo
 Even if one of these becomes necessary during a run, do not do it yourself: follow the policy decided in 2.2. With no
 policy, report the cause and a proposal, and stop.
 - Deleting models or results (except the converted QAD source, which `scripts/overnight.py` deletes)
-- Downloading or installing anything: models, the drafter, a harness (`FETCH=yes`, `scripts/acquire.py fetch`), and
-  copying models back from the archive
+- Downloading or installing anything: models, the drafter, a harness (`FETCH=yes`, `scripts/acquire.py fetch`)
 - Stopping a Strata engine other than the measuring one, or changing Strata's saved settings or presets
 - Changing the case plan
 - Publishing, such as `git push`
@@ -280,7 +289,7 @@ policy, report the cause and a proposal, and stop.
 | What | Where |
 | --- | --- |
 | The models | `~/.local/share/strata/Strata-data/models` (`downloads/manifest.json` lists them with SHA-256) |
-| Fetching state | `downloads/` (not in Git); `READY` marks that every model is on disk |
+| Fetching state | `downloads/` (not in Git); `READY` marks that every model of env.json is on disk (a run needs only its own: `scripts/acquire.py check`) |
 | Fixed prompts | `prompts/` (SHA-256 in `MANIFEST.json`); the long document's source is `prompts/long-corpus.txt` and `long-sources.json` |
 | What a run needs on disk | `run-status/acquire.json` (`scripts/acquire.py check`) |
 | Harnesses | the pinned version per division in `divisions/<division>/division.json` "pin"; installed by jbench in `tools/harness/<division>/<version>/` (not in Git), or found at the pinned version in its default place; adapters in `scripts/harnesses.py`; the one a run drove in the run's `harness.json` |

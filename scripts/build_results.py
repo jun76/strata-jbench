@@ -227,8 +227,8 @@ def sample(row, run, path, base):
     return out
 
 
-def samples(rows, found, base):
-    ref = '-'.join(build_cases.REF)
+def samples(rows, found, base, ref_model):
+    ref = '-'.join(ref_model or ('', ''))
     by_id = {r['id']: r for r in rows}
     out = {}
     for sec, (step, want) in SAMPLE.items():
@@ -313,6 +313,7 @@ def collect_env(cfg, run_id, published_only, rel=''):
                                  for k, v in planned.items()},
            'dflash2_models': sorted({f'{r["family"]} {r["model"]}' for r in rows if r['config'] == 'drafter=DFlash2'}),
            'noise_pct': {k: restart_noise(found, k) for k in ('decode', 'prefill')}}
+    env['ref'] = ' '.join(build_cases.REF) if build_cases.REF else None   # this environment's (build_cases.use_env)
     env['_rows'], env['_found'] = rows, found
     return env, cases
 
@@ -365,7 +366,7 @@ def main():
         base = os.path.relpath(ROOT, page_path.parent) + '/'
     data['snapshot'] = snap
     for e in data['envs']:
-        e['samples'] = samples(e.pop('_rows'), e.pop('_found'), base)
+        e['samples'] = samples(e.pop('_rows'), e.pop('_found'), base, tuple(e['ref'].split()) if e.get('ref') else None)
     data['csv'] = os.path.relpath(csv_path, page_path.parent)
     for e in data['envs']:   # each run's models.json (which version of each model), linked from the page
         for r in e['runs']:

@@ -239,10 +239,49 @@ def slug(hw):
     return f'{gpu}-{ram:.0f}g'
 
 
-def dflash2_here(card=0):
-    """Whether Auto drafting picks DFlash2 for a Qwen3.8 model on this card (strata launch --plan --gpu card)."""
+# The reference model of an environment (Tier 0, Tier 4d, the representatives of Tiers 4b, 4c and 5, the harness
+# divisions' "ref", the pages' "reference"): env.json "ref" ("family model"), else the model Strata itself recommends for
+# that much RAM + VRAM. Strata's memory tiers are read from its source checkout's setup.py (MEMORY_TIERS, the floors in GB
+# of RAM + VRAM less TIER_SYSTEM_RESERVE_GB); below the lowest tier its older rule picks Gyro-S.
+STRATA_SOURCE = Path(os.environ.get('STRATA_SOURCE') or Path.home() / 'Strata')
+REF_BELOW_TIERS = 'gyro Gyro-S'
+
+
+def strata_tiers(source=None):
+    """Strata's ((floor, family, model), ...) and its system reserve, from setup.py (parsed, not imported)."""
+    import ast
+    vals = {}
+    for node in ast.parse(((source or STRATA_SOURCE) / 'setup.py').read_text()).body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name) \
+                and node.targets[0].id in ('MEMORY_TIERS', 'TIER_SYSTEM_RESERVE_GB'):
+            vals[node.targets[0].id] = ast.literal_eval(node.value)
+    return vals['MEMORY_TIERS'], vals['TIER_SYSTEM_RESERVE_GB']
+
+
+def ref_for(ram_gib, vram_gib):
+    """"family model" Strata recommends for this RAM + VRAM, or None without its source checkout."""
     try:
-        out = subprocess.run(['strata', 'launch', '--plan', '--family', 'qwen', '--model', 'IQ3_S', '--context', '128k',
+        tiers, reserve = strata_tiers()
+    except (OSError, KeyError, SyntaxError, ValueError):
+        return None
+    for floor, fam, model in tiers:
+        if (ram_gib or 0) + (vram_gib or 0) - reserve >= floor:
+            return f'{fam} {model}'
+    return REF_BELOW_TIERS
+
+
+def ref(cfg):
+    """The environment's reference model as "family model": env.json "ref", else Strata's pick for its hardware. Whether
+    the environment measures it is the plan's business (scripts/build_cases.py use_env)."""
+    hw = cfg.get('hardware') or {}
+    return cfg.get('ref') or ref_for(hw.get('ram_gib'), hw.get('gpu_vram_gib'))
+
+
+def dflash2_here(card=0, model='qwen IQ3_S'):
+    """Whether Auto drafting picks DFlash2 for a Qwen3.8 model on this card (strata launch --plan --gpu card)."""
+    fam, name = model.split()
+    try:
+        out = subprocess.run(['strata', 'launch', '--plan', '--family', fam, '--model', name, '--context', '128k',
                               '--vision', 'off', '--parallel', '1', '--tune', 'skip', '--port', '18600', '--gpu', str(card),
                               '--output', 'json'],
                              capture_output=True, text=True, timeout=180, cwd='/tmp').stdout
@@ -260,14 +299,17 @@ def new(env_id, card=0):
     if path.exists():
         raise SystemExit(f'{path} already exists')
     ram = -(-hw['ram_gib'] // 16) * 16
+    vram = round((hw.get('gpu_vram_mib') or 0) / 1024, 1)
+    pick = ref_for(hw.get('ram_gib'), vram)
     cfg = {
         'label': f'{re.sub(r"^NVIDIA ", "", hw.get("gpu") or "?")} · {ram:.0f} GB RAM',
         'match': {'gpu': hw.get('gpu'), 'ram_gib': hw.get('ram_gib')},
         'gpu_index': card,
-        'hardware': {'gpu_vram_gib': round((hw.get('gpu_vram_mib') or 0) / 1024, 1), 'ram_gib': hw.get('ram_gib')},
+        'hardware': {'gpu_vram_gib': vram, 'ram_gib': hw.get('ram_gib')},
         'gpu_power_limit_w': None,
         'cpu_power_limit_w': None,
-        'drafters': ['mtp', 'dflash2'] if dflash2_here(card) else ['mtp'],
+        'drafters': ['mtp', 'dflash2'] if dflash2_here(card, pick or 'qwen IQ3_S') else ['mtp'],
+        'ref': pick,
         'models': None,
         'memory': None,
         'assume': {},
