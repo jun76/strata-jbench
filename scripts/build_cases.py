@@ -11,6 +11,7 @@ when present, fills each row's status, headline metrics and evidence links. The 
     python3 -I scripts/build_cases.py --env <id>   # one environment's case list
 """
 import os
+import re
 import argparse
 import csv
 import json
@@ -83,6 +84,11 @@ GAME_EFFORTS = ['high']
 QUESTIONS = [('q-d10', '10% の位置の事実'), ('q-d50', '50% の位置の事実'), ('q-d90', '90% の位置の事実'),
              ('q-multi', '離れた複数箇所の統合')]
 
+# Tier 5's VRAM reserve as a share of the card's VRAM (env.json hardware.gpu_vram_gib), the same rule in every
+# environment: a fixed MiB means little on a 12 GB card and nothing on a 32 GB one. vram_reserve_mib() turns it into MiB.
+VRAM_RESERVE_PCT = [10, 20, 30, 40, 50]
+VRAM_RESERVE_NOTE = 'カードの VRAM（env.json の gpu_vram_gib）に対する割合。MiB に直した値を渡す（切り捨て）。足りずに起動できない割合もそのまま結果になる'
+
 # Tier 5: one variable at a time from the baseline. (variable, id slug, level, launch option, note)
 TIER5_VARIANTS = [
     ('baseline', 'default', '既定', '', '同じセッション内の比較基準'),
@@ -95,11 +101,11 @@ TIER5_VARIANTS = [
     ('prefill-chunk', '1024', '1024', '--set prefill=1024', ''),
     ('prefill-chunk', '2048', '2048', '--set prefill=2048', ''),
     ('prefill-chunk', '4096', '4096', '--set prefill=4096', ''),
-    ('vram-reserve', '512', '512', '--set vram-reserve-mib=512', ''),
-    ('vram-reserve', '6512', '6512', '--set vram-reserve-mib=6512', 'デスクトップアプリの保存値'),
+    *[('vram-reserve', f'{pct}pct', f'{pct}%', f'--set vram-reserve-mib=<VRAM の {pct}%>', VRAM_RESERVE_NOTE)
+      for pct in VRAM_RESERVE_PCT],
     ('vision', 'gpu', 'gpu', '--vision gpu', '画像は入れない。エンコーダが VRAM を取る分の損失だけを見る'),
     ('pool-workers', '8', '8', '--set pool-workers=8', ''),
-    ('cpu-pin', 'pcore', 'P コアのみ', '--pool-cores <P コアの論理 CPU>', 'P コア 1 つにつき 1 論理 CPU（lscpu で2スレッドを持つコア）、CPU 0 はホストスレッド用に除く。実際の値は計測する PC の lscpu で決まり、起動の記録（launch.txt）に残る'),
+    ('cpu-pin', 'pcore', 'P コアのみ', '--pool-cores <P コアの論理 CPU>', 'P コア 1 つにつき 1 論理 CPU（P コアはカーネルの cpu_core の一覧、それが無ければ lscpu で2スレッドを持つコア）、CPU 0 はホストスレッド用に除く。実際の値は計測する PC で決まり、起動の記録（launch.txt）に残る'),
     ('ple-io', 'mmap', 'mmap', '--set ple-io=mmap', ''),
     ('parallel', '2', '2', '--parallel 2', 'クライアント並列数も 2'),
     ('parallel', '4', '4', '--parallel 4', 'クライアント並列数も 4'),
@@ -292,7 +298,7 @@ def build(cfg):
                 n = dict(PREFILL).get(fx, '短文')
                 conc = int(level) if var == 'parallel' else 1
                 rows.append(base('5', '5', fam, model, _key=f'{var}-{slug}-{fx}',
-                                 config=f'{var}={level}', launch_opts=opts, fixture=fx,
+                                 config=f'{var}={level}', launch_opts=vram_reserve_mib(opts, cfg), fixture=fx,
                                  content=PREFILL_CONTENT if is_prefill else dict(DECODE)[fx],
                                  input_tokens=n, output_cap=128 if is_prefill else 512, concurrency=conc,
                                  measures='prefill tok/s, TTFT' if is_prefill else 'decode tok/s, MTP 採用率',
@@ -330,6 +336,17 @@ def session_of(r):
 
 SIZE = {(f, m): gb for f, m, gb, _ in MODELS}
 GIB = 1.073741824   # GB per GiB
+
+
+def vram_reserve_mib(opts, cfg):
+    """'--set vram-reserve-mib=<VRAM の 20%>' -> '--set vram-reserve-mib=2437' for this environment's card."""
+    m = re.search(r'<VRAM の (\d+)%>', opts)
+    if not m:
+        return opts
+    gib = (cfg.get('hardware') or {}).get('gpu_vram_gib')
+    if not gib:
+        raise SystemExit(f"{cfg.get('id')}: env.json has no hardware.gpu_vram_gib, needed for Tier 5's VRAM reserve")
+    return opts.replace(m.group(0), str(int(gib * 1024 * int(m.group(1)) / 100)))
 
 
 def size_class(gb, cfg):

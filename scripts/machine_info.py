@@ -39,14 +39,20 @@ def field(text, name):
 
 
 def drive_of(path):
-    """The model name of the disk holding path (an NVMe partition -> its controller's model)."""
+    """The model name of the disk holding path (an NVMe partition -> its controller's model) and how it is attached:
+    'NVMe', 'SATA SSD', 'SATA HDD', 'USB' (lsblk's transport and whether the disk spins). A model larger than RAM + VRAM
+    is read from this disk while it runs, so its speed belongs to the result."""
     src = run(['findmnt', '-no', 'SOURCE', '-T', str(path)]).strip()
     dev = Path(src).name
     m = re.match(r'(nvme\d+)n\d+', dev)
     if m:
         return read(f'/sys/class/nvme/{m.group(1)}/model') or None, 'NVMe'
     disk = re.sub(r'\d+$', '', dev)
-    return read(f'/sys/block/{disk}/device/model') or None, None
+    tran, rota = (run(['lsblk', '-dno', 'TRAN,ROTA', f'/dev/{disk}']).split() + [None, None])[:2]
+    bus = {'sata': 'SATA', 'ata': 'SATA', 'usb': 'USB', 'sas': 'SAS'}.get(tran or '', (tran or '').upper() or None)
+    if bus in ('SATA', 'SAS'):
+        bus += ' HDD' if rota == '1' else ' SSD'
+    return read(f'/sys/block/{disk}/device/model') or None, bus
 
 
 def gpu_names():
@@ -222,6 +228,19 @@ def env_html(env, run_id, cfg=None, how=True):
             + '</dl>' + (f'<p class="how">{how_html()}</p>' if how else '') + f'<p class="src">{src}</p></section>')
 
 
+def drive_text(env, e, L):
+    """The model disk, with a slower bus than NVMe called out: a model that does not fit in RAM + VRAM is read from it
+    while it runs, and a SATA disk tops out near 0.55 GB/s against several GB/s for NVMe."""
+    bus = env.get('models_drive_bus')
+    text = f'{e(env.get("models_drive"))} ({e(bus)})'
+    if bus and bus != 'NVMe':
+        text = (f'<strong>{text}</strong> · '
+                + L(f'{e(bus)} 接続（読み込みは最大 0.55 GB/s ほどで、NVMe の数分の一）。RAM + VRAM に収まらない重みを読み直すモデルは、この速さで遅くなる',
+                    f'attached over {e(bus)} (reads top out near 0.55 GB/s, a fraction of NVMe): a model whose weights do not fit in RAM + VRAM is slowed by it',
+                    f'{e(bus)} 连接（读取最高约 0.55 GB/s，仅为 NVMe 的几分之一）。放不进 RAM + VRAM 的权重需要重读，模型会因此变慢'))
+    return text
+
+
 def env_rows(env, run_id, cfg, L):
     """The box's (label, value) rows and its source line; L picks the language(s) (i18n.L, or i18n.one(lang))."""
     import html
@@ -244,7 +263,7 @@ def env_rows(env, run_id, cfg, L):
                 + f' · governor {e(env.get("cpu_governor"))}' + pl),
         (L('メモリ', 'Memory', '内存'), ram_text(env, ram_installed, L)),
         (L('マザーボード', 'Motherboard', '主板'), e(board)),
-        (L('モデルの置き場所', 'Model storage', '模型存放'), f'{e(env.get("models_drive"))} ({e(env.get("models_drive_bus"))})'),
+        (L('モデルの置き場所', 'Model storage', '模型存放'), drive_text(env, e, L)),
         ('OS', f'{e(env.get("os"))} (Linux {e(env.get("kernel"))})'),
         ('Strata', e(env.get('strata'))),
     ]

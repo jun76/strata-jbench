@@ -63,8 +63,10 @@ the NVFP4 ready-made packs need Strata's setup once with `--no-start` to write t
 `strata launch --plan` reports them as needing a download); it changes Strata's saved settings, so section 3 applies.
 
 1. `python3 -I scripts/envs.py list` shows whether an environment matches the hardware now (marked `*`).
-2. If none does, `python3 -I scripts/envs.py new <env>` writes `envs/<env>/env.json` (ids like `rtx5070-64g`: GPU and
-   RAM). On a PC with two cards each card is an environment of its own: `--gpu N` picks the card (`gpu_index`; the
+2. If none does, `python3 -I scripts/envs.py new <env>` writes `envs/<env>/env.json` (with no name given, it
+   suggests one: `<GPU>-<CPU>-<RAM>-<model disk>`, like `rtx5070-cu5_235-64g-sata`; the CPU's parts are joined with `_`
+   so that `-` only separates the parts. The id is the folder in every path and URL, so it names what moves the
+   results. `rtx5090-128g` is from before this rule). On a PC with two cards each card is an environment of its own: `--gpu N` picks the card (`gpu_index`; the
    runner launches with `--gpu N` and reads that card alone). When two environments match the PC, name one with `BENCH_ENV`. It fills in the GPU name, VRAM, RAM and whether DFlash2 is available (checked with `strata launch --plan`).
    Then fill in by hand:
    - `memory`: the output of `sudo dmidecode -t memory` (type, speed, modules; it needs root, so ask the user to run it)

@@ -22,14 +22,14 @@
 ```bash
 python3 -I scripts/envs.py list              # 全環境と、いま合う環境（*）
 python3 -I scripts/envs.py detect            # いま合う環境の id
-python3 -I scripts/envs.py new rtx5070-64g   # いまのハードウェアから env.json の雛形を作る（2枚目のカードなら --gpu 1）
+python3 -I scripts/envs.py new   # いまのハードウェアから env.json の雛形を作る（2枚目のカードなら --gpu 1）。名前を省くと <GPU>-<CPU>-<RAM>-<モデルのディスク> を付ける
 ```
 
 ## env.json の項目
 
 | 項目 | 内容 | 書き方 |
 | --- | --- | --- |
-| `label` | ページに出す名前 | `"GeForce RTX 5090 · 128 GB RAM"` |
+| `label` | ページに出す名前 | `"GeForce RTX 5070 · Core Ultra 5 235 · 64 GB RAM · SATA SSD"` |
 | `match.gpu` | `nvidia-smi` の GPU 名。判定に使う | `new` が入れる |
 | `gpu_index` | 測るカードの番号（`nvidia-smi -i` の番号）。launch は `--gpu` でこのカードだけを使い、`match.gpu` もこの番号のカードと比べる。カードが2枚ある PC では1枚ずつ別の環境にする | `new --gpu N` が入れる（既定 0） |
 | `match.ram_gib` | MemTotal（GiB）。判定に使う | `new` が入れる |
