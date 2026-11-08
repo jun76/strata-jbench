@@ -55,6 +55,21 @@ MODELS = [
     ('nvfp4', 'NVFP4-NVIDIA', 128.0, '元重みの量子化 (RTN)'),
     ('nvfp4', 'NVFP4-QAD', 102.3, 'FP4 向け再学習版'),
 ]
+# Unsloth re-published its repository on 2026-11-04 as Dynamic v3.1, and the new UD-IQ4_XS kept the old file names
+# (Strata calls it UD-IQ4_XS-v31). The pages show which set a model is from; case ids and folders keep the plain names.
+UNSLOTH_V31 = {'UD-IQ1_M', 'UD-Q2_0', 'UD-IQ2_XS', 'UD-Q2_K_XL', 'UD-IQ3_XXS', 'UD-Q3_K_XL', 'UD-IQ4_XS-v31'}
+
+
+def display_model(family, model):
+    """The model's name on the pages: 'UD-Q2_K_XL (v3.1)', 'UD-IQ4_XS (v3.1)' for UD-IQ4_XS-v31, and
+    'UD-Q4_K_XL (pre-v3.1)' for the Unsloth sets pinned before the re-publication. Other families as they are."""
+    if family != 'unsloth':
+        return model
+    if model in UNSLOTH_V31:
+        return model.removesuffix('-v31') + ' (v3.1)'
+    return model + ' (pre-v3.1)'
+
+
 DERIVATIVE = {('coder', 'IQ1_M'), ('swift', 'IQ2_XS'), ('swift', 'IQ3_XXS'), ('swift', 'IQ3_S'),
               ('nvfp4', 'NVFP4-QAD')}
 REF = ('qwen', 'IQ3_S')
@@ -741,7 +756,7 @@ def write_md(rows, out, cfg, published_only=False):
                     f'| family | model | GB | {L("種別", "kind", "类别")} | '
                     f'{L("測った版（リポジトリ @ コミット、RUN_ID の models.json）", "version measured (repository @ commit, the RUN_ID's models.json)", "测量的版本（仓库 @ 提交，RUN_ID 的 models.json）")} |\n'
                     '| --- | --- | ---: | --- | --- |\n')
-        text[-1] += ''.join(f'| {f} | {m} | {gb} | {md(tr(role, lang))} | {versions.get((f, m), "–")} |\n'
+        text[-1] += ''.join(f'| {f} | {display_model(f, m)} | {gb} | {md(tr(role, lang))} | {versions.get((f, m), "–")} |\n'
                             for f, m, gb, role in env_models())
         text.append(f'\n## {L("全ケース共通の条件", "Conditions shared by every case", "所有用例的共同条件")}\n\n{COMMON[lang]}')
         title, intro, tree, after = GAME_LAYOUT[lang]
@@ -762,7 +777,7 @@ def write_md(rows, out, cfg, published_only=False):
                     if k == 'id':
                         cells.append(f'`{r["id"]}`')
                     elif k == 'model':
-                        cells.append(f'{r["family"]} {r["model"]}')
+                        cells.append(f'{r["family"]} {display_model(r["family"], r["model"])}')
                     elif k == 'context_label':
                         cells.append(r['context_label'] + (f' (YaRN {r["yarn"]})' if r.get('yarn') else ''))
                     else:
