@@ -55,19 +55,25 @@ MODELS = [
     ('nvfp4', 'NVFP4-NVIDIA', 128.0, '元重みの量子化 (RTN)'),
     ('nvfp4', 'NVFP4-QAD', 102.3, 'FP4 向け再学習版'),
 ]
-# Unsloth re-published its repository on 2026-11-04 as Dynamic v3.1, and the new UD-IQ4_XS kept the old file names
-# (Strata calls it UD-IQ4_XS-v31). The pages show which set a model is from; case ids and folders keep the plain names.
+# Unsloth re-published its repository on 2026-11-04 as Dynamic v3.1 under the same names. Of the sets pinned before
+# (38bb39ee), UD-IQ4_XS and UD-Q4_K_XL were replaced on the Hub then (Strata keeps the old UD-Q4_K_XL, and calls the new
+# UD-IQ4_XS UD-IQ4_XS-v31); UD-Q5_K_XL, UD-Q6_K_XL and Q8_0 are the same files there still. The pages show which set a
+# replaced name is from; case ids and folders keep the plain names.
 UNSLOTH_V31 = {'UD-IQ1_M', 'UD-Q2_0', 'UD-IQ2_XS', 'UD-Q2_K_XL', 'UD-IQ3_XXS', 'UD-Q3_K_XL', 'UD-IQ4_XS-v31'}
+UNSLOTH_REPLACED = {'UD-IQ4_XS', 'UD-Q4_K_XL'}   # the files before v3.1, which the Hub's same names no longer serve
 
 
 def display_model(family, model):
-    """The model's name on the pages: 'UD-Q2_K_XL (v3.1)', 'UD-IQ4_XS (v3.1)' for UD-IQ4_XS-v31, and
-    'UD-Q4_K_XL (pre-v3.1)' for the Unsloth sets pinned before the re-publication. Other families as they are."""
+    """The model's name on the pages: 'UD-Q2_K_XL (v3.1)', 'UD-IQ4_XS (v3.1)' for UD-IQ4_XS-v31, 'UD-Q4_K_XL (pre-v3.1)'
+    for a set the Hub replaced under the same name, and the others (UD-Q5_K_XL, UD-Q6_K_XL, Q8_0, other families) as
+    they are."""
     if family != 'unsloth':
         return model
     if model in UNSLOTH_V31:
         return model.removesuffix('-v31') + ' (v3.1)'
-    return model + ' (pre-v3.1)'
+    if model in UNSLOTH_REPLACED:
+        return model + ' (pre-v3.1)'
+    return model
 
 
 DERIVATIVE = {('coder', 'IQ1_M'), ('swift', 'IQ2_XS'), ('swift', 'IQ3_XXS'), ('swift', 'IQ3_S'),
