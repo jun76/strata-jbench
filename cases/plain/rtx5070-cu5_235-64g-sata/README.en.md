@@ -22,15 +22,15 @@ One table of cases per Tier (a row per case). Every parameter and result: the CS
 
 The Strata desktop app is not used. The CLI (<code>strata launch --no-tui</code>) starts the engine on a dedicated port (18600), and <code>scripts/bench_runner.py</code> calls its OpenAI-compatible HTTP API (<code>POST /v1/chat/completions</code>, streaming) directly. Only Tier 2 runs Strata's bundled benchmark, <code>strata bench run --suite standard-v1</code>, against the same engine.
 
-environment <code>rtx5070-cu5_235-64g-sata</code> · as recorded for RUN_ID 2026-11-06-main (machine.json)
+environment <code>rtx5070-cu5_235-64g-sata</code> · as recorded for RUN_ID 2026-11-08-gyro-coder (machine.json)
 
 ## Overview
 
-- cases: 719
-- measured requests: 2,433
-- engine launches: 65
-- estimate: 27 h
-- done: 715
+- cases: 830
+- measured requests: 2,802
+- engine launches: 73
+- estimate: 28 h
+- done: 826
 - failed: 4
 
 
@@ -38,11 +38,11 @@ environment <code>rtx5070-cu5_235-64g-sata</code> · as recorded for RUN_ID 2026
 
 | Tier | what | models | cases | requests | est. h | done |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| [0](tier-0.en.md) | validating the harness (IQ3_S × 3 launches, Gyro-S against the author's figures, unpacking the game result) | 1 | 19 | 165 | 1.0 | 19 |
-| [1](tier-1.en.md) | base speed of every model (5 decode kinds × 3 temperatures, prefill 4K / 32K / 128K); decode also with DFlash2 on the models that have it | 9 | 297 | 891 | 2.5 | 297 |
-| [2](tier-2.en.md) | the official standard-v1 (thinking xhigh, temperature 1.0), the whole suite 3 times | 9 | 135 | 405 | 2.0 | 135 |
-| [3](tier-3.en.md) | reasoning effort none / high × 4 tasks, the game at high only (every model) | 9 | 81 | 243 | 2.7 | 81 |
-| [4a](tier-4a.en.md) | the cost of reserving context (the same 4K input at 128K / 256K / 1M) | 9 | 27 | 81 | 1.0 | 27 |
+| [0](tier-0.en.md) | validating the harness (IQ3_S × 3 launches, Gyro-S against the author's figures, unpacking the game result) | 2 | 25 | 183 | 1.0 | 25 |
+| [1](tier-1.en.md) | base speed of every model (5 decode kinds × 3 temperatures, prefill 4K / 32K / 128K); decode also with DFlash2 on the models that have it | 11 | 348 | 1,044 | 2.7 | 348 |
+| [2](tier-2.en.md) | the official standard-v1 (thinking xhigh, temperature 1.0), the whole suite 3 times | 11 | 165 | 495 | 2.3 | 165 |
+| [3](tier-3.en.md) | reasoning effort none / high × 4 tasks, the game at high only (every model) | 11 | 99 | 297 | 2.9 | 99 |
+| [4a](tier-4a.en.md) | the cost of reserving context (the same 4K input at 128K / 256K / 1M) | 11 | 33 | 99 | 1.1 | 33 |
 | [4b](tier-4b.en.md) | long inputs within the trained length (32K / 128K / 256K, 6 models) | 3 | 36 | 108 | 1.9 | 36 |
 | [4c](tier-4c.en.md) | long inputs in the extended range (512K / 1M, 3 models) | 2 | 16 | 48 | 11.2 | 16 |
 | [4d](tier-4d.en.md) | the effect of YaRN (IQ3_S, same input, only the setting changes) | 1 | 16 | 48 | 3.0 | 16 |
@@ -57,6 +57,8 @@ environment <code>rtx5070-cu5_235-64g-sata</code> · as recorded for RUN_ID 2026
 | qwen | IQ2_XS | 68.0 | quantized from the original weights (ISTA) | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json)) |
 | qwen | IQ3_XXS | 75.8 | quantized from the original weights (ISTA) | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json)) |
 | qwen | IQ3_S | 83.6 | quantized from the original weights (ISTA), the reference model | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json)) |
+| coder | IQ1_M | 58.4 | pruned to half the experts | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF @ `5348543`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF/tree/5348543e0147355ac9cbcb031184a3546350988e) ([2026-11-08-gyro-coder](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-08-gyro-coder/models.json)) |
+| gyro | Gyro-S | 58.5 | quantized from the original weights (trellis) | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-08-gyro-coder](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-08-gyro-coder/models.json)) |
 | gyro | Gyro-M | 92.0 | quantized from the original weights (trellis) | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json)) |
 | unsloth | UD-IQ1_M | 68.0 | quantized from the original weights (Unsloth v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `d962011`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json)) |
 | unsloth | UD-Q2_0 | 70.5 | quantized from the original weights (Unsloth v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `d962011`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json)) |

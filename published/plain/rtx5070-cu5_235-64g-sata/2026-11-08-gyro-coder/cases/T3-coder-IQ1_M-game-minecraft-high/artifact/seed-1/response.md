@@ -1,0 +1,807 @@
+나 여기! 아래는 **single HTML file**-의 Minecraft-style **3D voxel sandbox game**.
+
+- WASD move  
+- Space jump  
+- Left click block remove  
+- Right click block place  
+- mouse move camera  
+- number key `1..6` block select  
+- keyboard camera: arrow keys  
+- save as `index.html` and open in browser  
+
+```html
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mini Minecraft-style 3D Sandbox</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #12222a;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+    cursor: crosshair;
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<script>
+(() => {
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+
+  function resize() {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    canvas.width = Math.floor(w * dpr);
+    canvas.height = Math.floor(h * dpr);
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  // -------------------------
+  // World
+  // -------------------------
+  const W = 40;
+  const D = 40;
+  const H = 20;
+
+  const grid = new Uint8Array(W * D * H);
+
+  function idx(x, y, z) {
+    return (y * D + z) * W + x;
+  }
+
+  function get(x, y, z) {
+    if (x < 0 || x >= W || y < 0 || y >= H || z < 0 || z >= D) return 0;
+    return grid[idx(x, y, z)];
+  }
+
+  function set(x, y, z, v) {
+    if (x < 0 || x >= W || y < 0 || y >= H || z < 0 || z >= D) return;
+    grid[idx(x, y, z)] = v;
+  }
+
+  function solidAt(x, y, z) {
+    if (y < 0) return true;
+    if (y >= H) return false;
+    if (x < 0 || x >= W || z < 0 || z >= D) return true; // invisible boundary walls
+    return grid[idx(x, y, z)] !== 0;
+  }
+
+  function heightAt(x, z) {
+    const a = Math.sin(x * 0.23) * 0.5 + Math.cos(z * 0.19) * 0.5;
+    const b = Math.sin((x + z) * 0.13) * 0.5 + Math.sin((x - z) * 0.17) * 0.5;
+    const n = (a + b + 2) / 4;
+    return 1 + Math.round(Math.max(0, Math.min(1, n)) * 3);
+  }
+
+  // -------------------------
+  // Palettes
+  // -------------------------
+  const PAL = [
+    null,
+    { top: [ 84, 196, 92 ], side: [ 138, 96, 64 ], bottom: [ 112, 82, 54 ] }, // grass
+    { top: [ 152, 110, 76 ], side: [ 148, 106, 72 ], bottom: [ 140, 98, 66 ] }, // dirt
+    { top: [ 154, 154, 154 ], side: [ 142, 142, 142 ], bottom: [ 122, 122, 122 ] }, // stone
+    { top: [ 148, 102, 66 ], side: [ 128, 88, 56 ], bottom: [ 106, 70, 44 ] }, // wood
+    { top: [ 62, 156, 74 ], side: [ 54, 142, 66 ], bottom: [ 44, 126, 58 ] }, // leaves
+    { top: [ 226, 206, 146 ], side: [ 218, 194, 128 ], bottom: [ 206, 184, 116 ] }  // sand
+  ];
+
+  const BLOCK_NAMES = [ "air", "grass", "dirt", "stone", "wood", "leaf", "sand" ];
+
+  // -------------------------
+  // Faces
+  // -------------------------
+  const FACES = [
+    { n: [ 0, 1, 0 ],  v: [[0,1,0],[1,1,0],[1,1,1],[0,1,1]] },
+    { n: [ 0,-1, 0 ],  v: [[0,0,0],[1,0,0],[1,0,1],[0,0,1]] },
+    { n: [ 0, 0, 1 ],  v: [[0,0,1],[1,0,1],[1,1,1],[0,1,1]] },
+    { n: [ 0, 0,-1 ],  v: [[0,0,0],[0,1,0],[1,1,0],[1,0,0]] },
+    { n: [-1, 0, 0 ],  v: [[0,0,0],[0,0,1],[0,1,1],[0,1,0]] },
+    { n: [ 1, 0, 0 ],  v: [[1,0,0],[1,1,0],[1,1,1],[1,0,1]] }
+  ];
+
+  const FACE_SHADE = [
+    1.00, // top
+    0.45, // bottom
+    0.90, // front +z
+    0.75, // back -z
+    0.78, // left -x
+    0.82  // right +x
+  ];
+
+  // -------------------------
+  // Player
+  // -------------------------
+  const EYE = 1.5;
+  const P = {
+    x: W / 2 + 0.5,
+    y: 0,
+    z: D / 2 + 0.5,
+    vy: 0,
+    yaw: 0,
+    pitch: 0,
+    grounded: false,
+    selected: 1
+  };
+
+  function clampPitch() {
+    const lim = Math.PI / 2 - 0.05;
+    P.pitch = Math.max(-lim, Math.min(lim, P.pitch));
+  }
+
+  // -------------------------
+  // Generate world
+  // -------------------------
+  const terrainH = new Uint8Array(W * D);
+
+  for (let z = 0; z < D; z++) {
+    for (let x = 0; x < W; x++) {
+      const h = heightAt(x, z);
+      terrainH[z * W + x] = h;
+
+      for (let y = 0; y < h; y++) {
+        let t = 3;
+        if (y === h - 1) t = 1;
+        else if (y >= h - 2) t = 2;
+        set(x, y, z, t);
+      }
+    }
+  }
+
+  // trees
+  function hash(x, z) {
+    let h = x * 374761393 + z * 668265263;
+    h = (h ^ (h >> 13)) * 1274126177;
+    h = h ^ (h >> 16);
+    return h & 255;
+  }
+
+  for (let x = 3; x < W - 3; x++) {
+    for (let z = 3; z < D - 3; z++) {
+      if (hash(x, z) % 11 !== 0) continue;
+
+      const gy = terrainH[z * W + x] - 1;
+      if (gy < 0) continue;
+      if (get(x, gy, z) !== 1) continue;
+
+      const trunkH = 4;
+      const topY = gy + 1;
+
+      for (let y = topY; y < topY + trunkH && y < H; y++) {
+        set(x, y, z, 4);
+      }
+
+      const leafCenterY = topY + trunkH - 1;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          for (let dz = -2; dz <= 2; dz++) {
+            const dist = Math.abs(dx) + Math.abs(dz) + Math.abs(dy) * 2;
+            if (dist > 4) continue;
+            if (dx === 0 && dz === 0 && dy < 0) continue; // do not hollow inside trunk
+
+            const lx = x + dx;
+            const ly = leafCenterY + dy;
+            const lz = z + dz;
+
+            if (get(lx, ly, lz) === 0) set(lx, ly, lz, 5);
+          }
+        }
+      }
+    }
+  }
+
+  // spawn on ground
+  const spawnX = (W >> 1);
+  const spawnZ = (D >> 1);
+  P.x = spawnX + 0.5;
+  P.z = spawnZ + 0.5;
+  P.y = terrainH[spawnZ * W + spawnX] + 0.05;
+
+  // -------------------------
+  // Input
+  // -------------------------
+  const keys = new Set();
+
+  window.addEventListener("keydown", (e) => {
+    keys.add(e.code);
+
+    if (e.code === "Digit1") P.selected = 1;
+    if (e.code === "Digit2") P.selected = 2;
+    if (e.code === "Digit3") P.selected = 3;
+    if (e.code === "Digit4") P.selected = 4;
+    if (e.code === "Digit5") P.selected = 5;
+    if (e.code === "Digit6") P.selected = 6;
+
+    if (e.code === "KeyE") removeWithKeyboard();
+    if (e.code === "KeyQ") placeWithKeyboard();
+
+    if (e.code === "ArrowLeft")  P.yaw -= 0.03;
+    if (e.code === "ArrowRight") P.yaw += 0.03;
+    if (e.code === "ArrowUp")    P.pitch -= 0.03;
+    if (e.code === "ArrowDown")  P.pitch += 0.03;
+    clampPitch();
+  });
+
+  window.addEventListener("keyup", (e) => {
+    keys.delete(e.code);
+  });
+
+  canvas.addEventListener("contextmenu", e => e.preventDefault());
+
+  canvas.addEventListener("mousedown", (e) => {
+    const target = raycast(14);
+    if (!target) return;
+
+    if (e.button === 0) {
+      if (target.hitValid) {
+        removeBlock(target.hitX, target.hitY, target.hitZ);
+      }
+    } else if (e.button === 2) {
+      if (target.placeValid) {
+        placeBlock(target.placeX, target.placeY, target.placeZ, P.selected);
+      }
+    }
+  });
+
+  let prevMouseX = null;
+  let prevMouseY = null;
+
+  canvas.addEventListener("mousemove", (e) => {
+    const r = canvas.getBoundingClientRect();
+    const mx = e.clientX - r.left;
+    const my = e.clientY - r.top;
+
+    if (prevMouseX !== null && prevMouseY !== null) {
+      const sens = 0.0022;
+      P.yaw += (mx - prevMouseX) * sens;
+      P.pitch += (my - prevMouseY) * sens;
+      clampPitch();
+    }
+
+    prevMouseX = mx;
+    prevMouseY = my;
+  });
+
+  canvas.addEventListener("mouseleave", () => {
+    prevMouseX = null;
+    prevMouseY = null;
+  });
+
+  // -------------------------
+  // Interaction helpers
+  // -------------------------
+  function validBlock(x, y, z) {
+    return x >= 0 && x < W && y >= 0 && y < H && z >= 0 && z < D;
+  }
+
+  function removeBlock(x, y, z) {
+    if (!validBlock(x, y, z)) return;
+    if (get(x, y, z) !== 0) set(x, y, z, 0);
+  }
+
+  function blockOverlapsPlayer(ix, iy, iz) {
+    const minX = P.x - 0.3;
+    const maxX = P.x + 0.3;
+    const minY = P.y;
+    const maxY = P.y + 1.7;
+    const minZ = P.z - 0.3;
+    const maxZ = P.z + 0.3;
+
+    return !(
+      ix + 1 <= minX ||
+      ix >= maxX ||
+      iy + 1 <= minY ||
+      iy >= maxY ||
+      iz + 1 <= maxZ ||
+      iz >= maxZ
+    );
+  }
+
+  function placeBlock(x, y, z, type) {
+    if (!validBlock(x, y, z)) return;
+    if (get(x, y, z) !== 0) return;
+    if (blockOverlapsPlayer(x, y, z)) return;
+    set(x, y, z, type);
+  }
+
+  function removeWithKeyboard() {
+    const t = raycast(14);
+    if (t && t.hitValid) removeBlock(t.hitX, t.hitY, t.hitZ);
+  }
+
+  function placeWithKeyboard() {
+    const t = raycast(14);
+    if (t && t.placeValid) placeBlock(t.placeX, t.placeY, t.placeZ, P.selected);
+  }
+
+  // -------------------------
+  // Raycast
+  // -------------------------
+  function raycast(maxDist = 14) {
+    const ox = P.x;
+    const oy = P.y + EYE;
+    const oz = P.z;
+
+    const cp = Math.cos(P.pitch);
+    const sp = Math.sin(P.pitch);
+    const sy = Math.sin(P.yaw);
+    const cy = Math.cos(P.yaw);
+
+    const dirX = sy * cp;
+    const dirY = sp;
+    const dirZ = cy * cp;
+
+    let prev = null;
+
+    for (let t = 0.05; t < maxDist; t += 0.07) {
+      const x = Math.floor(ox + dirX * t);
+      const y = Math.floor(oy + dirY * t);
+      const z = Math.floor(oz + dirZ * t);
+
+      const inside = validBlock(x, y, z);
+
+      if (inside && grid[idx(x, y, z)] !== 0) {
+        const pv = prev;
+        let placeValid = false;
+        if (pv) {
+          placeValid = validBlock(pv.x, pv.y, pv.z) && grid[idx(pv.x, pv.y, pv.z)] === 0;
+        }
+        return {
+          hitValid: true,
+          hitX: x, hitY: y, hitZ: z,
+          placeValid: placeValid,
+          placeX: pv ? pv.x : -9999,
+          placeY: pv ? pv.y : -9999,
+          placeZ: pv ? pv.z : -9999
+        };
+      }
+
+      if (y < 0) {
+        const pv = prev;
+        let placeValid = false;
+        if (pv) {
+          placeValid = validBlock(pv.x, pv.y, pv.z) && grid[idx(pv.x, pv.y, pv.z)] === 0;
+        }
+        return {
+          hitValid: false,
+          hitX: x, hitY: y, hitZ: z,
+          placeValid: placeValid,
+          placeX: pv ? pv.x : -9999,
+          placeY: pv ? pv.y : -9999,
+          placeZ: pv ? pv.z : -9999
+        };
+      }
+
+      if (x < 0 || x >= W || z < 0 || z >= D) {
+        return null;
+      }
+
+      prev = { x, y, z };
+    }
+
+    return null;
+  }
+
+  // -------------------------
+  // Movement / collision
+  // -------------------------
+  function collide(px, py, pz) {
+    const minX = Math.floor(px - 0.3);
+    const maxX = Math.ceil(px + 0.3) - 1;
+
+    const minY = Math.floor(py);
+    const maxY = Math.ceil(py + 1.7) - 1;
+
+    const minZ = Math.floor(pz - 0.3);
+    const maxZ = Math.ceil(pz + 0.3) - 1;
+
+    for (let x = minX; x <= maxX; x++) {
+      for (let y = minY; y <= maxY; y++) {
+        for (let z = minZ; z <= maxZ; z++) {
+          if (solidAt(x, y, z)) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  function isGrounded() {
+    return collide(P.x, P.y - 0.02, P.z);
+  }
+
+  function moveAxisX(amount) {
+    const steps = Math.ceil(Math.abs(amount) / 0.08);
+    const sign = Math.sign(amount);
+    for (let i = 0; i < steps; i++) {
+      const nx = P.x + sign * Math.min(0.08, Math.abs(amount) - i * 0.08);
+      if (collide(nx, P.y, P.z)) return;
+      P.x = nx;
+    }
+  }
+
+  function moveAxisZ(amount) {
+    const steps = Math.ceil(Math.abs(amount) / 0.08);
+    const sign = Math.sign(amount);
+    for (let i = 0; i < steps; i++) {
+      const nz = P.z + sign * Math.min(0.08, Math.abs(amount) - i * 0.08);
+      if (collide(P.x, P.y, nz)) return;
+      P.z = nz;
+    }
+  }
+
+  function moveAxisY(amount) {
+    const steps = Math.ceil(Math.abs(amount) / 0.08);
+    const sign = Math.sign(amount);
+
+    for (let i = 0; i < steps; i++) {
+      const ny = P.y + sign * Math.min(0.08, Math.abs(amount) - i * 0.08);
+      if (collide(P.x, ny, P.z)) {
+        if (amount < 0) {
+          P.vy = 0;
+          P.grounded = true;
+        } else {
+          P.vy = 0;
+          P.grounded = false;
+        }
+        return;
+      }
+      P.y = ny;
+    }
+  }
+
+  function respawn() {
+    P.x = spawnX + 0.5;
+    P.z = spawnZ + 0.5;
+    P.y = terrainH[spawnZ * W + spawnX] + 1.0;
+    P.vy = 0;
+  }
+
+  // -------------------------
+  // Projection
+  // -------------------------
+  let cam = null;
+
+  function buildCam() {
+    const sy = Math.sin(P.yaw);
+    const cy = Math.cos(P.yaw);
+    const sp = Math.sin(P.pitch);
+    const cp = Math.cos(P.pitch);
+
+    return {
+      ox: P.x,
+      oy: P.y + EYE,
+      oz: P.z,
+      sx: sy, cx: cy,
+      sp: sp, cp: cp
+    };
+  }
+
+  function toCam(wx, wy, wz) {
+    const vx = wx - cam.ox;
+    const vy = wy - cam.oy;
+    const vz = wz - cam.oz;
+
+    const x = vx * cam.cx - vz * cam.sx;
+    const z = vx * cam.sx * cam.cp + vy * cam.sp + vz * cam.cx * cam.cp;
+    const y = -vx * cam.sx * cam.sp + vy * cam.cp - vz * cam.cx * cam.sp;
+
+    return { x, y, z };
+  }
+
+  function projectPoint(wx, wy, wz) {
+    const c = toCam(wx, wy, wz);
+    const NEAR = 0.1;
+    if (c.z <= NEAR) return null;
+
+    const scale = (canvas.width * 0.5) / Math.tan(1.05 / 2);
+    const cx = canvas.width * 0.5;
+    const cy = canvas.height * 0.5;
+
+    return {
+      x: cx + (c.x / c.z) * scale,
+      y: cy - (c.y / c.z) * scale
+    };
+  }
+
+  function drawBoxEdges(bx, by, bz, rgba) {
+    const c000 = projectPoint(bx,     by,     bz);
+    const c100 = projectPoint(bx + 1, by,     bz);
+    const c110 = projectPoint(bx + 1, by + 1, bz);
+    const c010 = projectPoint(bx,     by + 1, bz);
+    const c001 = projectPoint(bx,     by,     bz + 1);
+    const c101 = projectPoint(bx + 1, by,     bz + 1);
+    const c111 = projectPoint(bx + 1, by + 1, bz + 1);
+    const c011 = projectPoint(bx,     by + 1, bz + 1);
+
+    const pts = [c000, c100, c110, c010, c001, c101, c111, c011];
+
+    const edges = [
+      [0,1],[1,2],[2,3],[3,0],
+      [4,5],[5,6],[6,7],[7,4],
+      [0,4],[1,5],[2,6],[3,7]
+    ];
+
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = rgba;
+
+    for (const e of edges) {
+      const a = pts[e[0]];
+      const b = pts[e[1]];
+      if (!a || !b) continue;
+
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    }
+  }
+
+  // -------------------------
+  // Render
+  // -------------------------
+  function shadeColor(type, faceIndex) {
+    const p = PAL[type];
+    const base =
+      faceIndex === 0 ? p.top :
+      faceIndex === 1 ? p.bottom :
+      p.side;
+
+    const s = FACE_SHADE[faceIndex];
+    const r = Math.round(base[0] * s);
+    const g = Math.round(base[1] * s);
+    const b = Math.round(base[2] * s);
+    return `rgb(${r},${g},${b})`;
+  }
+
+  function drawSky() {
+    const w = canvas.width;
+    const h = canvas.height;
+
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, "#8ed7e7");
+    grad.addColorStop(0.6, "#b9e4f0");
+    grad.addColorStop(1, "#6c4b31");
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+
+    // horizon fog
+    ctx.fillStyle = "rgba(210,220,230,0.18)";
+    ctx.fillRect(0, h * 0.54, w, h * 0.46);
+  }
+
+  function render() {
+    cam = buildCam();
+
+    drawSky();
+
+    const faces = [];
+
+    for (let y = 0; y < H; y++) {
+      for (let z = 0; z < D; z++) {
+        for (let x = 0; x < W; x++) {
+          const type = grid[idx(x, y, z)];
+          if (!type) continue;
+
+          const centerX = x + 0.5;
+          const centerY = y + 0.5;
+          const centerZ = z + 0.5;
+
+          const camCenter = toCam(centerX, centerY, centerZ);
+          if (camCenter.z <= 0.08) continue;
+
+          const dx = camCenter.x, dy = camCenter.y, dz = camCenter.z;
+          const dist2 = dx * dx + dy * dy + dz * dz;
+          if (dist2 > 70 * 70) continue;
+
+          for (let fi = 0; fi < FACES.length; fi++) {
+            const face = FACES[fi];
+            const nx = face.n[0];
+            const ny = face.n[1];
+            const nz = face.n[2];
+
+            // neighbor for face visibility
+            const nbx = x + nx;
+            const nby = y + ny;
+            const nbz = z + nz;
+
+            if (nbx >= 0 && nbx < W && nby >= 0 && nby < H && nbz >= 0 && nbz < D) {
+              if (grid[idx(nbx, nby, nbz)] !== 0) continue; // no face if adjacent block
+            }
+
+            // backface cull: face visible if normal faces camera
+            // vector faceCenter-cam dot normal < 0
+            const faceCenterCam = {
+              x: (centerX - cam.ox) + nx * 0.5,
+              y: (centerY - cam.oy) + ny * 0.5,
+              z: (centerZ - cam.oz) + nz * 0.5
+            };
+            const nDot = nx * faceCenterCam.x + ny * faceCenterCam.y + nz * faceCenterCam.z;
+            if (nDot >= 0) continue;
+
+            const pts = [];
+            let valid = true;
+            let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+
+            for (let k = 0; k < 4; k++) {
+              const vv = face.v[k];
+              const wx = x + vv[0];
+              const wy = y + vv[1];
+              const wz = z + vv[2];
+
+              const p = projectPoint(wx, wy, wz);
+              if (!p) { valid = false; break; }
+
+              pts.push(p.x, p.y);
+              minX = Math.min(minX, p.x);
+              maxX = Math.max(maxX, p.x);
+              minY = Math.min(minY, p.y);
+              maxY = Math.max(maxY, p.y);
+            }
+
+            if (!valid) continue;
+            if (maxX < 0 || minX > canvas.width || maxY < 0 || minY > canvas.height) continue;
+
+            faces.push({
+              pts: pts,
+              color: shadeColor(type, fi),
+              depth: camCenter.z
+            });
+          }
+        }
+      }
+    }
+
+    faces.sort((a, b) => b.depth - a.depth);
+
+    ctx.lineJoin = "round";
+    for (const f of faces) {
+      ctx.fillStyle = f.color;
+      ctx.strokeStyle = f.color;
+      ctx.lineWidth = 1;
+
+      ctx.beginPath();
+      ctx.moveTo(f.pts[0], f.pts[1]);
+      ctx.lineTo(f.pts[2], f.pts[3]);
+      ctx.lineTo(f.pts[4], f.pts[5]);
+      ctx.lineTo(f.pts[6], f.pts[7]);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // cursor highlight
+    const tgt = raycast(14);
+    if (tgt) {
+      if (tgt.hitValid) drawBoxEdges(tgt.hitX, tgt.hitY, tgt.hitZ, "rgba(255,255,255,0.85)");
+      if (tgt.placeValid) drawBoxEdges(tgt.placeX, tgt.placeY, tgt.placeZ, "rgba(120,220,120,0.9)");
+    }
+
+    drawHUD();
+  }
+
+  function drawHUD() {
+    const w = canvas.width;
+    const h = canvas.height;
+    const cx = w / 2;
+    const cy = h / 2;
+    const s = 10;
+
+    // crosshair
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+
+    ctx.beginPath();
+    ctx.moveTo(cx - s, cy);
+    ctx.lineTo(cx + s, cy);
+    ctx.moveTo(cx, cy - s);
+    ctx.lineTo(cx, cy + s);
+    ctx.stroke();
+
+    // selected block
+    const sel = P.selected;
+    const col = PAL[sel];
+    const base = col.top;
+    const size = Math.max(20, Math.floor(canvas.height * 0.05));
+
+    ctx.fillStyle = `rgb(${base[0]},${base[1]},${base[2]})`;
+    ctx.fillRect(20, h - 70, size, size);
+
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.fillRect(20, h - 70, size, size * 0.25); // top strip
+
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.font = `${Math.max(14, Math.floor(h * 0.025))}px sans-serif`;
+    ctx.textBaseline = "middle";
+    ctx.fillText(BLOCK_NAMES[sel], 30 + size, h - 70 + size / 2);
+
+    // controls
+    const font = `${Math.max(13, Math.floor(h * 0.022))}px sans-serif`;
+    ctx.font = font;
+    ctx.fillStyle = "rgba(255,255,255,0.82)";
+
+    ctx.textAlign = "center";
+    const lines = [
+      "WASD move / Space jump",
+      "mouse: camera",
+      "left click: remove, right click: place",
+      "1-6: select block, E remove, Q place",
+      "arrow keys: camera too"
+    ];
+    for (let i = 0; i < lines.length; i++) {
+      ctx.fillText(lines[i], w / 2, h - 90 + i * 18);
+    }
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+  }
+
+  // -------------------------
+  // Main loop
+  // -------------------------
+  function update(dt) {
+    P.grounded = isGrounded();
+
+    if (keys.has("Space") && P.grounded) {
+      P.vy = 7.4;
+    }
+
+    P.vy -= 22 * dt;
+    if (P.vy < -20) P.vy = -20;
+
+    const fw = (keys.has("KeyW") ? 1 : 0) - (keys.has("KeyS") ? 1 : 0);
+    const side = (keys.has("KeyD") ? 1 : 0) - (keys.has("KeyA") ? 1 : 0);
+
+    const sy = Math.sin(P.yaw);
+    const cy = Math.cos(P.yaw);
+
+    const fwdX = sy;
+    const fwdZ = cy;
+    const rightX = cy;
+    const rightZ = -sy;
+
+    const speed = 5.4;
+    const vx = (fw * fwdX + side * rightX) * speed * dt;
+    const vz = (fw * fwdZ + side * rightZ) * speed * dt;
+
+    moveAxisX(vx);
+    moveAxisY(P.vy * dt);
+    moveAxisZ(vz);
+
+    if (P.y < -40) respawn();
+  }
+
+  let last = performance.now();
+  function loop() {
+    const now = performance.now();
+    let dt = (now - last) / 1000;
+    last = now;
+    if (dt > 0.05) dt = 0.05;
+
+    update(dt);
+    render();
+
+    requestAnimationFrame(loop);
+  }
+
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
+```

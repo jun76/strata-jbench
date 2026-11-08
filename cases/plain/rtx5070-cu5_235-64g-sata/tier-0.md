@@ -4,7 +4,7 @@
 
 # Tier 0: 計測器の検証（IQ3_S × 起動3回、Gyro-S で作者の値と照合、ゲーム作成の展開確認）
 
-GeForce RTX 5070 · Core Ultra 5 235 · 64 GB RAM · SATA SSD · 19 ケース / 165 リクエスト。ほかのパラメータ（入力の内容、見るもの、備考、seed、timeout、起動セッション）は [tier-0.csv](tier-0.csv)。
+GeForce RTX 5070 · Core Ultra 5 235 · 64 GB RAM · SATA SSD · 25 ケース / 183 リクエスト。ほかのパラメータ（入力の内容、見るもの、備考、seed、timeout、起動セッション）は [tier-0.csv](tier-0.csv)。
 
 | 状態 | case id | model | context | 設定 | 起動オプションの差分 | fixture | effort | temp | 並列 | 入力 token | 出力 cap | 回数 | 結果 | エビデンス |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -26,4 +26,10 @@ GeForce RTX 5070 · Core Ultra 5 235 · 64 GB RAM · SATA SSD · 19 ケース / 
 | done | `T0-qwen-IQ3_S-prefill-4k` | qwen IQ3_S | 128K | baseline |  | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 9 | prefill 2148.0 / decode 89.1 / TTFT ms 1927.1 / 採用率 0.716 | [2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/cases/T0-qwen-IQ3_S-prefill-4k/) |
 | done | `T0-qwen-IQ3_S-prefill-32k` | qwen IQ3_S | 128K | baseline |  | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 9 | prefill 2488.5 / decode 89.5 / TTFT ms 13198.4 / 採用率 0.726 | [2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/cases/T0-qwen-IQ3_S-prefill-32k/) |
 | done | `T0-qwen-IQ3_S-prefill-128k` | qwen IQ3_S | 128K | baseline |  | prefill-128k | none | 0.7 | 1 | 128,000 | 128 | 9 | prefill 2440.1 / decode 86.1 / TTFT ms 52518.2 / 採用率 0.707 | [2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/cases/T0-qwen-IQ3_S-prefill-128k/) |
+| done | `T0-gyro-Gyro-S-author-decode-prose-en` | gyro Gyro-S | 128K | author-protocol |  | decode-prose-en | none | 0.7 | 1 | 短文 | 512 | 3 | prefill 212.9 / decode 100.6 / TTFT ms 455.0 / 採用率 0.538 | [2026-11-08-gyro-coder](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-08-gyro-coder/cases/T0-gyro-Gyro-S-author-decode-prose-en/) |
+| done | `T0-gyro-Gyro-S-author-decode-json` | gyro Gyro-S | 128K | author-protocol |  | decode-json | none | 0.7 | 1 | 短文 | 512 | 3 | prefill 247.7 / decode 149.8 / TTFT ms 464.7 / 採用率 0.921 | [2026-11-08-gyro-coder](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-08-gyro-coder/cases/T0-gyro-Gyro-S-author-decode-json/) |
+| done | `T0-gyro-Gyro-S-author-decode-code` | gyro Gyro-S | 128K | author-protocol |  | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 | prefill 250.1 / decode 134.8 / TTFT ms 398.8 / 採用率 0.804 | [2026-11-08-gyro-coder](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-08-gyro-coder/cases/T0-gyro-Gyro-S-author-decode-code/) |
+| done | `T0-gyro-Gyro-S-author-decode-copy` | gyro Gyro-S | 128K | author-protocol |  | decode-copy | none | 0.7 | 1 | 短文 | 512 | 3 | prefill 640.4 / decode 170.9 / TTFT ms 649.0 / 採用率 0.997 | [2026-11-08-gyro-coder](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-08-gyro-coder/cases/T0-gyro-Gyro-S-author-decode-copy/) |
+| done | `T0-gyro-Gyro-S-author-prefill-4k` | gyro Gyro-S | 128K | author-protocol |  | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 | prefill 2037.4 / decode 117.2 / TTFT ms 2026.2 / 採用率 0.644 | [2026-11-08-gyro-coder](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-08-gyro-coder/cases/T0-gyro-Gyro-S-author-prefill-4k/) |
+| done | `T0-gyro-Gyro-S-author-prefill-16k` | gyro Gyro-S | 128K | author-protocol |  | prefill-16k | none | 0.7 | 1 | 16,384 | 128 | 3 | prefill 2451.8 / decode 106.7 / TTFT ms 6706.8 / 採用率 0.678 | [2026-11-08-gyro-coder](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-08-gyro-coder/cases/T0-gyro-Gyro-S-author-prefill-16k/) |
 | done | `T0-qwen-IQ3_S-game-minecraft-none` | qwen IQ3_S | 128K | baseline |  | game-minecraft | none | 0.7 | 1 | 短文 | 16,384 | 3 | prefill 83.2 / decode 100.7 / TTFT ms 671.0 / 採用率 0.779 | [2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/cases/T0-qwen-IQ3_S-game-minecraft-none/) |

@@ -22,15 +22,15 @@ Tier ごとにケースの表がある（1行が1ケース）。全パラメー�
 
 Strata のデスクトップアプリは使っていない。CLI の <code>strata launch --no-tui</code> でエンジンを専用ポート（18600）に起動し、OpenAI 互換の HTTP API（<code>POST /v1/chat/completions</code>、ストリーミング）を <code>scripts/bench_runner.py</code> から直接呼んで測る。Tier 2 だけは Strata 同梱のベンチ <code>strata bench run --suite standard-v1</code> を同じエンジンに向けて実行する。
 
-環境 <code>rtx5070-cu5_235-64g-sata</code> · RUN_ID 2026-11-06-main の記録（machine.json）
+環境 <code>rtx5070-cu5_235-64g-sata</code> · RUN_ID 2026-11-08-gyro-coder の記録（machine.json）
 
 ## 概要
 
-- ケース: 719
-- 本計測リクエスト: 2,433
-- エンジン起動: 65
-- 見積もり: 27 時間
-- 完了: 715
+- ケース: 830
+- 本計測リクエスト: 2,802
+- エンジン起動: 73
+- 見積もり: 28 時間
+- 完了: 826
 - 失敗: 4
 
 
@@ -38,11 +38,11 @@ Strata のデスクトップアプリは使っていない。CLI の <code>strat
 
 | Tier | 内容 | モデル | ケース | リクエスト | 見積 h | 完了 |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| [0](tier-0.md) | 計測器の検証（IQ3_S × 起動3回、Gyro-S で作者の値と照合、ゲーム作成の展開確認） | 1 | 19 | 165 | 1.0 | 19 |
-| [1](tier-1.md) | 全モデルの基礎速度（decode 5種 × temperature 3水準、prefill 4K / 32K / 128K）。decode は DFlash2 対応のモデルで DFlash2 でも測る | 9 | 297 | 891 | 2.5 | 297 |
-| [2](tier-2.md) | 公式 standard-v1（thinking xhigh、temperature 1.0）をスイートごと3回 | 9 | 135 | 405 | 2.0 | 135 |
-| [3](tier-3.md) | 推論エフォート none / high × 4問、ゲーム作成は high のみ（全モデル） | 9 | 81 | 243 | 2.7 | 81 |
-| [4a](tier-4a.md) | 容量の確保コスト（128K / 256K / 1M に同じ 4K 入力） | 9 | 27 | 81 | 1.0 | 27 |
+| [0](tier-0.md) | 計測器の検証（IQ3_S × 起動3回、Gyro-S で作者の値と照合、ゲーム作成の展開確認） | 2 | 25 | 183 | 1.0 | 25 |
+| [1](tier-1.md) | 全モデルの基礎速度（decode 5種 × temperature 3水準、prefill 4K / 32K / 128K）。decode は DFlash2 対応のモデルで DFlash2 でも測る | 11 | 348 | 1,044 | 2.7 | 348 |
+| [2](tier-2.md) | 公式 standard-v1（thinking xhigh、temperature 1.0）をスイートごと3回 | 11 | 165 | 495 | 2.3 | 165 |
+| [3](tier-3.md) | 推論エフォート none / high × 4問、ゲーム作成は high のみ（全モデル） | 11 | 99 | 297 | 2.9 | 99 |
+| [4a](tier-4a.md) | 容量の確保コスト（128K / 256K / 1M に同じ 4K 入力） | 11 | 33 | 99 | 1.1 | 33 |
 | [4b](tier-4b.md) | 学習範囲の長文（32K / 128K / 256K、代表6） | 3 | 36 | 108 | 1.9 | 36 |
 | [4c](tier-4c.md) | 拡張範囲の長文（512K / 1M、代表3） | 2 | 16 | 48 | 11.2 | 16 |
 | [4d](tier-4d.md) | YaRN の影響（IQ3_S、同じ入力で設定だけ変える） | 1 | 16 | 48 | 3.0 | 16 |
@@ -57,6 +57,8 @@ Strata のデスクトップアプリは使っていない。CLI の <code>strat
 | qwen | IQ2_XS | 68.0 | 元重みの量子化 (ISTA) | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json)) |
 | qwen | IQ3_XXS | 75.8 | 元重みの量子化 (ISTA) | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json)) |
 | qwen | IQ3_S | 83.6 | 元重みの量子化 (ISTA)、基準モデル | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json)) |
+| coder | IQ1_M | 58.4 | expert 半減の剪定版 | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF @ `5348543`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF/tree/5348543e0147355ac9cbcb031184a3546350988e) ([2026-11-08-gyro-coder](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-08-gyro-coder/models.json)) |
+| gyro | Gyro-S | 58.5 | 元重みの量子化 (trellis) | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-08-gyro-coder](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-08-gyro-coder/models.json)) |
 | gyro | Gyro-M | 92.0 | 元重みの量子化 (trellis) | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json)) |
 | unsloth | UD-IQ1_M | 68.0 | 元重みの量子化 (Unsloth v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `d962011`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json)) |
 | unsloth | UD-Q2_0 | 70.5 | 元重みの量子化 (Unsloth v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `d962011`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json)) |

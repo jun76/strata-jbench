@@ -22,15 +22,15 @@
 
 未使用 Strata 桌面应用。用 CLI <code>strata launch --no-tui</code> 在专用端口（18600）启动引擎，由 <code>scripts/bench_runner.py</code> 直接调用其 OpenAI 兼容的 HTTP API（<code>POST /v1/chat/completions</code>，流式）进行测量。只有 Tier 2 是对同一引擎运行 Strata 自带的基准测试 <code>strata bench run --suite standard-v1</code>。
 
-环境 <code>rtx5070-cu5_235-64g-sata</code> · RUN_ID 2026-11-06-main 的记录（machine.json）
+环境 <code>rtx5070-cu5_235-64g-sata</code> · RUN_ID 2026-11-08-gyro-coder 的记录（machine.json）
 
 ## 概要
 
-- 用例: 719
-- 正式测量请求: 2,433
-- 引擎启动: 65
-- 预估: 27 小时
-- 完成: 715
+- 用例: 830
+- 正式测量请求: 2,802
+- 引擎启动: 73
+- 预估: 28 小时
+- 完成: 826
 - 失败: 4
 
 
@@ -38,11 +38,11 @@
 
 | Tier | 内容 | 模型 | 用例 | 请求 | 预估 h | 完成 |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| [0](tier-0.zh.md) | 验证测量工具（IQ3_S × 启动 3 次、用 Gyro-S 对照作者的数值、确认游戏成果的展开） | 1 | 19 | 165 | 1.0 | 19 |
-| [1](tier-1.zh.md) | 所有模型的基础速度（decode 5 种 × temperature 3 档，prefill 4K / 32K / 128K）；支持 DFlash2 的模型的 decode 也用 DFlash2 测量 | 9 | 297 | 891 | 2.5 | 297 |
-| [2](tier-2.zh.md) | 官方 standard-v1（thinking xhigh，temperature 1.0），整个套件 3 次 | 9 | 135 | 405 | 2.0 | 135 |
-| [3](tier-3.zh.md) | 推理 effort none / high × 4 题，游戏制作仅 high（所有模型） | 9 | 81 | 243 | 2.7 | 81 |
-| [4a](tier-4a.zh.md) | 预留上下文的代价（128K / 256K / 1M 下相同的 4K 输入） | 9 | 27 | 81 | 1.0 | 27 |
+| [0](tier-0.zh.md) | 验证测量工具（IQ3_S × 启动 3 次、用 Gyro-S 对照作者的数值、确认游戏成果的展开） | 2 | 25 | 183 | 1.0 | 25 |
+| [1](tier-1.zh.md) | 所有模型的基础速度（decode 5 种 × temperature 3 档，prefill 4K / 32K / 128K）；支持 DFlash2 的模型的 decode 也用 DFlash2 测量 | 11 | 348 | 1,044 | 2.7 | 348 |
+| [2](tier-2.zh.md) | 官方 standard-v1（thinking xhigh，temperature 1.0），整个套件 3 次 | 11 | 165 | 495 | 2.3 | 165 |
+| [3](tier-3.zh.md) | 推理 effort none / high × 4 题，游戏制作仅 high（所有模型） | 11 | 99 | 297 | 2.9 | 99 |
+| [4a](tier-4a.zh.md) | 预留上下文的代价（128K / 256K / 1M 下相同的 4K 输入） | 11 | 33 | 99 | 1.1 | 33 |
 | [4b](tier-4b.zh.md) | 训练长度内的长文本（32K / 128K / 256K，代表 6 个） | 3 | 36 | 108 | 1.9 | 36 |
 | [4c](tier-4c.zh.md) | 扩展范围的长文本（512K / 1M，代表 3 个） | 2 | 16 | 48 | 11.2 | 16 |
 | [4d](tier-4d.zh.md) | YaRN 的影响（IQ3_S，相同输入只改设置） | 1 | 16 | 48 | 3.0 | 16 |
@@ -57,6 +57,8 @@
 | qwen | IQ2_XS | 68.0 | 原始权重量化（ISTA） | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json)) |
 | qwen | IQ3_XXS | 75.8 | 原始权重量化（ISTA） | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json)) |
 | qwen | IQ3_S | 83.6 | 原始权重量化（ISTA），基准模型 | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json)) |
+| coder | IQ1_M | 58.4 | expert 减半的剪枝版 | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF @ `5348543`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF/tree/5348543e0147355ac9cbcb031184a3546350988e) ([2026-11-08-gyro-coder](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-08-gyro-coder/models.json)) |
+| gyro | Gyro-S | 58.5 | 原始权重量化（trellis） | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-08-gyro-coder](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-08-gyro-coder/models.json)) |
 | gyro | Gyro-M | 92.0 | 原始权重量化（trellis） | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json)) |
 | unsloth | UD-IQ1_M | 68.0 | 原始权重量化（Unsloth v3.1） | [unsloth/Qwen3.8-Flash-Next-GGUF @ `d962011`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json)) |
 | unsloth | UD-Q2_0 | 70.5 | 原始权重量化（Unsloth v3.1） | [unsloth/Qwen3.8-Flash-Next-GGUF @ `d962011`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json)) |
