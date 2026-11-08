@@ -2,7 +2,7 @@
 
 [← cases](README.en.md)
 
-# Tier 3: reasoning effort none / high × 4 tasks, the game at high only (18 models)
+# Tier 3: reasoning effort none / high × 4 tasks, the game at high only (every model)
 
 GeForce RTX 5090 · 128 GB RAM · 162 cases / 486 requests. The other parameters (input, measures, notes, seeds, timeout, launch session) are in [tier-3.csv](tier-3.csv).
 

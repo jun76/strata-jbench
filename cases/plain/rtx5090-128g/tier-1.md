@@ -2,7 +2,7 @@
 
 [← ケース一覧](README.md)
 
-# Tier 1: 18モデルの基礎速度（decode 5種 × temperature 3水準、prefill 4K / 32K / 128K）。decode は DFlash2 対応の11モデルで DFlash2 でも測る
+# Tier 1: 全モデルの基礎速度（decode 5種 × temperature 3水準、prefill 4K / 32K / 128K）。decode は DFlash2 対応のモデルで DFlash2 でも測る
 
 GeForce RTX 5090 · 128 GB RAM · 489 ケース / 1,467 リクエスト。ほかのパラメータ（入力の内容、見るもの、備考、seed、timeout、起動セッション）は [tier-1.csv](tier-1.csv)。
 

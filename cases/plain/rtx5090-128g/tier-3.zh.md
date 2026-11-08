@@ -2,7 +2,7 @@
 
 [← 用例一览](README.zh.md)
 
-# Tier 3: 推理 effort none / high × 4 题，游戏制作仅 high（18 个模型）
+# Tier 3: 推理 effort none / high × 4 题，游戏制作仅 high（所有模型）
 
 GeForce RTX 5090 · 128 GB RAM · 162 个用例 / 486 个请求。其他参数（输入内容、测量内容、备注、seed、timeout、启动会话）见 [tier-3.csv](tier-3.csv)。
 

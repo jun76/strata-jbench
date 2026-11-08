@@ -2,7 +2,7 @@
 
 [← ケース一覧](README.md)
 
-# Tier 3: 推論エフォート none / high × 4問、ゲーム作成は high のみ（18モデル）
+# Tier 3: 推論エフォート none / high × 4問、ゲーム作成は high のみ（全モデル）
 
 GeForce RTX 5090 · 128 GB RAM · 162 ケース / 486 リクエスト。ほかのパラメータ（入力の内容、見るもの、備考、seed、timeout、起動セッション）は [tier-3.csv](tier-3.csv)。
 

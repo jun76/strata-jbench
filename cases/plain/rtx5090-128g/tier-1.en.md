@@ -2,7 +2,7 @@
 
 [← cases](README.en.md)
 
-# Tier 1: base speed of 18 models (5 decode kinds × 3 temperatures, prefill 4K / 32K / 128K); decode also with DFlash2 on the 11 models that have it
+# Tier 1: base speed of every model (5 decode kinds × 3 temperatures, prefill 4K / 32K / 128K); decode also with DFlash2 on the models that have it
 
 GeForce RTX 5090 · 128 GB RAM · 489 cases / 1,467 requests. The other parameters (input, measures, notes, seeds, timeout, launch session) are in [tier-1.csv](tier-1.csv).
 
