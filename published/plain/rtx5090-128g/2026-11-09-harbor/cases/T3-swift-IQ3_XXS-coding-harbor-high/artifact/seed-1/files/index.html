@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Voxel Harbor — A Sailing Ship Calling at a Harbor</title>
+<style>
+  html, body { margin:0; height:100%; overflow:hidden; background:#000; }
+  #info {
+    position:fixed; top:12px; left:12px; z-index:10; color:#fff;
+    font:13px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    background:rgba(12,24,36,.42); padding:8px 11px; border-radius:10px;
+    text-shadow:0 1px 2px rgba(0,0,0,.7); user-select:none;
+  }
+  #info b { color:#ffe08a; }
+</style>
+</head>
+<body>
+<div id="info">
+  <b>A sailing ship calling at a harbor</b><br>
+  Drag: orbit • Scroll: zoom • Right-drag: pan
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x9ac8ff, 70, 200);
+
+function makeSky() {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+  const g = ctx.createRadialGradient(150, 95, 10, 150, 95, 520);
+  g.addColorStop(0.00, '#fff6cc');
+  g.addColorStop(0.16, '#ffdf8a');
+  g.addColorStop(0.42, '#9ed4ff');
+  g.addColorStop(1.00, '#3f7fc4');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 512, 512);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+scene.background = makeSky();
+
+const camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 400);
+camera.position.set(36, 23, 44);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.08;
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(-1, 7, 2);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 14;
+controls.maxDistance = 125;
+controls.maxPolarAngle = 1.45;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.32;
+controls.update();
+
+const hemi = new THREE.HemisphereLight(0xbfe6ff, 0x2d4a37, 1.15);
+scene.add(hemi);
+
+const ambient = new THREE.AmbientLight(0xffffff, 0.2);
+scene.add(ambient);
+
+const sun = new THREE.DirectionalLight(0xfff3d8, 2.55);
+sun.position.set(36, 58, 18);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.near = 1;
+sun.shadow.camera.far = 260;
+sun.shadow.camera.left = -85;
+sun.shadow.camera.right = 85;
+sun.shadow.camera.top = 85;
+sun.shadow.camera.bottom = -85;
+sun.shadow.bias = -0.0006;
+sun.shadow.normalBias = 0.02;
+sun.shadow.radius = 2.2;
+scene.add(sun);
+sun.target = new THREE.Object3D();
+sun.target.position.set(0, 0, 0);
+scene.add(sun.target);
+
+const sunMesh = new THREE.Mesh(
+  new THREE.SphereGeometry(4.2, 18, 18),
+  new THREE.MeshBasicMaterial({ color: 0xfffbd0, fog: false })
+);
+sunMesh.position.set(54, 66, 26);
+scene.add(sunMesh);
+
+const voxelGeo = new THREE.BoxGeometry(1, 1, 1);
+
+class VoxelBuilder {
+  constructor(cast = true, receive = true) {
+    this.map = new Map();
+    this.cast = cast;
+    this.receive = receive;
+  }
+
+  add(x, y, z, color, sx = 1, sy = 1, sz = 1, emissive = 0x000000) {
+    const key = color + ':' + emissive;
+    let rec = this.map.get(key);
+    if (!rec) {
+      rec = { color, emissive, mats: [] };
+      this.map.set(key, rec);
+    }
+    const m = new THREE.Matrix4();
+    m.compose(
+      new THREE.Vector3(x, y, z),
+      new THREE.Quaternion(),
+      new THREE.Vector3(sx * 0.97, sy * 0.97, sz * 0.97)
+    );
+    rec.mats.push(m);
+  }
+
+  addLine(x1, y1, z1, x2, y2, z2, color, steps = 12, scale = 0.18) {
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const x = x1 + (x2 - x1) * t;
+      const y = y1 + (y2 - y1) * t;
+      const z = z1 + (z2 - z1) * t;
+      this.add(x, y, z, color, scale, scale, scale, 0);
+    }
+  }
+
+  finish(parent) {
+    for (const rec of this.map.values()) {
+      if (rec.mats.length === 0) continue;
+      const mat = new THREE.MeshLambertMaterial({
+        color: rec.color,
+        emissive: rec.emissive,
+        flatShading: true
+      });
+      const mesh = new THREE.InstancedMesh(voxelGeo, mat, rec.mats.length);
+      mesh.castShadow = this.cast;
+      mesh.receiveShadow = this.receive;
+      mesh.frustumCulled = false;
+      rec.mats.forEach((m, i) => mesh.setMatrixAt(i, m));
+      mesh.instanceMatrix.needsUpdate = true;
+      parent.add(mesh);
+    }
+  }
+}
+
+const worldBuilder = new VoxelBuilder(true, true);
+function W(x, y, z, c, sx = 1, sy = 1, sz = 1, em = 0x000000) {
+  worldBuilder.add(x, y, z, c, sx, sy, sz, em);
+}
+
+function hash(x, z) {
+  const n = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
+  return n - Math.floor(n);
+}
+
+// Color palette
+const grass = 0x56a24c;
+const grassDark = 0x437e40;
+const sand = 0xe1c989;
+const dirt = 0x9b7852;
+const dirtDark = 0x73593d;
+const stone = 0xa9a9a9;
+const stoneDark = 0x818181;
+const woodLight = 0xb57a40;
+const woodDark = 0x784b2a;
+const roofRed = 0x9c3d3d;
+const roofBrown = 0x7b684f;
+const wallBeige = 0xd9c3a1;
+const wallWhite = 0xe8e2d4;
+const windowBlue = 0x67b4ff;
+const gold = 0xffdf6b;
+const red = 0xd53838;
+const white = 0xf6f6f4;
+
+// ---------- Land ----------
+for (let x = 14; x <= 62; x++) {
+  for (let z = -48; z <= 48; z++) {
+    const n = hash(x * 0.7, z * 0.9);
+    const hillFactor =
+      Math.min(1, Math.max(0, (x - 38) / 18)) *
+      Math.min(1, Math.max(0, (Math.abs(z) - 18) / 18));
+
+    const h = 2 + Math.floor(n * 4 * hillFactor);
+    for (let y = 0; y < h; y++) {
+      let c;
+      if (y === h - 1) {
+        c = x < 17 ? sand : (n > 0.72 ? grassDark : grass);
+      } else if (y >= h - 2) {
+        c = dirt;
+      } else {
+        c = dirtDark;
+      }
+      W(x, y, z, c);
+    }
+  }
+}
+
+// Shoreline rocks
+for (let z = -44; z <= 44; z += 6) {
+  if (hash(13, z) > 0.48) {
+    W(13, 0, z, stone, 0.95, 0.95, 0.95);
+    W(13, 1, z, stoneDark, 0.75, 0.75, 0.75);
+  }
+}
+
+// ---------- Dock ----------
+for (let x = 2; x <= 13; x++) {
+  for (let z = -6; z <= 6; z++) {
+    const c = (x + z) % 2 === 0 ? woodLight : woodDark;
+    W(x, 2.5, z, c, 1, 0.4, 1);
+  }
+}
+
+// Dock posts
+for (const x of [3, 5, 7, 9, 11, 13]) {
+  for (const z of [-6, -3, 0, 3, 6]) {
+    for (let y = -2; y <= 2; y++) {
+      W(x, y, z, woodDark, 0.6, 1, 0.6);
+    }
+  }
+}
+
+// Dock railings
+for (const z of [-6, 6]) {
+  for (let x = 3; x <= 13; x += 2) {
+    for (let y = 3; y <= 4; y++) {
+      W(x, y, z, woodDark, 0.35, 1, 0.35);
+    }
+  }
+  for (let x = 3; x <= 13; x++) {
+    W(x, 4, z, woodLight, 1.05, 0.22, 0.22);
+  }
+}
+
+// Mooring posts
+for (const x of [3, 7, 11, 13]) {
+  for (const z of [-5, 0, 5]) {
+    for (let y = 3; y <= 4; y++) {
+      W(x, y, z, 0x4b3020, 0.7, 1, 0.7);
+    }
+  }
+}
+
+// Lantern posts
+for (const x of [4, 8, 12]) {
+  for (const z of [-6, 6]) {
+    for (let y = 3; y <= 5; y++) {
+      W(x, y, z, woodDark, 0.38, 1, 0.38);
+    }
+    W(x, 6, z, gold, 0.8, 0.8, 0.8, 0xffdf6b);
+  }
+}
+
+// Cargo on dock
+function barrel(x, z) {
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dz = -1; dz <= 1; dz++) {
+      if (Math.abs(dx) + Math.abs(dz) <= 2) {
+        W(x + dx, 2.7, z + dz, 0x8b653f, 0.95, 0.95, 0.95);
+        W(x + dx, 3.7, z + dz, 0x7b5432, 0.95, 0.95, 0.95);
+      }
+    }
+  }
+}
+
+function crate(x, z) {
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let y = 3; y <= 4; y++) {
+        const c = (x + y + z + dx + dz) % 2 === 0 ? woodLight : woodDark;
+        W(x + dx, y + 0.7, z + dz, c, 0.95, 0.95, 0.95);
+      }
+    }
+  }
+}
+
+barrel(5, -3);
+barrel(7, -3);
+barrel(9, 3);
+crate(10, -4);
+crate(11, 2);
+
+// ---------- Buildings ----------
+function addBuilding(x0, z0, w, d, h, wall, roof, door, opts = {}) {
+  for (let y = 2; y <= h; y++) {
+    for (let x = 0; x < w; x++) {
+      for (let z = 0; z < d; z++) {
+        W(x0 + x, y, z0 + z, wall);
+      }
+    }
+  }
+
+  for (let x = 0; x < w; x++) {
+    for (let z = 0; z < d; z++) {
+      W(x0 + x, h + 1, z0 + z, roof);
+    }
+  }
+
+  // Front/back windows
+  for (let x = 1; x < w - 1; x += 2) {
+    W(x0 + x, 4, z0 - 1, windowBlue, 0.75, 0.9, 0.6, 0x0a1220);
+    W(x0 + x, 4, z0 + d, windowBlue, 0.75, 0.9, 0.6, 0x0a1220);
+  }
+
+  // Side windows
+  for (let z = 1; z < d - 1; z += 2) {
+    W(x0 - 1, 4, z0 + z, windowBlue, 0.6, 0.9, 0.75, 0x0a1220);
+    W(x0 + w - 1, 4, z0 + z, windowBlue, 0.6, 0.9, 0.75, 0x0a1220);
+  }
+
+  // Door
+  const cx = x0 + Math.floor(w / 2);
+  W(cx, 2, z0 - 1, door, 0.8, 1, 0.6);
+  W(cx, 3, z0 - 1, door, 0.8, 1, 0.6);
+
+  if (opts.chimney) {
+    const cx2 = x0 + Math.max(1, Math.min(w - 2, Math.floor(w / 3)));
+    W(cx2, h + 2, z0 + 1, stoneDark, 1, 2, 1);
+    W(cx2, h + 3, z0 + 1, 0x444444, 0.7, 1, 0.7);
+  }
+}
+
+addBuilding(20, -18, 10, 8, 6, wallBeige, roofRed, woodDark, { chimney: true });
+addBuilding(34, -14, 8, 6, 5, wallBeige, roofRed, woodDark, { chimney: true });
+addBuilding(24, 8, 5, 4, 4, wallWhite, roofRed, woodDark, {});
+addBuilding(32, 6, 5, 4, 4, wallWhite, roofRed, woodDark, {});
+addBuilding(40, 14, 6, 5, 4, wallWhite, roofBrown, woodDark, {});
+
+// ---------- Lighthouse ----------
+const beaconGroups = [];
+
+function addLighthouse(x, z) {
+  // Base ring
+  for (let dx = -2; dx <= 2; dx++) {
+    for (let dz = -2; dz <= 2; dz++) {
+      if (Math.abs(dx) === 2 || Math.abs(dz) === 2) {
+        W(x + dx, 2, z + dz, stone);
+        W(x + dx, 3, z + dz, stoneDark);
+      }
+    }
+  }
+
+  // Tower
+  for (let y = 2; y <= 16; y++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dz = -1; dz <= 1; dz++) {
+        const stripe = (Math.floor(y / 2) + Math.floor((dx + 1) / 2) + Math.floor((dz + 1) / 2)) % 2;
+        W(x + dx, y, z + dz, stripe ? white : red);
+      }
+    }
+  }
+
+  // Gallery
+  for (let dx = -2; dx <= 2; dx++) {
+    for (let dz = -2; dz <= 2; dz++) {
+      W(x + dx, 17, z + dz, stoneDark);
+    }
+  }
+
+  // Lamp room
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dz = -1; dz <= 1; dz++) {
+      W(x + dx, 18, z + dz, red);
+    }
+  }
+  W(x, 18, z, gold, 1.2, 1.2, 1.2, 0xffdf6b);
+
+  // Roof
+  for (let dx = -2; dx <= 2; dx++) {
+    for (let dz = -2; dz <= 2; dz++) {
+      W(x + dx, 19, z + dz, roofRed, 0.8, 0.4, 0.8);
+    }
+  }
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dz = -1; dz <= 1; dz++) {
+      W(x + dx, 20, z + dz, 0x6f2b2b, 0.7, 0.4, 0.7);
+    }
+  }
+
+  const beacon = new THREE.Group();
+  beacon.position.set(x, 19, z);
+  scene.add(beacon);
+  beaconGroups.push(beacon);
+
+  const spot = new THREE.SpotLight(0xffe3a3, 320, 95, 0.32, 0.7, 0.12);
+  spot.position.set(0, 0, 0);
+  beacon.add(spot);
+  spot.target.position.set(24, 0, 0);
+  beacon.add(spot.target);
+}
+
+addLighthouse(36, 20);
+
+// ---------- Trees & street lamps ----------
+function addTree(x, z) {
+  for (let y = 2; y <= 4; y++) {
+    W(x, y, z, woodDark, 0.65, 1, 0.65);
+  }
+  for (let y = 5; y <= 7; y++) {
+    const r = y === 7 ? 1 : 2;
+    for (let dx = -r; dx <= r; dx++) {
+      for (let dz = -r; dz <= r; dz++) {
+        if (dx * dx + dz * dz <= r * r + 1) {
+          const c = (Math.abs(dx) + Math.abs(dz) + y) % 3 === 0 ? grassDark : grass;
+          W(x + dx, y, z + dz, c);
+        }
+      }
+    }
+  }
+}
+
+function addLamp(x, z) {
+  for (let y = 2; y <= 5; y++) {
+    W(x, y, z, 0x333333, 0.35, 1, 0.35);
+  }
+  W(x, 6, z, gold, 0.7, 0.7, 0.7, 0xffdf6b);
+  W(x, 5.3, z, 0x555555, 0.55, 0.3, 0.55);
+}
+
+addTree(18, -12);
+addTree(20, 14);
+addTree(26, -24);
+addTree(44, -20);
+addTree(50, 22);
+
+addLamp(17, -8);
+addLamp(17, 4);
+addLamp(22, -10);
+addLamp(28, 16);
+
+// Finish static harbor voxels
+worldBuilder.finish(scene);
+
+// ---------- Water ----------
+const waterMin = -50;
+const waterMax = 49;
+const waterSize = waterMax - waterMin + 1;
+const waterCount = waterSize * waterSize;
+
+const waterX = new Int16Array(waterCount);
+const waterZ = new Int16Array(waterCount);
+
+const waterMat = new THREE.MeshStandardMaterial({
+  color: 0xffffff,
+  roughness: 0.75,
+  metalness: 0.05,
+  flatShading: true
+});
+
+const waterMesh = new THREE.InstancedMesh(voxelGeo, waterMat, waterCount);
+waterMesh.frustumCulled = false;
+waterMesh.castShadow = false;
+waterMesh.receiveShadow = true;
+scene.add(waterMesh);
+
+const tmpColor = new THREE.Color();
+const deep = new THREE.Color(0x144f7c);
+const mid = new THREE.Color(0x2d86c7);
+const shallow = new THREE.Color(0x79d6f2);
+const foam = new THREE.Color(0xdffaff);
+
+const tmpMatrix = new THREE.Matrix4();
+const tmpPos = new THREE.Vector3();
+const tmpQuat = new THREE.Quaternion();
+const tmpScale = new THREE.Vector3();
+
+let waterIdx = 0;
+for (let x = waterMin; x <= waterMax; x++) {
+  for (let z = waterMin; z <= waterMax; z++) {
+    waterX[waterIdx] = x;
+    waterZ[waterIdx] = z;
+
+    tmpPos.set(x, -0.25, z);
+    tmpScale.set(0.98, 0.5, 0.98);
+    tmpMatrix.compose(tmpPos, tmpQuat, tmpScale);
+    waterMesh.setMatrixAt(waterIdx, tmpMatrix);
+
+    tmpColor.copy(mid);
+    tmpColor.lerp(deep, THREE.MathUtils.clamp((15 - x) / 55, 0, 1) * 0.75);
+    tmpColor.lerp(shallow, THREE.MathUtils.clamp((x - 5) / 12, 0, 1) * 0.35);
+    tmpColor.lerp(foam, THREE.MathUtils.clamp((14 - x) / 4, 0, 1) * 0.18);
+    waterMesh.setColorAt(waterIdx, tmpColor);
+
+    waterIdx++;
+  }
+}
+waterMesh.instanceMatrix.needsUpdate = true;
+waterMesh.instanceColor.needsUpdate = true;
+
+// ---------- Sailing ship ----------
+const shipWood = 0x8b5a2b;
+const shipWoodDark = 0x58351f;
+const deckWood = 0xc29057;
+const deckWoodDark = 0x9b6d3a;
+const mastWood = 0x7c5231;
+const ropeColor = 0x5a4230;
+const sailWhite = 0xf4f2e8;
+const sailShade = 0xdfdac9;
+const sailRed = 0xc94b3b;
+const hullBlack = 0x212121;
+
+function buildShip() {
+  const group = new THREE.Group();
+  const b = new VoxelBuilder(true, true);
+  const add = (x, y, z, c, sx = 1, sy = 1, sz = 1, em = 0x000000) => b.add(x, y, z, c, sx, sy, sz, em);
+
+  function hullHalf(z) {
+    const a = Math.abs(z);
+    let w = 4;
+    if (z > 7) w = 4 - (z - 7) * 1.15;
+    else if (z < -7) w = 4 - (a - 7) * 0.85;
+    return Math.max(1, Math.round(w));
+  }
+
+  // Hull
+  for (let z = -11; z <= 11; z++) {
+    const hw = hullHalf(z);
+
+    // Underwater hull
+    for (let y = -4; y <= -1; y++) {
+      const half = Math.max(1, Math.round(hw - (-y) * 0.7));
+      for (let x = -half; x <= half; x++) {
+        add(x, y, z, hullBlack);
+      }
+    }
+
+    // Above-water hull
+    for (let y = 0; y <= 3; y++) {
+      let half = hw;
+      if (y >= 2) half = Math.max(1, Math.round(half - 1));
+      for (let x = -half; x <= half; x++) {
+        const c = (y <= 1)
+          ? ((x + z) % 2 === 0 ? shipWoodDark : shipWood)
+          : ((x + z) % 2 === 0 ? shipWood : 0xa77545);
+        add(x, y, z, c);
+      }
+    }
+
+    // Deck
+    for (let x = -hw; x <= hw; x++) {
+      add(x, 4, z, (x + z) % 2 === 0 ? deckWood : deckWoodDark, 1, 1, 1);
+    }
+
+    // Gunwale
+    add(hw, 4, z, shipWoodDark, 1, 1, 1);
+    add(-hw, 4, z, shipWoodDark, 1, 1, 1);
+
+    if (hw >= 3) {
+      add(hw, 5, z, shipWoodDark, 0.35, 1, 1);
+      add(-hw, 5, z, shipWoodDark, 0.35, 1, 1);
+    }
+
+    // Gun ports
+    if (z === -6 || z === 0 || z === 6) {
+      add(hw, 2, z, hullBlack, 0.8, 0.6, 0.8);
+      add(-hw, 2, z, hullBlack, 0.8, 0.6, 0.8);
+    }
+  }
+
+  // Bow
+  for (let y = 1; y <= 3; y++) {
+    add(0, y, 12, shipWood);
+    add(1, y, 12, shipWood);
+    add(-1, y, 12, shipWood);
+  }
+  add(0, 2, 13, shipWoodDark, 0.8, 1, 1);
+  add(0, 3, 13, shipWoodDark, 0.8, 1, 1);
+  add(0, 4, 12, deckWood, 1, 1, 1);
+  add(0, 4, 13, deckWoodDark, 0.8, 1, 0.8);
+
+  // Stern
+  for (let y = 1; y <= 4; y++) {
+    for (let x = -2; x <= 2; x++) {
+      add(x, y, -12, y === 4 ? deckWood : shipWoodDark);
+    }
+  }
+  add(0, 5, -12, shipWoodDark, 0.8, 1, 0.8);
+
+  // Stern castle
+  for (let z = -11; z <= -8; z++) {
+    for (let x = -3; x <= 3; x++) {
+      add(x, 5, z, 0xa46a35);
+      add(x, 6, z, 0x8d572a);
+    }
+    add(0, 7, z, 0x674028, 7, 0.7, 1);
+  }
+
+  for (let z = -11; z <= -9; z++) {
+    add(4, 5, z, windowBlue, 0.6, 0.8, 0.6, 0x112233);
+    add(4, 6, z, windowBlue, 0.6, 0.8, 0.6, 0x112233);
+    add(-4, 5, z, windowBlue, 0.6, 0.8, 0.6, 0x112233);
+    add(-4, 6, z, windowBlue, 0.6, 0.8, 0.6, 0x112233);
+  }
+
+  add(4, 7, -10, gold, 0.7, 0.7, 0.7, 0xffdf6b);
+  add(-4, 7, -10, gold, 0.7, 0.7, 0.7, 0xffdf6b);
+
+  // Forecastle
+  for (let z = 9; z <= 11; z++) {
+    for (let x = -3; x <= 3; x++) {
+      add(x, 5, z, 0xa46a35);
+    }
+    add(0, 6, z, 0x8d572a, 7, 0.7, 1);
+  }
+
+  // Masts
+  const masts = [
+    [0, 20],
+    [7, 16],
+    [-7, 14]
+  ];
+
+  for (const [z, h] of masts) {
+    for (let y = 4; y <= h; y++) {
+      add(0, y, z, mastWood, 0.55, 1, 0.55);
+    }
+    for (let y = h + 1; y <= h + 2; y++) {
+      for (let x = 1; x <= 3; x++) {
+        add(x, y, z, sailRed, 1, 0.8, 0.25);
+      }
+    }
+  }
+
+  // Yards
+  function addYard(z, y, xmin, xmax) {
+    for (let x = xmin; x <= xmax; x++) {
+      add(x, y, z, shipWoodDark, 1, 0.55, 0.55);
+    }
+  }
+
+  addYard(0, 12, -6, 6);
+  addYard(0, 17, -4, 4);
+  addYard(7, 11, -4, 4);
+  addYard(7, 14, -2, 2);
+  addYard(-7, 9, -3, 3);
+
+  // Sails
+  function addSail(xmin, xmax, ymin, ymax, z0, billow, color) {
+    const span = xmax - xmin;
+    for (let x = xmin; x <= xmax; x++) {
+      for (let y = ymin; y <= ymax; y++) {
+        const t = span === 0 ? 0.5 : (x - xmin) / span;
+        const zz = Math.round(z0 + Math.sin(t * Math.PI) * billow);
+        const c = ((x + y + z0) % 2 === 0) ? color : sailShade;
+        add(x, y, zz, c, 0.95, 0.95, 0.85);
+      }
+    }
+  }
+
+  addSail(-5, 5, 6, 11, 0, 2.2, sailWhite);
+  addSail(-3, 3, 13, 16, 0, 1.8, sailWhite);
+  addSail(-4, 4, 6, 10, 7, 2.0, sailWhite);
+  addSail(-2, 2, 12, 13, 7, 1.2, sailWhite);
+  addSail(-3, 3, 6, 8, -7, 1.6, sailWhite);
+
+  // Rigging
+  b.addLine(0, 20, 0, 0, 6, 12, ropeColor, 16, 0.14);
+  b.addLine(0, 20, 0, 0, 7, -12, ropeColor, 16, 0.14);
+  b.addLine(0, 16, 7, 0, 5, 12, ropeColor, 14, 0.14);
+  b.addLine(0, 14, -7, 0, 7, -12, ropeColor, 14, 0.14);
+
+  for (const dx of [4, -4]) {
+    b.addLine(0, 18, 0, dx, 4, 0, ropeColor, 10, 0.11);
+    b.addLine(0, 14, 7, dx, 4, 7, ropeColor, 10, 0.11);
+    b.addLine(0, 12, -7, dx, 4, -7, ropeColor, 10, 0.11);
+  }
+
+  // Deck details
+  function shipBarrel(x, z) {
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dz = -1; dz <= 1; dz++) {
+        if (Math.abs(dx) + Math.abs(dz) <= 2) {
+          add(x + dx, 5, z + dz, 0x8b653f);
+          add(x + dx, 6, z + dz, 0x7b5432);
+        }
+      }
+    }
+  }
+
+  shipBarrel(2, 3);
+  shipBarrel(-2, -4);
+
+  for (let z = -6; z <= 6; z += 3) {
+    add(3, 5, z, 0x333333, 0.7, 0.6, 1.6);
+  }
+
+  add(0, 5, 12, 0x333333, 0.8, 1, 0.8);
+
+  // Stern flag
+  for (let y = 8; y <= 12; y++) {
+    add(0, y, -12, mastWood, 0.25, 1, 0.25);
+  }
+  for (let y = 10; y <= 11; y++) {
+    for (let x = 1; x <= 3; x++) {
+      add(x, y, -12, sailRed, 1, 0.8, 0.2);
+    }
+  }
+
+  b.finish(group);
+  group.position.set(-7, 0, 0);
+  group.rotation.y = 0.15;
+  return group;
+}
+
+const shipGroup = buildShip();
+scene.add(shipGroup);
+
+// ---------- Small moored rowboat ----------
+function buildBoat() {
+  const group = new THREE.Group();
+  const b = new VoxelBuilder(true, true);
+  const add = (x, y, z, c, sx = 1, sy = 1, sz = 1, em = 0x000000) => b.add(x, y, z, c, sx, sy, sz, em);
+
+  for (let z = -2; z <= 2; z++) {
+    for (let x = -1; x <= 1; x++) {
+      if (Math.abs(x) === 1 && Math.abs(z) === 2) continue;
+      add(x, 0, z, shipWoodDark);
+      add(x, 1, z, shipWood);
+    }
+    add(0, 2, z, deckWood, 1, 0.35, 1);
+  }
+
+  for (let y = 2; y <= 6; y++) {
+    add(0, y, 0, mastWood, 0.35, 1, 0.35);
+  }
+  for (let x = -1; x <= 1; x++) {
+    add(x, 4, 0, shipWoodDark, 1, 0.35, 0.35);
+  }
+
+  for (let x = -1; x <= 1; x++) {
+    for (let y = 3; y <= 5; y++) {
+      const zz = Math.round(Math.sin(((x + 1) / 2) * Math.PI) * 1.0);
+      add(x, y, zz, sailWhite, 0.85, 0.95, 0.7);
+    }
+  }
+
+  add(1, 5, 0, sailRed, 1, 0.6, 0.2);
+  add(-2, 1, 0, woodDark, 0.8, 0.2, 0.2);
+  add(2, 1, 0, woodDark, 0.8, 0.2, 0.2);
+
+  b.finish(group);
+  group.position.set(-1, 0, 7);
+  return group;
+}
+
+const boatGroup = buildBoat();
+scene.add(boatGroup);
+
+// ---------- Clouds ----------
+const clouds = [];
+
+function addCloud(x, y, z, speed) {
+  const g = new THREE.Group();
+  const b = new VoxelBuilder(false, false);
+  const add = (x, y, z, c) => b.add(x, y, z, c, 1, 1, 1);
+
+  const offsets = [
+    [0,0,0],[1,0,0],[-1,0,0],[2,0,0],[-2,0,0],
+    [0,0,1],[0,0,-1],[1,0,1],[-1,0,-1],[1,0,-1],[-1,0,1],
+    [0,1,0],[1,1,0],[-1,1,0],[0,1,1],[0,1,-1],[2,1,0],[-2,1,0],
+    [1,1,1],[-1,1,-1],[3,0,0],[-3,0,0],
+    [0,2,0],[1,2,0],[-1,2,0],[0,2,1],[0,2,-1],[2,2,0],[-2,2,0]
+  ];
+
+  for (const o of offsets) {
+    const c = ((o[0] + o[1] + o[2]) % 2 === 0) ? 0xf7fbff : 0xe5eef5;
+    add(o[0], o[1], o[2], c);
+  }
+
+  b.finish(g);
+  g.position.set(x, y, z);
+  g.userData.speed = speed;
+  g.userData.phase = Math.random() * Math.PI * 2;
+  scene.add(g);
+  clouds.push(g);
+}
+
+addCloud(-45, 30, -20, 1.05);
+addCloud(-15, 35, -34, 0.75);
+addCloud(25, 32, -12, 1.35);
+addCloud(60, 36, 18, 0.95);
+addCloud(15, 40, 28, 0.65);
+addCloud(-35, 38, 30, 1.15);
+addCloud(42, 28, -36, 0.85);
+addCloud(-55, 33, 8, 1.2);
+
+// ---------- Seagulls ----------
+const gulls = [];
+
+function makeSeagull() {
+  const g = new THREE.Group();
+
+  const whiteMat = new THREE.MeshLambertMaterial({ color: 0xf6f6f6, flatShading: true });
+  const yellowMat = new THREE.MeshLambertMaterial({ color: 0xffd23e, flatShading: true });
+
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.4, 2.2), whiteMat);
+  g.add(body);
+
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.7), whiteMat);
+  head.position.set(0, 0.18, 1.25);
+  g.add(head);
+
+  const beak = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.18, 0.55), yellowMat);
+  beak.position.set(0, 0.18, 1.85);
+  g.add(beak);
+
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.1, 1.0), whiteMat);
+  tail.position.set(0, 0.05, -1.6);
+  g.add(tail);
+
+  const leftPivot = new THREE.Group();
+  const rightPivot = new THREE.Group();
+
+  leftPivot.position.set(0, 0.18, 0);
+  rightPivot.position.set(0, 0.18, 0);
+
+  const leftWing = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.12, 0.75), whiteMat);
+  leftWing.position.set(-1.15, 0, 0);
+  leftPivot.add(leftWing);
+
+  const rightWing = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.12, 0.75), whiteMat);
+  rightWing.position.set(1.15, 0, 0);
+  rightPivot.add(rightWing);
+
+  g.add(leftPivot);
+  g.add(rightPivot);
+
+  g.traverse(o => {
+    o.castShadow = true;
+    o.receiveShadow = false;
+  });
+
+  g.userData = { left: leftPivot, right: rightPivot };
+  return g;
+}
+
+for (let i = 0; i < 6; i++) {
+  const g = makeSeagull();
+  g.userData.radius = 14 + i * 3;
+  g.userData.speed = 0.14 + i * 0.045;
+  g.userData.phase = i * 1.1;
+  g.userData.y = 21 + (i % 2) * 2;
+  g.userData.cx = 3;
+  g.userData.cz = 1;
+  scene.add(g);
+  gulls.push(g);
+}
+
+// ---------- Animation ----------
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  const dt = Math.min(clock.getDelta(), 0.1);
+  const t = clock.elapsedTime;
+
+  // Animate water
+  for (let i = 0; i < waterCount; i++) {
+    const x = waterX[i];
+    const z = waterZ[i];
+
+    const h =
+      0.28 +
+      0.24 * Math.sin(x * 0.22 + t * 1.1) +
+      0.18 * Math.cos(z * 0.18 - t * 0.9) +
+      0.15 * Math.sin((x + z) * 0.16 + t * 0.7) +
+      0.12 * Math.cos((x - z) * 0.13 - t * 0.5);
+
+    const height = Math.max(0.15, Math.min(1.35, h));
+
+    tmpPos.set(x, -0.25 + height * 0.5, z);
+    tmpScale.set(0.98, height, 0.98);
+    tmpMatrix.compose(tmpPos, tmpQuat, tmpScale);
+    waterMesh.setMatrixAt(i, tmpMatrix);
+  }
+  waterMesh.instanceMatrix.needsUpdate = true;
+
+  // Ship bobbing
+  shipGroup.position.y = 0.26 * Math.sin(t * 0.72);
+  shipGroup.position.x = -7 + 0.12 * Math.sin(t * 0.19);
+  shipGroup.rotation.z = 0.045 * Math.sin(t * 0.43);
+  shipGroup.rotation.x = 0.025 * Math.sin(t * 0.31);
+  shipGroup.rotation.y = 0.15 + 0.035 * Math.sin(t * 0.12);
+
+  // Rowboat bobbing
+  boatGroup.position.y = 0.22 * Math.sin(t * 0.88 + 1.4);
+  boatGroup.position.z = 7 + 0.18 * Math.sin(t * 0.31);
+  boatGroup.rotation.z = 0.05 * Math.sin(t * 0.52);
+  boatGroup.rotation.x = 0.02 * Math.sin(t * 0.38);
+
+  // Clouds
+  for (const cloud of clouds) {
+    cloud.position.x += cloud.userData.speed * dt * 2.0;
+    if (cloud.position.x > 105) cloud.position.x = -105;
+  }
+
+  // Seagulls
+  for (const g of gulls) {
+    const d = g.userData;
+    const ang = t * d.speed + d.phase;
+
+    g.position.set(
+      d.cx + Math.cos(ang) * d.radius,
+      d.y + 1.2 * Math.sin(ang * 2),
+      d.cz + Math.sin(ang) * d.radius
+    );
+    g.rotation.y = -ang;
+
+    d.left.rotation.z = -0.65 * Math.sin(t * 7 + d.phase);
+    d.right.rotation.z = 0.65 * Math.sin(t * 7 + d.phase);
+  }
+
+  // Lighthouse beacon
+  for (const beacon of beaconGroups) {
+    beacon.rotation.y += dt * 0.75;
+  }
+
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+animate();
+
+// Resize
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>

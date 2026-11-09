@@ -1,0 +1,654 @@
+Save this as `harbor.html` and open it in Chrome. It fetches Three.js from a CDN, so you need an internet connection the first time.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Voxel Harbor Sailing Ship</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+  }
+  canvas { display: block; }
+  #ui {
+    position: fixed;
+    left: 12px;
+    bottom: 12px;
+    color: #fff;
+    font: 12px/1.4 system-ui, -apple-system, Arial, sans-serif;
+    background: rgba(0,0,0,0.45);
+    padding: 8px 10px;
+    border-radius: 8px;
+    pointer-events: none;
+    user-select: none;
+  }
+</style>
+</head>
+<body>
+<div id="ui">
+  Left-drag: rotate • Right-drag: pan • Wheel: zoom • Double-click: reset
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function () {
+  if (typeof THREE === "undefined") {
+    document.body.innerHTML = '<p style="color:#fff;font:16px sans-serif;padding:20px">Could not load Three.js. Check your internet connection.</p>';
+    return;
+  }
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xbcd8e6);
+  scene.fog = new THREE.Fog(0xbcd8e6, 80, 220);
+
+  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 500);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
+
+  const hemi = new THREE.HemisphereLight(0xdfefff, 0x62707e, 1.05);
+  scene.add(hemi);
+
+  const sun = new THREE.DirectionalLight(0xffffff, 0.85);
+  sun.position.set(28, 46, 20);
+  scene.add(sun);
+
+  const sharedBox = new THREE.BoxGeometry(1, 1, 1);
+  const materials = new Map();
+
+  function materialFor(hex) {
+    if (!materials.has(hex)) {
+      materials.set(hex, new THREE.MeshLambertMaterial({
+        color: new THREE.Color(hex),
+        flatShading: true
+      }));
+    }
+    return materials.get(hex);
+  }
+
+  const dummy = new THREE.Object3D();
+
+  class VoxelBuilder {
+    constructor() {
+      this.items = [];
+    }
+
+    add(x, y, z, color) {
+      this.items.push({
+        x: Math.round(x),
+        y: Math.round(y),
+        z: Math.round(z),
+        color
+      });
+    }
+
+    build() {
+      if (!this.items.length) return null;
+
+      const buckets = new Map();
+
+      for (const item of this.items) {
+        let arr = buckets.get(item.color);
+        if (!arr) {
+          arr = [];
+          buckets.set(item.color, arr);
+        }
+        arr.push(item);
+      }
+
+      const group = new THREE.Group();
+
+      for (const [hex, arr] of buckets) {
+        const mesh = new THREE.InstancedMesh(sharedBox, materialFor(hex), arr.length);
+        mesh.frustumCulled = false;
+
+        for (let i = 0; i < arr.length; i++) {
+          dummy.position.set(arr[i].x, arr[i].y, arr[i].z);
+          dummy.rotation.set(0, 0, 0);
+          dummy.scale.set(1, 1, 1);
+          dummy.updateMatrix();
+          mesh.setMatrixAt(i, dummy.matrix);
+        }
+
+        mesh.instanceMatrix.needsUpdate = true;
+        group.add(mesh);
+      }
+
+      return group;
+    }
+  }
+
+  const occupied = new Set();
+
+  function put(builder, x, y, z, color) {
+    const key = x + "," + y + "," + z;
+    if (occupied.has(key)) return;
+    occupied.add(key);
+    builder.add(x, y, z, color);
+  }
+
+  const P = {
+    waterDeep: 0x1e5f95,
+    waterMid: 0x2d7db8,
+    waterShallow: 0x4ea7cf,
+    foam: 0xb2e1f0,
+
+    landStone: 0x878c92,
+    landDark: 0x5f656b,
+    landLight: 0xa7adb3,
+    grass: 0x4f7e46,
+    grassDark: 0x345f34,
+
+    dockWood: 0x9a6738,
+    dockDark: 0x6c4524,
+    bollard: 0x2f3336,
+
+    treeTrunk: 0x6e4a2a,
+    leaves: 0x4f8b4c,
+    leavesDark: 0x2d6a34,
+
+    wallBlue: 0x597eae,
+    wallWood: 0xb08c5c,
+    wallStone: 0xcfd3d7,
+    wallDark: 0x8b6344,
+    roofRed: 0xbb4a3b,
+    roofDark: 0x7d2e27,
+    window: 0xffd870,
+
+    hullLower: 0x2d2420,
+    hullMid: 0x4d3728,
+    deck: 0xc6a77b,
+    bulwark: 0xeef2f5,
+
+    mast: 0x8b5a2b,
+    yard: 0x67421f,
+    sail: 0xf3e9cf,
+    sail2: 0xdfd2b4,
+
+    crane: 0xf2c14e,
+    craneDark: 0xa77f2c,
+
+    containerRed: 0xc5483d,
+    containerBlue: 0x3b70ae,
+    containerGreen: 0x4d8f5e,
+
+    lamp: 0xffe27a,
+    lighthouseRed: 0xc54a3b,
+    lighthouseWhite: 0xf3f3f3,
+
+    cloud: 0xf7f9fb,
+    cloudLight: 0xe3e9f1
+  };
+
+  function fillRect(builder, x1, x2, z1, z2, y, color) {
+    const minX = Math.min(x1, x2);
+    const maxX = Math.max(x1, x2);
+    const minZ = Math.min(z1, z2);
+    const maxZ = Math.max(z1, z2);
+
+    for (let z = minZ; z <= maxZ; z++) {
+      for (let x = minX; x <= maxX; x++) {
+        put(builder, x, y, z, color);
+      }
+    }
+  }
+
+  function addBuilding(builder, x1, x2, z1, z2, height, wallColor, roofColor, opts) {
+    opts = opts || {};
+
+    const frontZ = opts.frontZ || z2;
+    const centerX = Math.floor((x1 + x2) / 2);
+    const windowOffsets = opts.windows || [];
+
+    for (let y = 1; y <= height; y++) {
+      for (let x = x1; x <= x2; x++) {
+        for (let z = z1; z <= z2; z++) {
+          if (x === x1 || x === x2 || z === z1 || z === z2) {
+            let color = wallColor;
+
+            if (z === frontZ && y === 1 && x === centerX) {
+              color = 0x3f2f21;
+            } else if (y >= 2 && z === frontZ && windowOffsets.includes(x - centerX)) {
+              color = P.window;
+            }
+
+            put(builder, x, y, z, color);
+          }
+        }
+      }
+    }
+
+    const width = x2 - x1 + 1;
+    const depth = z2 - z1 + 1;
+    const roofLevels = Math.max(1, Math.floor(Math.min(width, depth) / 2));
+
+    for (let level = 0; level < roofLevels; level++) {
+      const ix1 = x1 + level;
+      const ix2 = x2 - level;
+      const iz1 = z1 + level;
+      const iz2 = z2 - level;
+
+      if (ix1 > ix2 || iz1 > iz2) break;
+
+      fillRect(builder, ix1, ix2, iz1, iz2, height + 1 + level, level === 0 ? roofColor : P.roofDark);
+    }
+  }
+
+  function addTree(builder, x, z) {
+    for (let y = 1; y <= 2; y++) {
+      put(builder, x, y, z, P.treeTrunk);
+    }
+
+    for (let y = 3; y <= 5; y++) {
+      const r = 2 - (y - 3);
+
+      for (let dx = -r; dx <= r; dx++) {
+        for (let dz = -r; dz <= r; dz++) {
+          if (dx * dx + dz * dz <= r * r) {
+            const col = ((x + dx + y + z + dz) % 4 === 0) ? P.leavesDark : P.leaves;
+            put(builder, x + dx, y, z + dz, col);
+          }
+        }
+      }
+    }
+  }
+
+  function addCrane(builder, x, z) {
+    fillRect(builder, x, x + 1, z, z + 1, 1, P.dockDark);
+    fillRect(builder, x, x + 1, z, z + 1, 2, P.craneDark);
+
+    for (let y = 3; y <= 8; y++) {
+      put(builder, x, y, z, P.crane);
+    }
+
+    put(builder, x, 9, z, P.craneDark);
+
+    for (let bx = x + 1; bx <= x + 6; bx++) {
+      put(builder, bx, 8, z, P.crane);
+    }
+
+    put(builder, x + 1, 7, z, P.craneDark);
+    put(builder, x + 6, 7, z, P.craneDark);
+    put(builder, x + 6, 6, z, P.craneDark);
+    put(builder, x + 6, 5, z, P.containerBlue);
+  }
+
+  function addBoat(builder, x, z, hull, sail) {
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dz = -1; dz <= 1; dz++) {
+        put(builder, x + dx, 1, z + dz, hull);
+      }
+    }
+
+    put(builder, x, 2, z, P.deck);
+
+    for (let y = 3; y <= 5; y++) {
+      put(builder, x, y, z, P.mast);
+    }
+
+    for (let y = 3; y <= 5; y++) {
+      put(builder, x + 1, y, z, sail);
+    }
+  }
+
+  function addCloud(builder, x, y, z) {
+    const offsets = [
+      [0, 0], [1, 0], [-1, 0], [0, 1], [0, -1],
+      [1, 1], [-1, 1], [1, -1], [-1, -1],
+      [2, 0], [-2, 0], [0, 2], [0, -2],
+      [1, 2], [-1, 2], [1, -2], [-1, -2]
+    ];
+
+    for (const off of offsets) {
+      const dx = off[0];
+      const dz = off[1];
+      const color = ((dx + dz) % 3 === 0) ? P.cloud : P.cloudLight;
+      put(builder, x + dx, y, z + dz, color);
+    }
+  }
+
+  function addMastSail(builder, z, mastTop, lowerYardHalf, upperYardHalf, lowerSailHalf, upperSailHalf) {
+    for (let y = 4; y <= mastTop; y++) {
+      put(builder, 0, y, z, P.mast);
+    }
+
+    for (let x = -lowerYardHalf; x <= lowerYardHalf; x++) {
+      put(builder, x, 8, z, P.yard);
+    }
+
+    for (let y = 5; y <= 7; y++) {
+      for (let x = -lowerSailHalf; x <= lowerSailHalf; x++) {
+        const shade = (Math.abs(x) % 2 === 0) ? P.sail : P.sail2;
+        put(builder, x, y, z, shade);
+      }
+    }
+
+    if (upperSailHalf > 0) {
+      for (let x = -upperYardHalf; x <= upperYardHalf; x++) {
+        put(builder, x, 11, z, P.yard);
+      }
+
+      for (let y = 9; y <= 10; y++) {
+        for (let x = -upperSailHalf; x <= upperSailHalf; x++) {
+          put(builder, x, y, z, P.sail);
+        }
+      }
+    }
+  }
+
+  function addShip(builder) {
+    const zStart = 0;
+    const zEnd = 11;
+
+    for (let z = zStart; z <= zEnd; z++) {
+      let xMin = -2;
+      let xMax = 2;
+
+      if (z >= 9 && z <= 10) {
+        xMin = -1;
+        xMax = 1;
+      } else if (z === 11) {
+        xMin = 0;
+        xMax = 0;
+      }
+
+      for (let x = xMin; x <= xMax; x++) {
+        put(builder, x, 1, z, P.hullLower);
+        put(builder, x, 2, z, P.hullMid);
+        put(builder, x, 3, z, P.deck);
+      }
+
+      for (let x = xMin; x <= xMax; x++) {
+        if (z === zStart || z === zEnd || x === xMin || x === xMax) {
+          put(builder, x, 4, z, P.bulwark);
+        }
+      }
+    }
+
+    put(builder, 0, 5, 0, 0xff5555);
+    put(builder, 0, 6, 0, 0xff5555);
+
+    const cargo = [
+      [-1, 3, P.containerRed],
+      [1, 3, P.containerBlue],
+      [-1, 4, P.containerGreen],
+      [1, 4, P.containerRed],
+      [0, 4, P.wallDark],
+      [-1, 7, P.containerBlue],
+      [1, 7, P.containerRed],
+      [-1, 8, P.containerGreen],
+      [1, 8, P.containerBlue]
+    ];
+
+    for (const c of cargo) {
+      put(builder, c[0], 4, c[1], c[2]);
+    }
+
+    addMastSail(builder, 2, 10, 3, 0, 2, 0);   // mizzen
+    addMastSail(builder, 6, 12, 4, 2, 4, 2);   // main
+    addMastSail(builder, 9, 11, 3, 1, 3, 1);   // fore
+
+    put(builder, 0, 3, 12, P.mast);
+    put(builder, 0, 3, 13, P.mast);
+    put(builder, 0, 4, 12, P.mast);
+    put(builder, -1, 4, 12, P.sail);
+    put(builder, 1, 4, 12, P.sail);
+  }
+
+  const staticBuilder = new VoxelBuilder();
+  const shipBuilder = new VoxelBuilder();
+  const cloudBuilder = new VoxelBuilder();
+
+  /* Water */
+  for (let z = 0; z <= 18; z++) {
+    for (let x = -20; x <= 18; x++) {
+      let col = P.waterMid;
+
+      if ((x + z * 2) % 7 === 0) col = P.waterDeep;
+      else if ((x + z * 3) % 11 === 0) col = P.waterShallow;
+
+      if (z === 0 && ((x + z) % 5 === 0)) col = P.foam;
+
+      put(staticBuilder, x, 0, z, col);
+      put(staticBuilder, x, -1, z, z < 3 ? P.waterMid : P.waterDeep);
+    }
+  }
+
+  /* Land / shoreline */
+  for (let z = -18; z <= -1; z++) {
+    for (let x = -20; x <= 18; x++) {
+      if (z >= -3 && z <= -1 && x >= -12 && x <= 6) continue;
+
+      let col;
+      if (z >= -6) {
+        col = ((x + z) % 4 === 0) ? P.landStone : P.landDark;
+      } else {
+        col = ((x + z) % 3 === 0) ? P.grass : P.grassDark;
+      }
+
+      put(staticBuilder, x, 0, z, col);
+    }
+  }
+
+  /* Dock */
+  for (let z = -3; z <= -1; z++) {
+    for (let x = -12; x <= 6; x++) {
+      let col;
+      if (z === -1 && x % 2 === 0) col = P.dockDark;
+      else col = ((x + z) % 3 === 0) ? P.dockDark : P.dockWood;
+
+      put(staticBuilder, x, 0, z, col);
+    }
+  }
+
+  for (let x = -12; x <= 6; x += 3) {
+    put(staticBuilder, x, -1, -1, P.dockDark);
+    put(staticBuilder, x, -2, -1, P.dockDark);
+  }
+
+  /* Bollards */
+  for (let x = -11; x <= 4; x += 3) {
+    put(staticBuilder, x, 1, -1, P.bollard);
+    put(staticBuilder, x, 2, -1, P.bollard);
+  }
+
+  /* Containers and crates on dock */
+  const containerColors = [P.containerRed, P.containerBlue, P.containerGreen];
+
+  for (let x = -10, i = 0; x <= -2; x += 2, i++) {
+    put(staticBuilder, x, 1, -2, containerColors[i % 3]);
+
+    if (i % 2 === 0) {
+      put(staticBuilder, x, 2, -2, containerColors[(i + 1) % 3]);
+    }
+  }
+
+  for (let x = -11; x <= -3; x += 2) {
+    put(staticBuilder, x, 1, -2, P.wallDark);
+  }
+
+  /* Crane */
+  addCrane(staticBuilder, 5, -2);
+
+  /* Buildings */
+  addBuilding(staticBuilder, -16, -10, -12, -6, 3, P.wallBlue, P.roofRed, {
+    frontZ: -6,
+    windows: [-2, 2]
+  });
+
+  addBuilding(staticBuilder, -6, -2, -9, -6, 2, P.wallStone, P.roofDark, {
+    frontZ: -6,
+    windows: [-1, 1]
+  });
+
+  addBuilding(staticBuilder, 1, 4, -10, -7, 2, P.wallWood, P.roofRed, {
+    frontZ: -7,
+    windows: [2]
+  });
+
+  /* Trees */
+  addTree(staticBuilder, -18, -14);
+  addTree(staticBuilder, 6, -14);
+  addTree(staticBuilder, -4, -12);
+
+  /* Small boats */
+  addBoat(staticBuilder, -10, 6, P.deck, P.sail);
+  addBoat(staticBuilder, 12, 8, P.hullMid, P.sail);
+
+  /* Breakwater and lighthouse */
+  fillRect(staticBuilder, 8, 18, 14, 14, 1, P.landStone);
+  fillRect(staticBuilder, 8, 18, 14, 14, 2, P.landDark);
+
+  fillRect(staticBuilder, 11, 13, 15, 17, 1, P.landDark);
+
+  for (let y = 2; y <= 8; y++) {
+    const col = (y % 2 === 0) ? P.lighthouseRed : P.lighthouseWhite;
+    put(staticBuilder, 12, y, 16, col);
+  }
+
+  put(staticBuilder, 12, 9, 16, P.lamp);
+  put(staticBuilder, 12, 10, 16, 0x2d3338);
+
+  /* Clouds */
+  addCloud(cloudBuilder, -8, 20, 10);
+  addCloud(cloudBuilder, 12, 22, 14);
+  addCloud(cloudBuilder, -15, 20, 16);
+
+  /* Ship */
+  addShip(shipBuilder);
+
+  const staticGroup = staticBuilder.build();
+  const shipGroup = shipBuilder.build();
+  const cloudGroup = cloudBuilder.build();
+
+  if (staticGroup) scene.add(staticGroup);
+  if (shipGroup) scene.add(shipGroup);
+  if (cloudGroup) scene.add(cloudGroup);
+
+  /* Custom mouse controls */
+  let target = new THREE.Vector3(0, 4, 7);
+  let theta = 0.95;
+  let phi = 1.08;
+  let radius = 52;
+
+  function updateCamera() {
+    phi = Math.max(0.08, Math.min(Math.PI - 0.12, phi));
+    radius = Math.max(10, Math.min(140, radius));
+
+    camera.position.set(
+      target.x + radius * Math.sin(phi) * Math.cos(theta),
+      target.y + radius * Math.cos(phi),
+      target.z + radius * Math.sin(phi) * Math.sin(theta)
+    );
+
+    camera.lookAt(target);
+    camera.updateMatrixWorld();
+  }
+
+  function resetView() {
+    target = new THREE.Vector3(0, 4, 7);
+    theta = 0.95;
+    phi = 1.08;
+    radius = 52;
+  }
+
+  updateCamera();
+
+  let dragging = false;
+  let dragMode = "rotate";
+  let lastX = 0;
+  let lastY = 0;
+
+  renderer.domElement.addEventListener("pointerdown", function (e) {
+    dragging = true;
+    dragMode = (e.button === 2 || e.button === 1 || e.shiftKey) ? "pan" : "rotate";
+    lastX = e.clientX;
+    lastY = e.clientY;
+    e.preventDefault();
+  });
+
+  window.addEventListener("pointermove", function (e) {
+    if (!dragging) return;
+
+    const dx = e.clientX - lastX;
+    const dy = e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+
+    if (dragMode === "rotate") {
+      theta -= dx * 0.008;
+      phi -= dy * 0.008;
+      updateCamera();
+    } else {
+      const scale = radius * 0.003;
+      const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+      const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
+
+      target.addScaledVector(right, -dx * scale);
+      target.addScaledVector(up, -dy * scale);
+      updateCamera();
+    }
+  });
+
+  window.addEventListener("pointerup", function () {
+    dragging = false;
+  });
+
+  window.addEventListener("blur", function () {
+    dragging = false;
+  });
+
+  renderer.domElement.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    radius *= Math.exp(e.deltaY * 0.001);
+    updateCamera();
+  }, { passive: false });
+
+  window.addEventListener("contextmenu", function (e) {
+    e.preventDefault();
+  });
+
+  window.addEventListener("dblclick", function () {
+    resetView();
+    updateCamera();
+  });
+
+  window.addEventListener("resize", function () {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  const clock = new THREE.Clock();
+
+  function animate() {
+    const t = clock.getElapsedTime();
+
+    if (shipGroup) {
+      shipGroup.position.y = 0.08 * Math.sin(t * 1.2);
+      shipGroup.rotation.z = 0.010 * Math.sin(t * 0.8);
+      shipGroup.rotation.x = 0.004 * Math.sin(t * 0.6);
+    }
+
+    if (cloudGroup) {
+      cloudGroup.position.x = 7 * Math.sin(t * 0.15);
+    }
+
+    updateCamera();
+    renderer.render(scene, camera);
+    requestAnimationFrame(animate);
+  }
+
+  animate();
+})();
+</script>
+</body>
+</html>
+```

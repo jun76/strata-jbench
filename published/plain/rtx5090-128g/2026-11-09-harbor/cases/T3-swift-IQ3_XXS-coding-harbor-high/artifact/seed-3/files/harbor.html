@@ -1,0 +1,704 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>3D Voxel Harbor</title>
+<style>
+  html, body { margin:0; height:100%; overflow:hidden; background:#87ceeb; }
+  canvas { display:block; }
+  #hud {
+    position:fixed; left:14px; top:14px; color:#fff;
+    font:13px/1.35 system-ui, Arial, sans-serif;
+    text-shadow:0 1px 4px rgba(0,0,0,.85);
+    pointer-events:none;
+  }
+</style>
+</head>
+<body>
+<div id="hud">
+  <strong>A sailing ship calling at a harbor</strong><br>
+  drag to orbit · scroll to zoom · right-drag pan
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/OrbitControls.js"></script>
+
+<script>
+if (typeof THREE === 'undefined' || typeof THREE.OrbitControls === 'undefined') {
+  document.getElementById('hud').innerHTML =
+    '<strong>3D library failed to load.</strong><br>Check your internet connection and reload.';
+} else {
+  init();
+}
+
+function init() {
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x9edcff);
+  scene.fog = new THREE.Fog(0xbfeaff, 70, 180);
+
+  const camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 500);
+  camera.position.set(42, 24, 48);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.08;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  document.body.appendChild(renderer.domElement);
+
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.target.set(16, 6, 0);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.minDistance = 12;
+  controls.maxDistance = 180;
+  controls.maxPolarAngle = Math.PI * 0.495;
+
+  const hemi = new THREE.HemisphereLight(0xbfe6ff, 0x443222, 0.75);
+  scene.add(hemi);
+
+  const sun = new THREE.DirectionalLight(0xfff4cf, 1.25);
+  sun.position.set(55, 70, 30);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = -90;
+  sun.shadow.camera.right = 90;
+  sun.shadow.camera.top = 90;
+  sun.shadow.camera.bottom = -90;
+  sun.shadow.camera.near = 1;
+  sun.shadow.camera.far = 250;
+  sun.shadow.bias = -0.0008;
+  sun.target.position.set(16, 0, 0);
+  scene.add(sun, sun.target);
+
+  const COL = {
+    sand: 0x9c7b4f,
+    deepWater: 0x154a75,
+    stone: 0x8b8c90,
+    stoneDark: 0x6d6e75,
+    dockWood: 0xa86f3f,
+    dockDark: 0x704324,
+    floorDark: 0x3a2b24,
+    crate: 0x9b6a37,
+    crateDark: 0x634026,
+    darkWood: 0x3a2519,
+    hull: 0x6c4025,
+    hullDark: 0x4a2919,
+    deck: 0xa9744a,
+    white: 0xf4efe2,
+    red: 0xbf3a2b,
+    gold: 0xd4a94c,
+    rope: 0x2d2d2d,
+    black: 0x1d1d1d,
+    lamp: 0xffdd77,
+    cloud: 0xf8f8ff
+  };
+
+  const dummy = new THREE.Object3D();
+  const tempColor = new THREE.Color();
+
+  function addRectTo(list, x0, x1, y0, y1, z0, z1, color) {
+    for (let x = x0; x <= x1; x++) {
+      for (let y = y0; y <= y1; y++) {
+        for (let z = z0; z <= z1; z++) {
+          list.push({ x, y, z, color });
+        }
+      }
+    }
+  }
+
+  function addLineTo(list, a, b, color) {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const dz = b.z - a.z;
+    const len = Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dz), 1);
+    for (let i = 0; i <= len; i++) {
+      list.push({
+        x: Math.round(a.x + dx * i / len),
+        y: Math.round(a.y + dy * i / len),
+        z: Math.round(a.z + dz * i / len),
+        color
+      });
+    }
+  }
+
+  function buildVoxelMesh(items, material) {
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const mesh = new THREE.InstancedMesh(geometry, material, items.length);
+    mesh.frustumCulled = false;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+
+    const color = new THREE.Color();
+    items.forEach((it, i) => {
+      dummy.position.set(it.x, it.y, it.z);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+      mesh.setColorAt(i, color.set(it.color));
+    });
+
+    mesh.count = items.length;
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    return mesh;
+  }
+
+  class VoxelBuilder {
+    constructor(max) {
+      this.max = max;
+      this.count = 0;
+      this.geometry = new THREE.BoxGeometry(1, 1, 1);
+      this.material = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        vertexColors: true,
+        roughness: 0.72,
+        metalness: 0.03
+      });
+      this.mesh = new THREE.InstancedMesh(this.geometry, this.material, max);
+      this.mesh.frustumCulled = false;
+      this.mesh.castShadow = true;
+      this.mesh.receiveShadow = true;
+    }
+
+    addCube(x, y, z, color) {
+      if (this.count >= this.max) return;
+      dummy.position.set(x, y, z);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      this.mesh.setMatrixAt(this.count, dummy.matrix);
+      this.mesh.setColorAt(this.count, tempColor.set(color));
+      this.count++;
+    }
+
+    addRect(x0, x1, y0, y1, z0, z1, color) {
+      for (let x = x0; x <= x1; x++) {
+        for (let y = y0; y <= y1; y++) {
+          for (let z = z0; z <= z1; z++) {
+            this.addCube(x, y, z, color);
+          }
+        }
+      }
+    }
+
+    finish() {
+      this.mesh.count = this.count;
+      this.mesh.instanceMatrix.needsUpdate = true;
+      if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
+      this.mesh.frustumCulled = false;
+      scene.add(this.mesh);
+      return this.mesh;
+    }
+  }
+
+  const lampLights = [];
+  const flags = [];
+  const sailGroups = [];
+  const lampItems = [];
+
+  const flagMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    vertexColors: true,
+    side: THREE.DoubleSide,
+    roughness: 0.85
+  });
+
+  function addFlagPole(x, y, z, color = COL.red, poleHeight = 4) {
+    const items = [];
+    addRectTo(items, 0, 0, -poleHeight, 0, 0, COL.darkWood);
+    addRectTo(items, 1, 4, 0, 1, 0, color);
+    addRectTo(items, 1, 4, 1, 1, 0, COL.white);
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    g.add(buildVoxelMesh(items, flagMat));
+    scene.add(g);
+    flags.push(g);
+  }
+
+  const SHIP_X0 = 2, SHIP_X1 = 31, SHIP_Z0 = -3, SHIP_Z1 = 3;
+  const QUAY_X0 = 2, QUAY_X1 = 36, QUAY_Z0 = 7, QUAY_Z1 = 16;
+  const WALL_X0 = -36, WALL_X1 = -22, WALL_Z0 = 14, WALL_Z1 = 22;
+
+  function isLand(x, z) {
+    return (
+      (x >= SHIP_X0 && x <= SHIP_X1 && z >= SHIP_Z0 && z <= SHIP_Z1) ||
+      (x >= QUAY_X0 && x <= QUAY_X1 && z >= QUAY_Z0 && z <= QUAY_Z1) ||
+      (x >= WALL_X0 && x <= WALL_X1 && z >= WALL_Z0 && z <= WALL_Z1)
+    );
+  }
+
+  function addRectToBuilderSkip(sb, x0, x1, y0, y1, z0, z1, color, skip) {
+    for (let x = x0; x <= x1; x++) {
+      for (let y = y0; y <= y1; y++) {
+        for (let z = z0; z <= z1; z++) {
+          if (!skip(x, z)) sb.addCube(x, y, z, color);
+        }
+      }
+    }
+  }
+
+  const staticBuilder = new VoxelBuilder(140000);
+
+  function addLamp(x, z) {
+    staticBuilder.addRect(x, x, 2, 6, z, z, COL.black);
+    addRectTo(lampItems, x - 1, x + 1, 7, 8, z - 1, z + 1, COL.lamp);
+
+    const light = new THREE.PointLight(0xffb44c, 2.6, 38, 1.7);
+    light.position.set(x + 0.5, 7.7, z + 0.5);
+    scene.add(light);
+    lampLights.push(light);
+  }
+
+  function addBollard(x, z) {
+    staticBuilder.addRect(x, x + 1, 2, 3, z, z + 1, 0x333333);
+    staticBuilder.addRect(x, x + 1, 4, 4, z, z + 1, 0x555555);
+  }
+
+  function addBarrel(x, z) {
+    staticBuilder.addRect(x, x + 2, 2, 4, z, z + 2, COL.crate);
+    for (let y = 2; y <= 4; y += 2) {
+      staticBuilder.addRect(x, x + 2, y, y, z, z, COL.black);
+      staticBuilder.addRect(x, x + 2, y, y, z + 2, z + 2, COL.black);
+      staticBuilder.addRect(x, x, y, y, z, z + 2, COL.black);
+      staticBuilder.addRect(x + 2, x + 2, y, y, z, z + 2, COL.black);
+    }
+  }
+
+  function addCrate(x, z, y = 2) {
+    staticBuilder.addRect(x, x + 1, y, y + 1, z, z + 1, COL.crate);
+    staticBuilder.addRect(x, x + 1, y + 1, y + 1, z, z + 1, COL.crateDark);
+  }
+
+  function addCrane(x, z) {
+    staticBuilder.addRect(x, x + 2, 2, 5, z, z + 2, COL.darkWood);
+    staticBuilder.addRect(x + 1, x + 1, 6, 7, z + 1, z + 1, COL.darkWood);
+    staticBuilder.addRect(x - 6, x + 4, 7, 7, z + 1, z + 1, COL.darkWood);
+    staticBuilder.addRect(x - 4, x - 4, 4, 7, z + 1, z + 1, COL.darkWood);
+    staticBuilder.addRect(x - 5, x - 4, 2, 3, z, z + 1, COL.crate);
+  }
+
+  function addWarehouse() {
+    const x0 = 26, x1 = 34, z0 = 12, z1 = 18;
+
+    staticBuilder.addRect(x0, x0 + 2, 2, 5, z0, z0, COL.stone);
+    staticBuilder.addRect(x1 - 2, x1, 2, 5, z0, z0, COL.stone);
+    staticBuilder.addRect(x0, x1, 5, 5, z0, z0, COL.stone);
+    staticBuilder.addRect(x0 + 3, x1 - 3, 2, 4, z0, z0, COL.darkWood);
+
+    staticBuilder.addRect(x0, x1, 2, 5, z1, z1, COL.stone);
+    staticBuilder.addRect(x0, x0, 2, 5, z0 + 1, z1 - 1, COL.stone);
+    staticBuilder.addRect(x1, x1, 2, 5, z0 + 1, z1 - 1, COL.stone);
+    staticBuilder.addRect(x0 + 1, x1 - 1, 2, 2, z0 + 1, z1 - 1, COL.floorDark);
+
+    for (let y = 6; y <= 8; y++) {
+      const inset = y - 6;
+      staticBuilder.addRect(x0 + inset, x1 - inset, y, y, z0 + inset, z1 - inset, COL.roof);
+    }
+    staticBuilder.addRect(x0 + 3, x1 - 3, 9, 9, z0 + 3, z1 - 3, COL.roof);
+
+    for (const wx of [27, 33]) {
+      staticBuilder.addRect(wx, wx, 3, 3, z0 - 1, z0 - 1, COL.gold);
+    }
+    staticBuilder.addRect(x0 - 1, x0 - 1, 3, 3, 14, 14, COL.gold);
+    staticBuilder.addRect(x0 - 1, x0 - 1, 3, 3, 16, 16, COL.gold);
+    staticBuilder.addRect(x1 + 1, x1 + 1, 3, 3, 14, 14, COL.gold);
+    staticBuilder.addRect(x1 + 1, x1 + 1, 3, 3, 16, 16, COL.gold);
+  }
+
+  function addLighthouse(x, z) {
+    staticBuilder.addRect(x - 2, x + 2, 3, 4, z - 2, z + 2, COL.stone);
+
+    for (let y = 5; y <= 13; y++) {
+      const band = ((y % 4) < 2) ? COL.white : COL.red;
+      staticBuilder.addRect(x - 1, x + 1, y, y, z - 1, z + 1, band);
+    }
+
+    addRectTo(lampItems, x - 1, x + 1, 14, 14, z - 1, z + 1, COL.lamp);
+    staticBuilder.addRect(x - 1, x + 1, 15, 15, z - 1, z + 1, COL.red);
+    staticBuilder.addRect(x, x, 16, 16, z, z, COL.red);
+
+    const light = new THREE.PointLight(0xffe2a8, 3.0, 70, 1.7);
+    light.position.set(x, 14.6, z + 0.5);
+    scene.add(light);
+    lampLights.push(light);
+  }
+
+  // Sea floor and deep water, avoiding land and hull footprints.
+  addRectToBuilderSkip(staticBuilder, -44, 44, -4, -4, -26, 26, COL.sand, isLand);
+  addRectToBuilderSkip(staticBuilder, -44, 44, -3, -1, -26, 26, COL.deepWater, isLand);
+
+  // Main quay.
+  staticBuilder.addRect(QUAY_X0, QUAY_X1, -4, 0, QUAY_Z0, QUAY_Z1, COL.stone);
+  staticBuilder.addRect(QUAY_X0, QUAY_X1, 1, 1, QUAY_Z0, QUAY_Z0, COL.stoneDark);
+  staticBuilder.addRect(QUAY_X0, QUAY_X1, 1, 1, QUAY_Z0 + 1, QUAY_Z1, COL.dockWood);
+
+  for (let z = QUAY_Z0 + 1; z < QUAY_Z1; z += 2) {
+    staticBuilder.addRect(QUAY_X0, QUAY_X1, 1, 1, z, z + 1, COL.dockDark);
+  }
+
+  // Harbor wall / breakwater.
+  staticBuilder.addRect(WALL_X0, WALL_X1, -2, 1, WALL_Z0, WALL_Z1, COL.stoneDark);
+  staticBuilder.addRect(WALL_X0, WALL_X1, 2, 2, WALL_Z0, WALL_Z1, COL.stone);
+
+  // Quay props.
+  for (const bx of [8, 16, 24, 32]) addBollard(bx, 8);
+  for (const lx of [8, 20, 32]) addLamp(lx, 10);
+
+  addBarrel(14, 12);
+  addBarrel(18, 11);
+  addBarrel(19, 12);
+
+  addCrate(24, 10);
+  addCrate(30, 10);
+  addCrate(10, 11);
+
+  addCrane(26, 8);
+  addWarehouse();
+  addLighthouse(-30, 18);
+
+  addFlagPole(8, 6, 12);
+  addFlagPole(22, 6, 12);
+  addFlagPole(32, 6, 12);
+  addFlagPole(30, 13, 15, COL.red, 3);
+
+  staticBuilder.finish();
+
+  const lampMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    emissive: 0xffa433,
+    emissiveIntensity: 0.95,
+    vertexColors: true,
+    roughness: 0.55
+  });
+  const lampMesh = buildVoxelMesh(lampItems, lampMat);
+  lampMesh.castShadow = false;
+  scene.add(lampMesh);
+
+  // Ship.
+  const ship = new THREE.Group();
+  const hull = [];
+
+  addRectTo(hull, -11, 11, -3, -3, 0, COL.darkWood);
+  addRectTo(hull, -11, 11, -2, -2, -2, 2, COL.darkWood);
+  addRectTo(hull, -12, 12, -1, 0, -3, 3, COL.hull);
+
+  addRectTo(hull, 13, 14, -1, 0, -2, 2, COL.hull);
+  addRectTo(hull, 13, 15, -2, -2, -1, 1, COL.hullDark);
+  addRectTo(hull, 13, 15, -1, 0, -1, 1, COL.hullDark);
+
+  addRectTo(hull, -14, -13, -2, -2, -1, 1, COL.hullDark);
+  addRectTo(hull, -14, -13, -1, 0, -1, 1, COL.hullDark);
+
+  addRectTo(hull, -12, 12, 1, 1, -3, 3, COL.deck);
+  addRectTo(hull, 13, 15, 1, 1, -1, 1, COL.deck);
+  addRectTo(hull, -14, -13, 1, 1, -1, 1, COL.deck);
+
+  addRectTo(hull, -11, 11, 2, 2, -3, -3, COL.hullDark);
+  addRectTo(hull, -11, 11, 2, 2, 3, 3, COL.hullDark);
+  addRectTo(hull, -14, -14, 2, 2, -1, 1, COL.hullDark);
+  addRectTo(hull, 15, 15, 2, 2, -1, 1, COL.hullDark);
+
+  addRectTo(hull, 16, 18, 2, 2, 0, 0, COL.darkWood);
+
+  // Stern castle.
+  addRectTo(hull, -12, -9, 2, 2, -2, 2, COL.deck);
+  addRectTo(hull, -12, -9, 3, 3, -2, -2, COL.hull);
+  addRectTo(hull, -12, -9, 3, 3, 2, 2, COL.hull);
+  addRectTo(hull, -12, -12, 3, 3, -2, 2, COL.hull);
+  addRectTo(hull, -9, -9, 3, 3, -2, 2, COL.hull);
+  addRectTo(hull, -12, -9, 4, 4, -2, 2, COL.hullDark);
+  addRectTo(hull, -11, -10, 2, 2, -1, -1, COL.gold);
+  addRectTo(hull, -11, -10, 2, 2, 1, 1, COL.gold);
+  addRectTo(hull, -11, -10, 3, 3, -1, -1, COL.gold);
+  addRectTo(hull, -11, -10, 3, 3, 1, 1, COL.gold);
+
+  // Bow castle.
+  addRectTo(hull, 11, 13, 2, 2, -1, 1, COL.deck);
+  addRectTo(hull, 11, 13, 3, 3, -1, -1, COL.hull);
+  addRectTo(hull, 11, 13, 3, 3, 1, 1, COL.hull);
+  addRectTo(hull, 11, 11, 3, 3, -1, 1, COL.hull);
+  addRectTo(hull, 13, 13, 3, 3, -1, 1, COL.hull);
+  addRectTo(hull, 11, 13, 4, 4, -1, 1, COL.hullDark);
+  addRectTo(hull, 12, 12, 2, 2, -2, -2, COL.gold);
+  addRectTo(hull, 12, 12, 2, 2, 2, 2, COL.gold);
+
+  // Cannons.
+  for (let x = -8; x <= 8; x += 3) {
+    addRectTo(hull, x, x, 2, 2, -4, -4, COL.black);
+    addRectTo(hull, x, x, 2, 2, 4, 4, COL.black);
+  }
+
+  // Cargo.
+  addRectTo(hull, -6, -5, 2, 2, 0, 1, COL.crate);
+  addRectTo(hull, 4, 5, 2, 2, -1, 0, COL.crate);
+  addRectTo(hull, 2, 2, 2, 2, 2, 2, COL.white);
+
+  // Masts.
+  const masts = [
+    { x: 9, h: 12 },
+    { x: 0, h: 13 },
+    { x: -8, h: 11 }
+  ];
+  for (const m of masts) {
+    addRectTo(hull, m.x, m.x, 2, m.h, 0, 0, COL.darkWood);
+  }
+
+  // Yards.
+  addRectTo(hull, 6, 12, 10, 10, 0, 0, COL.darkWood);
+  addRectTo(hull, 7, 11, 8, 8, 0, 0, COL.darkWood);
+  addRectTo(hull, 8, 10, 6, 6, 0, 0, COL.darkWood);
+
+  addRectTo(hull, -6, 6, 11, 11, 0, 0, COL.darkWood);
+  addRectTo(hull, -5, 5, 9, 9, 0, 0, COL.darkWood);
+  addRectTo(hull, -4, 4, 7, 7, 0, 0, COL.darkWood);
+
+  addRectTo(hull, -13, -3, 9, 9, 0, 0, COL.darkWood);
+  addRectTo(hull, -12, -4, 7, 7, 0, 0, COL.darkWood);
+
+  // Rigging.
+  addLineTo(hull, { x: 9, y: 10, z: -3 }, { x: 8, y: 3, z: -3 }, COL.rope);
+  addLineTo(hull, { x: 9, y: 10, z: 3 }, { x: 8, y: 3, z: 3 }, COL.rope);
+  addLineTo(hull, { x: 0, y: 11, z: -3 }, { x: -1, y: 3, z: -3 }, COL.rope);
+  addLineTo(hull, { x: 0, y: 11, z: 3 }, { x: 1, y: 3, z: 3 }, COL.rope);
+  addLineTo(hull, { x: -8, y: 9, z: -3 }, { x: -9, y: 3, z: -3 }, COL.rope);
+  addLineTo(hull, { x: -8, y: 9, z: 3 }, { x: -7, y: 3, z: 3 }, COL.rope);
+  addLineTo(hull, { x: 12, y: 2, z: 0 }, { x: 14, y: 2, z: 0 }, COL.rope);
+
+  // Gangplank.
+  addRectTo(hull, -1, 1, 1, 1, 4, 7, COL.deck);
+  addRectTo(hull, -2, -2, 2, 2, 4, 7, COL.deck);
+  addRectTo(hull, 2, 2, 2, 2, 4, 7, COL.deck);
+
+  const shipMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    vertexColors: true,
+    roughness: 0.8
+  });
+
+  ship.add(buildVoxelMesh(hull, shipMat));
+  ship.position.set(16, 0.12, 0);
+  scene.add(ship);
+
+  const sailMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    vertexColors: true,
+    roughness: 0.92,
+    metalness: 0.02
+  });
+
+  function makeSail(mastX, y, width, height) {
+    const items = [];
+    addRectTo(items, -width, width, -height, -1, 0, COL.white);
+    const g = new THREE.Group();
+    g.position.set(mastX, y, 0);
+    g.add(buildVoxelMesh(items, sailMat));
+    ship.add(g);
+    sailGroups.push(g);
+  }
+
+  makeSail(9, 10, 3, 4);
+  makeSail(9, 8, 2, 2);
+  makeSail(9, 6, 2, 2);
+
+  makeSail(0, 11, 4, 5);
+  makeSail(0, 9, 3, 3);
+  makeSail(0, 7, 3, 2);
+
+  makeSail(-8, 9, 4, 4);
+  makeSail(-8, 7, 3, 2);
+
+  function addShipFlag(mastX, y, width = 4, height = 2) {
+    const items = [];
+    addRectTo(items, 0, 0, -2, 0, 0, COL.darkWood);
+    addRectTo(items, 1, width, 0, height - 1, 0, COL.red);
+    addRectTo(items, 1, width, 0, 0, 0, COL.white);
+    const g = new THREE.Group();
+    g.position.set(mastX, y, 0);
+    g.add(buildVoxelMesh(items, flagMat));
+    ship.add(g);
+    flags.push(g);
+  }
+
+  addShipFlag(9, 12, 4, 2);
+  addShipFlag(0, 13, 6, 3);
+  addShipFlag(-8, 11, 3, 2);
+
+  // Clouds.
+  const cloudMat = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.92
+  });
+  const clouds = [];
+
+  function makeCloud(x, y, z, speed) {
+    const items = [];
+    addRectTo(items, -3, 3, 0, 1, -2, 2, COL.cloud);
+    addRectTo(items, 1, 4, 1, 2, -1, 1, COL.cloud);
+    addRectTo(items, -4, -1, 1, 2, 0, 3, COL.cloud);
+    addRectTo(items, -1, 2, 2, 2, -1, 1, COL.cloud);
+    const mesh = buildVoxelMesh(items, cloudMat);
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    g.add(mesh);
+    scene.add(g);
+    clouds.push({ group: g, speed });
+  }
+
+  makeCloud(-70, 26, -32, 0.024);
+  makeCloud(30, 28, 18, 0.018);
+  makeCloud(80, 25, -10, 0.021);
+  makeCloud(-20, 29, 36, 0.015);
+  makeCloud(58, 27, -42, 0.020);
+  makeCloud(-92, 27, 14, 0.017);
+  makeCloud(4, 31, -60, 0.013);
+  makeCloud(-45, 24, 52, 0.016);
+
+  // Seagulls.
+  const birdMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    vertexColors: true
+  });
+  const birds = [];
+
+  function makeBird(r, speed, phase, yBase) {
+    const items = [];
+    addRectTo(items, -1, 1, 0, 0, 0, COL.white);
+    addRectTo(items, 2, 2, 0, 0, 0, COL.white);
+    addRectTo(items, 3, 3, 0, 0, 0, COL.red);
+    addRectTo(items, 0, 0, 0, 0, -2, -2, COL.white);
+    addRectTo(items, 0, 0, 0, 0, 2, 2, COL.white);
+    addRectTo(items, -2, -2, 0, 0, 0, COL.white);
+    const mesh = buildVoxelMesh(items, birdMat);
+    mesh.castShadow = false;
+    const g = new THREE.Group();
+    g.add(mesh);
+    scene.add(g);
+    birds.push({ group: g, r, speed, phase, yBase });
+  }
+
+  makeBird(22, 0.22, 0.0, 9.5);
+  makeBird(27, 0.17, 1.2, 10.5);
+  makeBird(19, 0.26, 2.1, 8.8);
+  makeBird(31, 0.14, 4.4, 11.0);
+  makeBird(24, 0.20, 5.1, 10.1);
+  makeBird(17, 0.28, 3.0, 9.1);
+
+  // Animated water surface.
+  const waterMat = new THREE.MeshStandardMaterial({
+    color: 0x2386bd,
+    transparent: true,
+    opacity: 0.92,
+    depthWrite: false,
+    roughness: 0.22,
+    metalness: 0.06
+  });
+
+  const waterX = [];
+  const waterZ = [];
+
+  for (let z = -26; z <= 26; z++) {
+    for (let x = -44; x <= 44; x++) {
+      if (isLand(x, z)) continue;
+      waterX.push(x);
+      waterZ.push(z);
+    }
+  }
+
+  const waterCount = waterX.length;
+  const water = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), waterMat, waterCount);
+  water.frustumCulled = false;
+  water.castShadow = false;
+  water.receiveShadow = true;
+  water.renderOrder = 1;
+
+  for (let i = 0; i < waterCount; i++) {
+    dummy.position.set(waterX[i], 0, waterZ[i]);
+    dummy.rotation.set(0, 0, 0);
+    dummy.scale.set(1, 1, 1);
+    dummy.updateMatrix();
+    water.setMatrixAt(i, dummy.matrix);
+  }
+  water.instanceMatrix.needsUpdate = true;
+  scene.add(water);
+
+  const clock = new THREE.Clock();
+
+  function updateWater(t) {
+    for (let i = 0; i < waterCount; i++) {
+      const x = waterX[i];
+      const z = waterZ[i];
+      dummy.position.set(x, Math.sin(x * 0.18 + z * 0.14 + t) * 0.14, z);
+      dummy.rotation.set(0, 0, Math.sin(x * 0.17 + z * 0.12 + t * 0.8) * 0.02);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      water.setMatrixAt(i, dummy.matrix);
+    }
+    water.instanceMatrix.needsUpdate = true;
+  }
+
+  function animate() {
+    requestAnimationFrame(animate);
+    const t = clock.getElapsedTime();
+
+    controls.update();
+
+    ship.position.y = 0.12 + Math.sin(t * 1.1) * 0.15;
+    ship.rotation.z = Math.sin(t * 0.75) * 0.010;
+    ship.rotation.x = Math.sin(t * 0.65) * 0.010;
+
+    sailGroups.forEach((g, i) => {
+      g.rotation.z = Math.sin(t * 1.15 + i * 0.7) * 0.08;
+      g.rotation.y = Math.sin(t * 0.8 + i * 1.1) * 0.04;
+    });
+
+    flags.forEach((g, i) => {
+      g.rotation.y = Math.sin(t * 2.2 + i * 0.7) * 0.24;
+      g.rotation.z = Math.sin(t * 1.3 + i) * 0.06;
+    });
+
+    updateWater(t);
+
+    clouds.forEach(c => {
+      c.group.position.x += c.speed;
+      if (c.group.position.x > 110) c.group.position.x = -110;
+    });
+
+    birds.forEach((b, i) => {
+      const a = t * b.speed + b.phase;
+      const px = 16 + Math.cos(a) * b.r;
+      const pz = Math.sin(a) * b.r * 0.7;
+      const py = b.yBase + Math.sin(t * 2.0 + b.phase) * 0.8;
+      b.group.position.set(px, py, pz);
+      b.group.rotation.y = 1.5 * Math.PI - a;
+      b.group.rotation.z = Math.sin(t * 5 + i) * 0.18;
+    });
+
+    lampLights.forEach((l, i) => {
+      l.intensity = 2.2 + Math.sin(t * 3 + i * 1.7) * 0.4;
+    });
+    lampMat.emissiveIntensity = 0.95 + Math.sin(t * 4) * 0.15;
+
+    renderer.render(scene, camera);
+  }
+
+  animate();
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,449 @@
+```html
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>3D Voxel Art — A Sailing Ship Calling at a Harbor</title>
+
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #10232f; }
+  canvas { display: block; }
+  #hint {
+    position: fixed;
+    left: 12px;
+    bottom: 12px;
+    color: #e7f5ff;
+    background: rgba(10, 25, 35, 0.55);
+    padding: 8px 12px;
+    font: 13px system-ui, sans-serif;
+    border-radius: 8px;
+    pointer-events: none;
+  }
+</style>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+
+<body>
+<div id="hint">Drag to orbit · Scroll to zoom · Right drag to pan</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const palette = {
+  sea: 0x2a6f88,
+  seaLight: 0x3b93a8,
+
+  dockStone: 0x9c8b76,
+  dockStoneTop: 0xb3a089,
+  dockEdge: 0x7f6b56,
+
+  pierWood: 0x845c42,
+  pierSupport: 0x5e3b28,
+
+  bollard: 0x3b3429,
+
+  warehouseWall: 0xa05042,
+  houseWall: 0x7d543f,
+  customWall: 0xc17050,
+  roof: 0x484144,
+  roofDark: 0x322c2f,
+
+  window: 0x1d2329,
+  door: 0x2f221a,
+
+  crate: 0xa66e3f,
+  crateDark: 0x7d5230,
+  barrel: 0x805637,
+
+  shipHull: 0x4b3126,
+  shipHullDark: 0x352219,
+  shipTrim: 0x241a15,
+  shipDeck: 0x775a3f,
+  shipCabin: 0x644331,
+
+  mast: 0x6b4b30,
+  sail: 0xe8d5b2,
+  cargo: 0xa06d41,
+  cargoDark: 0x754b29,
+
+  lighthouseWhite: 0xe8e2d8,
+  lighthouseRed: 0xb93d32,
+  lamp: 0xffc46b
+};
+
+class VoxelBuilder {
+  constructor(size = 1) {
+    this.size = size;
+    this.blocks = [];
+    this.materials = new Map();
+  }
+
+  add(x, y, z, color) {
+    this.blocks.push({ x, y, z, color });
+  }
+
+  addRegion(x0, x1, y0, y1, z0, z1, color) {
+    for (let x = x0; x <= x1; x++) {
+      for (let y = y0; y <= y1; y++) {
+        for (let z = z0; z <= z1; z++) {
+          this.add(x, y, z, color);
+        }
+      }
+    }
+  }
+
+  build(options = {}) {
+    const root = new THREE.Group();
+    const geo = new THREE.BoxGeometry(this.size, this.size, this.size);
+    const map = new Map();
+
+    for (const block of this.blocks) {
+      if (!map.has(block.color)) map.set(block.color, []);
+      map.get(block.color).push(block);
+    }
+
+    const dummy = new THREE.Matrix4();
+    const roughness = options.roughness === undefined ? 0.8 : options.roughness;
+    const metalness = options.metalness === undefined ? 0.0 : options.metalness;
+    const cast = options.cast === undefined ? true : options.cast;
+    const receive = options.receive === undefined ? true : options.receive;
+
+    for (const [color, arr] of map) {
+      const mat = new THREE.MeshStandardMaterial({
+        color,
+        roughness,
+        metalness
+      });
+
+      this.materials.set(color, mat);
+
+      const mesh = new THREE.InstancedMesh(geo, mat, arr.length);
+      mesh.castShadow = cast;
+      mesh.receiveShadow = receive;
+
+      for (let i = 0; i < arr.length; i++) {
+        dummy.setPosition(arr[i].x, arr[i].y, arr[i].z);
+        mesh.setMatrixAt(i, dummy);
+      }
+
+      mesh.instanceMatrix.needsUpdate = true;
+      root.add(mesh);
+    }
+
+    return root;
+  }
+}
+
+function addBuilding(b, x0, x1, z0, z1, height, wallColor, roofColor) {
+  for (let x = x0; x <= x1; x++) {
+    for (let y = 1; y <= height; y++) {
+      for (let z = z0; z <= z1; z++) {
+        let color = wallColor;
+
+        if (z === z1) {
+          if (y === 2 && ((x - x0) % 4 === 2)) color = palette.window;
+          if (x === Math.round((x0 + x1) / 2) && y === 1) color = palette.door;
+        }
+
+        b.add(x, y, z, color);
+      }
+    }
+  }
+
+  b.addRegion(x0 - 1, x1 + 1, height + 1, height + 1, z0 - 1, z1 + 1, roofColor);
+}
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9fcde2);
+scene.fog = new THREE.Fog(0x9fcde2, 35, 170);
+
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 500);
+camera.position.set(22, 18, 32);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 4, 10);
+controls.enableDamping = true;
+controls.minDistance = 5;
+controls.maxDistance = 120;
+controls.maxPolarAngle = Math.PI * 0.49;
+controls.update();
+
+const hemi = new THREE.HemisphereLight(0xc6e5f2, 0x3a4654, 0.75);
+scene.add(hemi);
+
+const sun = new THREE.DirectionalLight(0xfff3dc, 1.1);
+sun.position.set(25, 45, 22);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+sun.shadow.camera.left = -45;
+sun.shadow.camera.right = 45;
+sun.shadow.camera.top = 45;
+sun.shadow.camera.bottom = -45;
+sun.shadow.camera.near = 1;
+sun.shadow.camera.far = 160;
+sun.shadow.bias = -0.001;
+scene.add(sun);
+
+const sunTarget = new THREE.Object3D();
+sunTarget.position.set(0, 2, 10);
+scene.add(sunTarget);
+sun.target = sunTarget;
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.22));
+
+// Harbor quay, pier, buildings, cargo
+const harbor = new VoxelBuilder(1);
+
+// Quay surface and lower stone
+harbor.addRegion(-26, 24, -1, -1, -13, 0, palette.dockStone);
+harbor.addRegion(-26, 24, 0, 0, -13, 0, palette.dockStoneTop);
+
+// Edge wall facing the sea
+harbor.addRegion(-26, 24, -1, -1, 1, 1, palette.dockEdge);
+harbor.addRegion(-26, 24, 0, 0, 1, 1, palette.dockEdge);
+
+// Pier
+harbor.addRegion(-16, -8, 0, 0, 2, 12, palette.pierWood);
+harbor.addRegion(-16, -8, -1, -1, 2, 12, palette.pierSupport);
+
+// Bollards along edge
+for (let x = -24; x <= 24; x += 6) {
+  harbor.add(x, 1, 1, palette.bollard);
+}
+
+// Harbor buildings
+addBuilding(harbor, -22, -14, -12, -6, 4, palette.warehouseWall, palette.roof);
+addBuilding(harbor, -12, -6, -12, -8, 3, palette.houseWall, palette.roofDark);
+addBuilding(harbor, 2, 8, -12, -6, 4, palette.customWall, palette.roof);
+
+// Lighthouse
+for (let y = 1; y <= 8; y++) {
+  const color = y % 2 === 1 ? palette.lighthouseWhite : palette.lighthouseRed;
+  harbor.addRegion(22, 24, y, y, -2, 0, color);
+}
+
+harbor.add(23, 9, -1, palette.lamp);
+harbor.addRegion(22, 24, 10, 10, -2, 0, palette.roofDark);
+
+const lampLight = new THREE.PointLight(0xffc46b, 0.7, 18);
+lampLight.position.set(23, 9, -1);
+scene.add(lampLight);
+
+// Cargo near customs house
+for (let x = 8; x <= 20; x += 2) {
+  for (let z = -4; z <= -1; z += 2) {
+    harbor.add(x, 1, z, palette.crate);
+    if ((x + z) % 3 === 0) harbor.add(x, 2, z, palette.crateDark);
+  }
+}
+
+// Barrels near edge
+harbor.addRegion(12, 13, 1, 2, 0, 0, palette.barrel);
+
+const harborRoot = harbor.build({ roughness: 0.85, cast: true, receive: true });
+scene.add(harborRoot);
+
+const lampMat = harbor.materials.get(palette.lamp);
+if (lampMat) {
+  lampMat.emissive = new THREE.Color(palette.lamp);
+  lampMat.emissiveIntensity = 1.2;
+}
+
+// Sea
+const water = new VoxelBuilder(1);
+
+const shipSkipX0 = -6;
+const shipSkipX1 = 6;
+const shipSkipZ0 = 4;
+const shipSkipZ1 = 28;
+
+for (let x = -28; x <= 28; x++) {
+  for (let z = 2; z <= 34; z++) {
+    if (x >= shipSkipX0 && x <= shipSkipX1 && z >= shipSkipZ0 && z <= shipSkipZ1) continue;
+
+    const color = ((x * 13 + z * 11) % 8 === 0) ? palette.seaLight : palette.sea;
+    water.add(x, -2, z, color);
+  }
+}
+
+const waterRoot = water.build({ roughness: 0.35, metalness: 0.05, cast: false, receive: true });
+scene.add(waterRoot);
+
+// Ship
+const ship = new VoxelBuilder(1);
+
+function shipHalfWidth(x) {
+  const t = Math.abs(x);
+  if (t <= 8) return 5;
+  if (t === 9) return 4;
+  if (t === 10) return 3;
+  if (t === 11) return 2;
+  if (t === 12) return 1;
+  return 0;
+}
+
+// Lower hull / keel
+for (let x = -11; x <= 11; x++) {
+  for (let z = -2; z <= 2; z++) {
+    ship.add(x, -3, z, palette.shipHullDark);
+  }
+}
+
+// Hull sides and deck
+for (let x = -12; x <= 12; x++) {
+  const w = shipHalfWidth(x);
+  if (w < 1) continue;
+
+  for (let z = -w; z <= w; z++) {
+    const edge = (z === -w || z === w);
+
+    ship.add(
+      x,
+      -2,
+      z,
+      edge ? palette.shipTrim : palette.shipHull
+    );
+
+    ship.add(
+      x,
+      -1,
+      z,
+      (edge && x % 3 === 0) ? palette.shipTrim : palette.shipHull
+    );
+
+    ship.add(x, 0, z, palette.shipDeck);
+  }
+}
+
+// Deck rail
+for (let x = -12; x <= 12; x++) {
+  const w = shipHalfWidth(x);
+  ship.add(x, 1, -w, palette.shipTrim);
+  ship.add(x, 1, w, palette.shipTrim);
+
+  if (x === -12 || x === 12) {
+    ship.add(x, 1, 0, palette.shipTrim);
+  }
+}
+
+// Stern cabin
+const masts = [-8, 0, 7];
+
+for (let x = -10; x <= -6; x++) {
+  for (let y = 1; y <= 2; y++) {
+    for (let z = -4; z <= 4; z++) {
+      if (x === -8 && z === 0) continue;
+      ship.add(x, y, z, palette.shipCabin);
+    }
+  }
+}
+
+for (let x = -10; x <= -6; x++) {
+  for (let z = -4; z <= 4; z++) {
+    if (x === -8 && z === 0) continue;
+    ship.add(x, 3, z, palette.shipTrim);
+  }
+}
+
+// Cargo on deck
+for (let x = -7; x <= 10; x += 3) {
+  const w = shipHalfWidth(x);
+
+  for (let z = -4; z <= 4; z += 3) {
+    if (Math.abs(z) > w) continue;
+    if (x >= -10 && x <= -6 && Math.abs(z) <= 4) continue; // skip cabin
+    if (z === 0 && (x === -8 || x === 0 || x === 7)) continue; // skip masts
+
+    ship.add(x, 1, z, palette.cargo);
+    if ((x + z) % 3 === 0) ship.add(x, 2, z, palette.cargoDark);
+  }
+}
+
+// Masts, yards, sails
+for (const mx of masts) {
+  for (let y = 1; y <= 8; y++) {
+    ship.add(mx, y, 0, palette.mast);
+  }
+
+  ship.add(mx, 10, 0, palette.mast);
+
+  // Yard
+  for (let x = mx - 5; x <= mx + 5; x++) {
+    ship.add(x, 9, 0, palette.shipTrim);
+  }
+
+  // Sail
+  for (let x = mx - 4; x <= mx + 4; x++) {
+    for (let y = 4; y <= 8; y++) {
+      ship.add(x, y, 1, palette.sail);
+    }
+  }
+}
+
+// Bowsprit and small forward sail
+ship.addRegion(13, 15, 2, 2, 0, 0, palette.mast);
+ship.addRegion(14, 15, 3, 4, 1, 1, palette.sail);
+
+// Stern flag
+ship.add(-9, 10, 0, palette.sail);
+
+const shipRoot = ship.build({ roughness: 0.75, cast: true, receive: true });
+
+// Ship anchored near the harbor, bow pointing toward the quay
+shipRoot.position.set(0, 0, 16);
+shipRoot.rotation.y = Math.PI / 2;
+scene.add(shipRoot);
+
+const shipBaseY = shipRoot.position.y;
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  const t = performance.now() * 0.001;
+
+  // Gentle ship motion
+  shipRoot.position.y = shipBaseY + Math.sin(t * 0.8) * 0.12;
+  shipRoot.rotation.set(
+    Math.sin(t * 0.35) * 0.015,
+    Math.PI / 2,
+    Math.sin(t * 0.25) * 0.012
+  );
+
+  // Harbor light pulse
+  const pulse = 0.8 + Math.sin(t * 2.2) * 0.55;
+  if (lampMat) lampMat.emissiveIntensity = pulse;
+  lampLight.intensity = 0.65 + pulse * 0.5;
+
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>
+```

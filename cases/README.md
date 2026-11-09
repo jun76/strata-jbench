@@ -9,4 +9,4 @@
 | 環境 | id | ケース | 見積 h | 完了 | 失敗 |
 | --- | --- | ---: | ---: | ---: | ---: |
 | [GeForce RTX 5070 · Core Ultra 5 235 · 64 GB RAM · SATA SSD](plain/rtx5070-cu5_235-64g-sata/README.md) | `rtx5070-cu5_235-64g-sata` | 1,034 | 39 | 794 | 4 |
-| [GeForce RTX 5090 · 128 GB RAM](plain/rtx5090-128g/README.md) | `rtx5090-128g` | 1,376 | 34 | 1,125 | 0 |
+| [GeForce RTX 5090 · 128 GB RAM](plain/rtx5090-128g/README.md) | `rtx5090-128g` | 1,803 | 28 | 1,218 | 0 |

@@ -13,25 +13,25 @@
 | | |
 | --- | --- |
 | GPU | NVIDIA GeForce RTX 5090 (32 GB, PCIe 5.0 x16) · driver 580.178.04 / CUDA 13.0 · 功耗上限 500 W（默认 575 W） |
-| CPU | Intel Core i7-14700 · 20 核 / 28 线程，最高 5.4 GHz · governor powersave |
+| CPU | Intel Core i7-14700 · 20 核 / 28 线程，最高 5.4 GHz · governor powersave · PL1 65 W / PL2 219 W |
 | 内存 | 128 GB（DDR5-5600 64 GB × 2，2 通道；操作系统可见 123.2 GiB） |
 | 主板 | MSI Z790 GAMING PLUS WIFI (MS-7E06) |
 | 模型存放 | Fanxiang S880E 2TB (NVMe) |
 | OS | Ubuntu 26.10 (Linux 7.3.0-10-generic) |
-| Strata | strata 0.2.10 (build 0.1.56) |
+| Strata | strata 0.2.12 (build 0.1.58) |
 
 未使用 Strata 桌面应用。用 CLI <code>strata launch --no-tui</code> 在专用端口（18600）启动引擎，由 <code>scripts/bench_runner.py</code> 直接调用其 OpenAI 兼容的 HTTP API（<code>POST /v1/chat/completions</code>，流式）进行测量。只有 Tier 2 是对同一引擎运行 Strata 自带的基准测试 <code>strata bench run --suite standard-v1</code>。
 
-环境 <code>rtx5090-128g</code> · RUN_ID 2026-11-04-q8-t3 的记录（machine.json）
+环境 <code>rtx5090-128g</code> · RUN_ID 2026-11-09-harbor 的记录（machine.json）
 
 ## 概要
 
-- 用例: 1,376
-- 正式测量请求: 4,566
-- 引擎启动: 140
-- 预估: 34 小时
+- 用例: 1,803
+- 正式测量请求: 5,973
+- 引擎启动: 168
+- 预估: 32 小时
 - 基准模型: qwen IQ3_S （env.json 的 ref，否则为 Strata 针对此 RAM + VRAM 推荐的模型）
-- 完成: 1,125
+- 完成: 1,218
 - 失败: 0
 
 
@@ -39,39 +39,46 @@
 
 | Tier | 内容 | 模型 | 用例 | 请求 | 预估 h | 完成 |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| [0](tier-0.zh.md) | 验证测量工具（基准模型 × 启动 3 次、用 Gyro-S 对照作者的数值、确认编程成果的展开） | 2 | 25 | 183 | 0.5 | 24 |
-| [1](tier-1.zh.md) | 所有模型的基础速度（decode 5 种 × temperature 3 档，prefill 4K / 32K / 128K）；支持 DFlash2 的模型的 decode 也用 DFlash2 测量 | 18 | 489 | 1,467 | 2.5 | 489 |
-| [2](tier-2.zh.md) | 官方 standard-v1（thinking xhigh，temperature 1.0），整个套件 3 次 | 18 | 270 | 810 | 3.0 | 270 |
-| [3](tier-3.zh.md) | 推理 effort none / high × 4 题，编程（帆船）仅 high（所有模型） | 18 | 162 | 486 | 8.3 | 144 |
-| [4a](tier-4a.zh.md) | 预留上下文的代价（128K / 256K / 1M 下相同的 4K 输入） | 18 | 54 | 162 | 1.4 | 54 |
-| [4b](tier-4b.zh.md) | 训练长度内的长文本（32K / 128K / 256K；基准模型、各系列最大的模型、最小的模型） | 5 | 60 | 180 | 1.8 | 48 |
-| [4c](tier-4c.zh.md) | 扩展范围的长文本（512K / 1M；基准模型、最小与最大的模型） | 3 | 24 | 72 | 10.2 | 8 |
+| [0](tier-0.zh.md) | 验证测量工具（基准模型 × 启动 3 次、用 Gyro-S 对照作者的数值、确认编程成果的展开） | 2 | 25 | 183 | 0.5 | 25 |
+| [1](tier-1.zh.md) | 所有模型的基础速度（decode 5 种 × temperature 3 档，prefill 4K / 32K / 128K）；支持 DFlash2 的模型的 decode 也用 DFlash2 测量 | 25 | 720 | 2,160 | 3.3 | 489 |
+| [2](tier-2.zh.md) | 官方 standard-v1（thinking xhigh，temperature 1.0），整个套件 3 次 | 25 | 375 | 1,125 | 4.0 | 270 |
+| [3](tier-3.zh.md) | 推理 effort none / high × 4 题，编程（帆船）仅 high（所有模型） | 25 | 220 | 660 | 7.5 | 164 |
+| [4a](tier-4a.zh.md) | 预留上下文的代价（128K / 256K / 1M 下相同的 4K 输入） | 25 | 75 | 225 | 1.8 | 54 |
+| [4b](tier-4b.zh.md) | 训练长度内的长文本（32K / 128K / 256K；基准模型、各系列最大的模型、最小的模型） | 6 | 72 | 216 | 2.0 | 48 |
+| [4c](tier-4c.zh.md) | 扩展范围的长文本（512K / 1M；基准模型、最小与最大的模型） | 3 | 24 | 72 | 7.7 | 8 |
 | [4d](tier-4d.zh.md) | YaRN 的影响（基准模型，相同输入只改设置） | 1 | 16 | 48 | 1.1 | 16 |
-| [5](tier-5.zh.md) | 每次只改一个启动选项（基准模型、最大与最小的模型；含自动 tune） | 3 | 276 | 828 | 5.0 | 72 |
+| [5](tier-5.zh.md) | 每次只改一个启动选项（基准模型、最大与最小的模型；含自动 tune） | 3 | 276 | 828 | 4.0 | 144 |
 
 
 ## 模型
 
 | family | model | GB | 类别 | 测量的版本（仓库 @ 提交，RUN_ID 的 models.json） |
 | --- | --- | ---: | --- | --- |
-| qwen | Q2_0 | 67.3 | 原始权重量化（ISTA） | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
-| qwen | IQ2_XS | 68.0 | 原始权重量化（ISTA） | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
-| qwen | IQ3_XXS | 75.8 | 原始权重量化（ISTA） | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
-| qwen | IQ3_S | 83.6 | 原始权重量化（ISTA） | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-04-iq3s-mtp](../../../published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json)) |
-| coder | IQ1_M | 58.4 | expert 减半的剪枝版 | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF @ `5348543`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF/tree/5348543e0147355ac9cbcb031184a3546350988e) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
-| gyro | Gyro-S | 58.5 | 原始权重量化（trellis） | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
-| gyro | Gyro-M | 92.0 | 原始权重量化（trellis） | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json)) |
+| qwen | Q2_0 | 67.3 | 原始权重量化（ISTA） | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
+| qwen | IQ2_XS | 68.0 | 原始权重量化（ISTA） | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
+| qwen | IQ3_XXS | 75.8 | 原始权重量化（ISTA） | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
+| qwen | IQ3_S | 83.6 | 原始权重量化（ISTA） | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-04-iq3s-mtp](../../../published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json), [2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
+| coder | IQ1_M | 58.4 | expert 减半的剪枝版 | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF @ `5348543`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF/tree/5348543e0147355ac9cbcb031184a3546350988e) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
+| gyro | Gyro-S | 58.5 | 原始权重量化（trellis） | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
+| gyro | Gyro-M | 92.0 | 原始权重量化（trellis） | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json), [2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
 | unsloth | UD-IQ4_XS (pre-v3.1) | 93.7 | 原始权重量化（Unsloth，v3.1 之前的版本） | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | unsloth | UD-Q4_K_XL (pre-v3.1) | 111.3 | 原始权重量化（Unsloth，v3.1 中未变） | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | unsloth | UD-Q5_K_XL | 158.3 | 原始权重量化（Unsloth，v3.1 中未变） | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | unsloth | UD-Q6_K_XL | 169.2 | 原始权重量化（Unsloth，v3.1 中未变） | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | unsloth | Q8_0 | 188.2 | 原始权重量化（Unsloth，v3.1 中未变），质量参照点 | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json), [2026-11-04-q8-t3](../../../published/plain/rtx5090-128g/2026-11-04-q8-t3/models.json)) |
-| swift | IQ2_XS | 69.1 | fine-tune（思考较短） | [ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `99bb8f7`](https://huggingface.co/ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/99bb8f7f95c7aa7b24a36a7786a4f657b30f5d3d) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
-| swift | IQ3_XXS | 76.0 | fine-tune（思考较短） | [ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `99bb8f7`](https://huggingface.co/ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/99bb8f7f95c7aa7b24a36a7786a4f657b30f5d3d) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
-| swift | IQ3_S | 83.7 | fine-tune（思考较短） | [ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `99bb8f7`](https://huggingface.co/ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/99bb8f7f95c7aa7b24a36a7786a4f657b30f5d3d) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
-| nvfp4 | NVFP4 | 128.0 | 原始权重量化（GPTQ） | [Maximilian228/Qwen3.8-Flash-Next-NVFP4-GPTQ-Strata @ `640a1db`](https://huggingface.co/Maximilian228/Qwen3.8-Flash-Next-NVFP4-GPTQ-Strata/tree/640a1db97446ddd5e89d2b70ecd0297987192c93) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json)) |
-| nvfp4 | NVFP4-NVIDIA | 128.0 | 原始权重量化（RTN） | [Maximilian228/Qwen3.8-Flash-Next-NVIDIA-NVFP4-Strata @ `cca8f7f`](https://huggingface.co/Maximilian228/Qwen3.8-Flash-Next-NVIDIA-NVFP4-Strata/tree/cca8f7fee5ce0af932097340a75e06df25c4e57d) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
-| nvfp4 | NVFP4-QAD | 102.3 | 针对 FP4 重新训练的版本 | [nvidia/Qwen3.8-Flash-Next-FP4-Local @ `b9ce18a`](https://huggingface.co/nvidia/Qwen3.8-Flash-Next-FP4-Local/tree/b9ce18a6887e18c089fdea8509a33e63429a3300) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
+| unsloth | UD-IQ1_M (v3.1) | 68.0 | 原始权重量化（Unsloth v3.1） | [unsloth/Qwen3.8-Flash-Next-GGUF @ `d962011`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c) ([2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
+| unsloth | UD-Q2_0 (v3.1) | 70.5 | 原始权重量化（Unsloth v3.1） | [unsloth/Qwen3.8-Flash-Next-GGUF @ `d962011`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c) ([2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
+| unsloth | UD-IQ2_XS (v3.1) | 75.8 | 原始权重量化（Unsloth v3.1） | [unsloth/Qwen3.8-Flash-Next-GGUF @ `d962011`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c) ([2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
+| unsloth | UD-Q2_K_XL (v3.1) | 79.6 | 原始权重量化（Unsloth v3.1） | [unsloth/Qwen3.8-Flash-Next-GGUF @ `d962011`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c) ([2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
+| unsloth | UD-IQ3_XXS (v3.1) | 83.6 | 原始权重量化（Unsloth v3.1） | [unsloth/Qwen3.8-Flash-Next-GGUF @ `d962011`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c) ([2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
+| unsloth | UD-Q3_K_XL (v3.1) | 89.5 | 原始权重量化（Unsloth v3.1） | [unsloth/Qwen3.8-Flash-Next-GGUF @ `d962011`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c) ([2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
+| unsloth | UD-IQ4_XS (v3.1) | 93.7 | 原始权重量化（Unsloth v3.1，UD-IQ4_XS 的新版本） | [unsloth/Qwen3.8-Flash-Next-GGUF @ `d962011`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c) ([2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
+| swift | IQ2_XS | 69.1 | fine-tune（思考较短） | [ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `99bb8f7`](https://huggingface.co/ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/99bb8f7f95c7aa7b24a36a7786a4f657b30f5d3d) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
+| swift | IQ3_XXS | 76.0 | fine-tune（思考较短） | [ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `99bb8f7`](https://huggingface.co/ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/99bb8f7f95c7aa7b24a36a7786a4f657b30f5d3d) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
+| swift | IQ3_S | 83.7 | fine-tune（思考较短） | [ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `99bb8f7`](https://huggingface.co/ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/99bb8f7f95c7aa7b24a36a7786a4f657b30f5d3d) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
+| nvfp4 | NVFP4 | 128.0 | 原始权重量化（GPTQ） | [Maximilian228/Qwen3.8-Flash-Next-NVFP4-GPTQ-Strata @ `640a1db`](https://huggingface.co/Maximilian228/Qwen3.8-Flash-Next-NVFP4-GPTQ-Strata/tree/640a1db97446ddd5e89d2b70ecd0297987192c93) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json), [2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
+| nvfp4 | NVFP4-NVIDIA | 128.0 | 原始权重量化（RTN） | [Maximilian228/Qwen3.8-Flash-Next-NVIDIA-NVFP4-Strata @ `cca8f7f`](https://huggingface.co/Maximilian228/Qwen3.8-Flash-Next-NVIDIA-NVFP4-Strata/tree/cca8f7fee5ce0af932097340a75e06df25c4e57d) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
+| nvfp4 | NVFP4-QAD | 102.3 | 针对 FP4 重新训练的版本 | [nvidia/Qwen3.8-Flash-Next-FP4-Local @ `b9ce18a`](https://huggingface.co/nvidia/Qwen3.8-Flash-Next-FP4-Local/tree/b9ce18a6887e18c089fdea8509a33e63429a3300) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
 
 
 ## 所有用例的共同条件

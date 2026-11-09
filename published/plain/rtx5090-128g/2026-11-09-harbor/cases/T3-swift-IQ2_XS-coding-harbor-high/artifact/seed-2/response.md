@@ -1,0 +1,554 @@
+```html
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Voxel Harbor: Sailing Ship Calling at Harbor</title>
+<style>
+  html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #6ea3d5;
+    font-family: system-ui, sans-serif;
+  }
+  canvas {
+    display: block;
+    touch-action: none;
+  }
+  #info {
+    position: fixed;
+    left: 12px;
+    bottom: 12px;
+    color: #fff;
+    font-size: 14px;
+    line-height: 1.4;
+    text-shadow: 0 1px 2px rgba(0,0,0,.55);
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="info">Drag to rotate · Scroll to zoom</div>
+
+<script>
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+
+let W = 0, H = 0, dpr = 1;
+
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = Math.floor(W * dpr);
+  canvas.height = Math.floor(H * dpr);
+  canvas.style.width = W + "px";
+  canvas.style.height = H + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+window.addEventListener("resize", resize);
+resize();
+
+let yaw = 0.65;
+let pitch = -0.35;
+let zoom = 18;
+
+const voxels = [];
+
+function add(x, y, z, c) {
+  voxels.push({ x, y, z, c });
+}
+
+function rnd(x, z) {
+  const t = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453;
+  return t - Math.floor(t);
+}
+
+const water      = [71, 154, 175];
+const waterLight = [113, 193, 178];
+const waterDark  = [49, 124, 149];
+const foam       = [180, 215, 214];
+
+const stone     = [147, 143, 143];
+const stoneEdge = [166, 164, 160];
+const grass     = [105, 177, 91];
+
+const wood     = [152, 113, 63];
+const woodDark = [111, 73, 42];
+const deck     = [177, 146, 90];
+
+const hull     = [130, 84, 44];
+const hullDark = [95, 58, 33];
+
+const sail     = [238, 232, 218];
+const mast     = [119, 86, 50];
+const mastDark = [88, 63, 37];
+
+const red   = [210, 66, 57];
+const white = [236, 236, 236];
+const glow  = [255, 242, 170];
+
+const crate      = [175, 138, 86];
+const crateDark  = [134, 98, 59];
+const barrel     = [153, 101, 62];
+const birdColor  = [232, 232, 226];
+
+// ----------------------------------------------------------------
+// Harbor water
+// ----------------------------------------------------------------
+for (let z = -18; z <= 16; z++) {
+  for (let x = -16; x <= 13; x++) {
+    const s = Math.sin(x * 0.7 + z * 0.45) * 0.5 + 0.5;
+    const r = rnd(x, z);
+
+    let c = water;
+    if (r < 0.07) c = foam;
+    else if (s > 0.75) c = waterLight;
+    else if (s < 0.25) c = waterDark;
+
+    add(x, 0, z, c);
+  }
+}
+
+// ----------------------------------------------------------------
+// Land / shore
+// ----------------------------------------------------------------
+for (let x = 14; x <= 20; x++) {
+  for (let z = -18; z <= 18; z++) {
+    add(x, 0, z, stone);
+    add(x, 1, z, grass);
+  }
+}
+
+// Quay wall
+for (let z = -18; z <= 6; z++) add(14, 2, z, stoneEdge);
+
+// ----------------------------------------------------------------
+// Dock
+// ----------------------------------------------------------------
+for (let z = -8; z <= 4; z += 2) {
+  for (let x = 11; x <= 13; x++) {
+    add(x, 0, z, woodDark);
+    add(x, 1, z, woodDark);
+    add(x, 2, z, x === 12 ? woodDark : wood);
+  }
+}
+
+for (let z = -8; z <= 4; z++) {
+  for (let x = 11; x <= 13; x++) {
+    add(x, 2, z, x === 12 ? woodDark : wood);
+  }
+}
+
+function crate(x, z, y) {
+  add(x, y, z, crate);
+  add(x, y + 1, z, crate);
+  add(x, y, z + 1, crateDark);
+  add(x, y + 1, z + 1, crateDark);
+  add(x + 1, y, z, crateDark);
+  add(x + 1, y + 1, z, crateDark);
+}
+
+function barrel(x, z, y) {
+  add(x, y, z, barrel);
+  add(x, y + 1, z, barrel);
+  add(x - 1, y, z, barrel);
+  add(x + 1, y, z, barrel);
+  add(x, y, z - 1, barrel);
+  add(x, y, z + 1, barrel);
+  add(x - 1, y + 1, z, barrel);
+  add(x + 1, y + 1, z, barrel);
+  add(x, y + 1, z - 1, barrel);
+  add(x, y + 1, z + 1, barrel);
+}
+
+// Cargo
+crate(12, -3, 3);
+crate(12, 1, 3);
+crate(11, -3, 3);
+
+barrel(12, 0, 3);
+
+// Bollard
+add(13, 2, 3, woodDark);
+add(13, 3, 3, woodDark);
+
+// Dock lantern
+add(13, 3, -2, woodDark);
+add(13, 4, -2, red);
+add(13, 5, -2, glow);
+add(12, 5, -2, glow);
+
+// ----------------------------------------------------------------
+// Small house on shore
+// ----------------------------------------------------------------
+for (let x = 16; x <= 18; x++) {
+  for (let z = 8; z <= 11; z++) {
+    add(x, 2, z, white);
+    add(x, 3, z, white);
+  }
+}
+add(16, 2, 11, [220, 140, 90]);
+add(16, 3, 11, [220, 140, 90]);
+
+for (let x = 15; x <= 19; x++) {
+  for (let z = 7; z <= 12; z++) {
+    add(x, 4, z, [202, 111, 85]);
+  }
+}
+
+// ----------------------------------------------------------------
+// Lighthouse
+// ----------------------------------------------------------------
+for (let x = 16; x <= 18; x++) {
+  for (let z = -16; z <= -14; z++) {
+    add(x, 2, z, stoneEdge);
+  }
+}
+
+for (let y = 2; y <= 10; y++) {
+  const c = Math.floor(y / 2) % 2 === 0 ? white : red;
+  add(17, y, -15, c);
+}
+
+add(17, 11, -15, red);
+add(17, 11, -14, glow);
+add(17, 11, -16, glow);
+add(16, 11, -15, glow);
+add(18, 11, -15, glow);
+
+add(17, 12, -15, red);
+add(16, 12, -15, red);
+add(18, 12, -15, red);
+
+// ----------------------------------------------------------------
+// Small sailboat near the shore
+// ----------------------------------------------------------------
+for (let z = 10; z <= 12; z++) {
+  for (let x = -12; x <= -10; x++) {
+    add(x, 1, z, hull);
+    add(x, 2, z, hullDark);
+  }
+}
+
+for (let y = 3; y <= 6; y++) add(-11, y, 10, mast);
+
+for (let y = 4; y <= 6; y++) {
+  for (let x = -12; x <= -10; x++) {
+    add(x, y, 10, sail);
+  }
+}
+
+// ----------------------------------------------------------------
+// Sailing ship
+// ----------------------------------------------------------------
+function addShip() {
+  // Hull
+  for (let z = -7; z <= 7; z++) {
+    for (let x = 2; x <= 6; x++) {
+      add(x, 1, z, hullDark);
+    }
+  }
+
+  for (let z = -6; z <= 6; z++) {
+    for (let x = 3; x <= 5; x++) {
+      add(x, 2, z, hull);
+    }
+    add(2, 2, z, hull);
+    add(6, 2, z, hull);
+  }
+
+  // Deck
+  for (let z = -6; z <= 6; z++) {
+    for (let x = 3; x <= 5; x++) {
+      add(x, 3, z, deck);
+    }
+  }
+
+  // Bulwark
+  for (let z = -7; z <= 7; z++) {
+    add(2, 3, z, hullDark);
+    add(6, 3, z, hullDark);
+  }
+
+  // Stern cabin
+  for (let z = -7; z <= -5; z++) {
+    for (let x = 3; x <= 5; x++) {
+      add(x, 4, z, white);
+    }
+    add(2, 4, z, hullDark);
+    add(6, 4, z, hullDark);
+  }
+
+  // Bow
+  add(4, 1, 8, hullDark);
+  add(4, 2, 8, hull);
+  add(4, 3, 8, deck);
+
+  // Bowsprit
+  for (let z = 9; z <= 12; z++) {
+    add(4, 3, z, mastDark);
+  }
+
+  // Masts
+  for (let y = 3; y <= 9; y++) add(4, y, 3, mast);
+  for (let y = 3; y <= 14; y++) add(4, y, -1, mast);
+  for (let y = 3; y <= 9; y++) add(4, y, -5, mast);
+
+  // Yards
+  for (let x = 2; x <= 6; x++) add(x, 3, 3, mastDark);
+  for (let x = 0; x <= 8; x++) add(x, 3, -1, mastDark);
+  for (let x = 2; x <= 6; x++) add(x, 3, -5, mastDark);
+
+  // Sails
+  for (let y = 4; y <= 6; y++) {
+    for (let x = 2; x <= 6; x++) add(x, y, 3, sail);
+  }
+
+  for (let y = 4; y <= 10; y++) {
+    for (let x = 0; x <= 8; x++) add(x, y, -1, sail);
+  }
+
+  for (let y = 4; y <= 7; y++) {
+    for (let x = 2; x <= 6; x++) add(x, y, -5, sail);
+  }
+
+  // Flag
+  add(4, 15, -1, red);
+  add(5, 15, -1, red);
+  add(4, 15, -2, red);
+}
+
+addShip();
+
+// Wake
+for (let z = 9; z <= 11; z++) {
+  add(4, 0, z, foam);
+  add(5, 0, z, foam);
+  add(3, 0, z, foam);
+  add(4, 0, z + 1, foam);
+  add(5, 0, z + 1, foam);
+  add(3, 0, z + 1, foam);
+}
+
+for (let z = -9; z <= -7; z++) add(4, 0, z, foam);
+
+// ----------------------------------------------------------------
+// Clouds and birds
+// ----------------------------------------------------------------
+function cloud(x, y, z) {
+  for (let i = 0; i < 4; i++) add(x + i, y, z, white);
+
+  add(x + 1, y + 1, z, white);
+  add(x + 2, y + 1, z, white);
+
+  add(x + 1, y, z + 1, white);
+  add(x + 2, y, z + 1, white);
+  add(x + 2, y, z + 2, white);
+}
+
+cloud(-13, 14, -8);
+cloud(11, 15, 12);
+cloud(2, 16, -15);
+cloud(-1, 14, 14);
+
+function bird(x, y, z) {
+  add(x, y, z, birdColor);
+  add(x + 1, y, z, birdColor);
+  add(x + 1, y + 1, z - 1, birdColor);
+  add(x - 1, y, z + 1, birdColor);
+}
+
+bird(-7, 12, 2);
+bird(9, 13, -5);
+bird(-1, 14, -10);
+
+const center = { x: 4, y: 4, z: 0 };
+
+// ----------------------------------------------------------------
+// Renderer
+// ----------------------------------------------------------------
+const facesDef = [
+  { n: [0, 1, 0],  v: [[-0.5, 0.5, -0.5], [0.5, 0.5, -0.5], [0.5, 0.5, 0.5], [-0.5, 0.5, 0.5]] },
+  { n: [0, -1, 0], v: [[-0.5, -0.5, 0.5], [0.5, -0.5, 0.5], [0.5, -0.5, -0.5], [-0.5, -0.5, -0.5]] },
+  { n: [1, 0, 0],  v: [[0.5, -0.5, 0.5], [0.5, -0.5, -0.5], [0.5, 0.5, -0.5], [0.5, 0.5, 0.5]] },
+  { n: [-1, 0, 0], v: [[-0.5, -0.5, -0.5], [-0.5, -0.5, 0.5], [-0.5, 0.5, 0.5], [-0.5, 0.5, -0.5]] },
+  { n: [0, 0, 1],  v: [[-0.5, -0.5, 0.5], [0.5, -0.5, 0.5], [0.5, 0.5, 0.5], [-0.5, 0.5, 0.5]] },
+  { n: [0, 0, -1], v: [[-0.5, -0.5, -0.5], [0.5, -0.5, -0.5], [0.5, 0.5, -0.5], [-0.5, 0.5, -0.5]] }
+];
+
+const L = (() => {
+  const a = 0.34, b = 0.42, c = -0.77;
+  const len = Math.sqrt(a * a + b * b + c * c);
+  return [a / len, b / len, c / len];
+})();
+
+function drawSky() {
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, "#6ea3d5");
+  g.addColorStop(0.55, "#d5e6f2");
+  g.addColorStop(1, "#f7f6ef");
+
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  const sx = W * 0.72;
+  const sy = H * 0.23;
+
+  const sun = ctx.createRadialGradient(sx, sy, 5, sx, sy, 170);
+  sun.addColorStop(0, "rgba(255,253,236,0.85)");
+  sun.addColorStop(0.28, "rgba(255,245,190,0.35)");
+  sun.addColorStop(1, "rgba(255,245,190,0)");
+
+  ctx.fillStyle = sun;
+  ctx.beginPath();
+  ctx.arc(sx, sy, 170, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "rgba(255,252,235,0.95)";
+  ctx.beginPath();
+  ctx.arc(sx, sy, 34, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function render() {
+  const cY = Math.cos(yaw), sY = Math.sin(yaw);
+  const cP = Math.cos(pitch), sP = Math.sin(pitch);
+
+  const transform = (x, y, z) => {
+    const x1 = x * cY - z * sY;
+    const z1 = x * sY + z * cY;
+
+    const y2 = y * cP - z1 * sP;
+    const z2 = y * sP + z1 * cP;
+
+    return { x: x1, y: y2, z: z2 };
+  };
+
+  drawSky();
+
+  const ox = W / 2;
+  const oy = H / 2;
+
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "rgba(25,18,16,0.33)";
+  ctx.lineWidth = 1;
+
+  const items = [];
+
+  for (const v of voxels) {
+    const cx = v.x + 0.5 - center.x;
+    const cy = v.y + 0.5 - center.y;
+    const cz = v.z + 0.5 - center.z;
+
+    const t = transform(cx, cy, cz);
+    items.push({ v, cx, cy, cz, depth: t.z });
+  }
+
+  items.sort((a, b) => b.depth - a.depth);
+
+  for (const it of items) {
+    const polys = [];
+
+    for (const f of facesDef) {
+      const tn = transform(f.n[0], f.n[1], f.n[2]);
+
+      // Draw only faces pointing toward the viewer
+      if (tn.z >= -0.01) continue;
+
+      const dot = Math.max(0, tn.x * L[0] + tn.y * L[1] + tn.z * L[2]);
+      const shade = 0.56 + dot * 0.44;
+
+      const r = Math.min(255, Math.floor(it.v.c[0] * shade));
+      const g = Math.min(255, Math.floor(it.v.c[1] * shade));
+      const b = Math.min(255, Math.floor(it.v.c[2] * shade));
+
+      const pts = [];
+
+      for (const vv of f.v) {
+        const p = transform(it.cx + vv[0], it.cy + vv[1], it.cz + vv[2]);
+        pts.push([p.x * zoom + ox, -p.y * zoom + oy]);
+      }
+
+      const fc = transform(
+        it.cx + f.n[0] * 0.5,
+        it.cy + f.n[1] * 0.5,
+        it.cz + f.n[2] * 0.5
+      );
+
+      polys.push({
+        depth: fc.z,
+        pts,
+        color: `rgb(${r},${g},${b})`
+      });
+    }
+
+    polys.sort((a, b) => b.depth - a.depth);
+
+    for (const p of polys) {
+      ctx.beginPath();
+      ctx.moveTo(p.pts[0][0], p.pts[0][1]);
+
+      for (let i = 1; i < p.pts.length; i++) {
+        ctx.lineTo(p.pts[i][0], p.pts[i][1]);
+      }
+
+      ctx.closePath();
+      ctx.fillStyle = p.color;
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+}
+
+// ----------------------------------------------------------------
+// Mouse controls
+// ----------------------------------------------------------------
+let dragging = false;
+let lx = 0, ly = 0;
+
+canvas.addEventListener("pointerdown", e => {
+  dragging = true;
+  lx = e.clientX;
+  ly = e.clientY;
+  canvas.setPointerCapture(e.pointerId);
+});
+
+canvas.addEventListener("pointermove", e => {
+  if (!dragging) return;
+
+  const dx = e.clientX - lx;
+  const dy = e.clientY - ly;
+  lx = e.clientX;
+  ly = e.clientY;
+
+  yaw += dx * 0.010;
+  pitch += dy * 0.010;
+
+  pitch = Math.max(-1.25, Math.min(-0.05, pitch));
+});
+
+canvas.addEventListener("pointerup", () => { dragging = false; });
+canvas.addEventListener("pointercancel", () => { dragging = false; });
+
+canvas.addEventListener("wheel", e => {
+  e.preventDefault();
+  zoom *= Math.exp(-e.deltaY * 0.0012);
+  zoom = Math.max(6, Math.min(45, zoom));
+}, { passive: false });
+
+function loop() {
+  render();
+  requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+</body>
+</html>
+```

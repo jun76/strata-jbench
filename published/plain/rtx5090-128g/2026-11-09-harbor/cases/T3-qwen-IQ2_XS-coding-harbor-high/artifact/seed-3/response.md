@@ -1,0 +1,951 @@
+```html
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3D Voxel Scene: Sailing Ship Calling at a Harbor</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #3c6d96;
+    font-family: system-ui, sans-serif;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+    touch-action: none;
+  }
+  #ui {
+    position: fixed;
+    left: 12px;
+    top: 12px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.74);
+    color: #17202a;
+    font-size: 14px;
+    line-height: 1.45;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    pointer-events: none;
+    max-width: 340px;
+  }
+  #ui strong {
+    font-size: 16px;
+    display: block;
+    margin-bottom: 4px;
+  }
+</style>
+</head>
+<body>
+  <div id="ui">
+    <strong>Sailing Ship Calling at a Harbor</strong>
+    Drag with the mouse to rotate. Scroll to zoom. Double-click to reset view.
+  </div>
+
+  <canvas id="scene"></canvas>
+
+  <script>
+  (() => {
+    const canvas = document.getElementById("scene");
+    const ui = document.getElementById("ui");
+    const gl = canvas.getContext("webgl2", { antialias: true });
+
+    if (!gl) {
+      ui.textContent = "WebGL2 is required to render this scene.";
+      return;
+    }
+
+    const vertexShaderSource = `#version 300 es
+      precision highp float;
+
+      in vec3 aVertex;
+      in vec3 aNormal;
+      in vec3 aCenter;
+      in vec3 aColor;
+      in vec3 aScale;
+
+      uniform mat4 uProjection;
+      uniform mat4 uView;
+      uniform vec3 uCameraPos;
+
+      out vec3 vColor;
+      out vec3 vNormal;
+      out float vDist;
+
+      void main() {
+        vec3 scale = abs(aScale);
+        vec3 worldPos = aCenter + aVertex * scale;
+        vec3 worldNormal = normalize(aNormal * scale);
+
+        vColor = aColor;
+        vNormal = worldNormal;
+        vDist = distance(uCameraPos, worldPos);
+
+        gl_Position = uProjection * uView * vec4(worldPos, 1.0);
+      }
+    `;
+
+    const fragmentShaderSource = `#version 300 es
+      precision highp float;
+
+      in vec3 vColor;
+      in vec3 vNormal;
+      in float vDist;
+
+      uniform vec3 uSky;
+
+      out vec4 outColor;
+
+      void main() {
+        vec3 n = normalize(vNormal);
+
+        vec3 L1 = normalize(vec3(0.45, 0.60, 0.25));
+        vec3 L2 = normalize(vec3(-0.35, 0.25, 0.45));
+
+        float d1 = max(0.0, dot(n, L1)) * 0.30;
+        float d2 = max(0.0, dot(n, L2)) * 0.15;
+
+        vec3 col = vColor * (0.76 + d1 + d2);
+
+        float fog = clamp((vDist - 55.0) / (85.0 - 55.0), 0.0, 1.0);
+        col = mix(col, uSky, fog);
+
+        outColor = vec4(col, 1.0);
+      }
+    `;
+
+    function compileShader(type, source) {
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        ui.textContent = "Shader error: " + gl.getShaderInfoLog(shader);
+        return null;
+      }
+      return shader;
+    }
+
+    function makeProgram(vs, fs) {
+      const vertexShader = compileShader(gl.VERTEX_SHADER, vs);
+      const fragmentShader = compileShader(gl.FRAGMENT_SHADER, fs);
+
+      const program = gl.createProgram();
+      gl.attachShader(program, vertexShader);
+      gl.attachShader(program, fragmentShader);
+      gl.linkProgram(program);
+
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        ui.textContent = "Program link error: " + gl.getProgramInfoLog(program);
+        return null;
+      }
+
+      return program;
+    }
+
+    const program = makeProgram(vertexShaderSource, fragmentShaderSource);
+    if (!program) return;
+
+    const attributeNames = ["aVertex", "aNormal", "aCenter", "aColor", "aScale"];
+    const uniformNames = ["uProjection", "uView", "uCameraPos", "uSky"];
+
+    const attr = {};
+    const uniforms = {};
+
+    gl.useProgram(program);
+
+    for (const name of attributeNames) {
+      attr[name] = gl.getAttribLocation(program, name);
+    }
+
+    for (const name of uniformNames) {
+      uniforms[name] = gl.getUniformLocation(program, name);
+    }
+
+    function rgb(r, g, b) {
+      return [r / 255, g / 255, b / 255];
+    }
+
+    function hash(x, z) {
+      const n = Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453);
+      return n % 1;
+    }
+
+    function pickColor(palette, x, z) {
+      return palette[Math.floor(hash(x, z) * palette.length) % palette.length];
+    }
+
+    const centers = [];
+    const colors = [];
+    const scales = [];
+
+    const waterInfo = [];
+    const shipInfo = [];
+
+    function addBlock(x, y, z, color, sx = 1, sy = 1, sz = 1) {
+      centers.push(x, y, z);
+      colors.push(color[0], color[1], color[2]);
+      scales.push(Math.abs(sx), Math.abs(sy), Math.abs(sz));
+      return centers.length / 3 - 1;
+    }
+
+    function addTopBlock(x, z, topY, color, sx = 1, sz = 1, h = 0.4) {
+      const y = topY - h / 2;
+      return addBlock(x, y, z, color, sx, h, sz);
+    }
+
+    function addAnimatedTopBlock(x, z, topY, color, sx = 1, sz = 1, h = 0.4, amp = 0.045) {
+      const y = topY - h / 2;
+      const idx = addBlock(x, y, z, color, sx, h, sz);
+      waterInfo.push({ idx, baseY: y, x, z, amp });
+      return idx;
+    }
+
+    function addAnimatedBlock(x, y, z, color, sx = 1, sy = 1, sz = 1, amp = 0.045) {
+      const idx = addBlock(x, y, z, color, sx, sy, sz);
+      waterInfo.push({ idx, baseY: y, x, z, amp });
+      return idx;
+    }
+
+    // Basic cube geometry for instanced rendering.
+    const baseVertex = new Float32Array([
+      0.5,-0.5,0.5, 0.5,-0.5,-0.5, 0.5,0.5,-0.5,
+      0.5,0.5,-0.5, 0.5,0.5,0.5, 0.5,-0.5,0.5,
+
+      -0.5,-0.5,0.5, -0.5,0.5,0.5, -0.5,0.5,-0.5,
+      -0.5,0.5,-0.5, -0.5,-0.5,-0.5, -0.5,-0.5,0.5,
+
+      -0.5,0.5,-0.5, 0.5,0.5,-0.5, 0.5,0.5,0.5,
+      0.5,0.5,0.5, -0.5,0.5,0.5, -0.5,0.5,-0.5,
+
+      -0.5,-0.5,-0.5, -0.5,-0.5,0.5, 0.5,-0.5,0.5,
+      0.5,-0.5,0.5, 0.5,-0.5,-0.5, -0.5,-0.5,-0.5,
+
+      -0.5,-0.5,0.5, -0.5,0.5,0.5, 0.5,0.5,0.5,
+      0.5,0.5,0.5, 0.5,-0.5,0.5, -0.5,-0.5,0.5,
+
+      -0.5,-0.5,-0.5, 0.5,-0.5,-0.5, 0.5,0.5,-0.5,
+      0.5,0.5,-0.5, -0.5,0.5,-0.5, -0.5,-0.5,-0.5
+    ]);
+
+    const baseNormal = new Float32Array([
+      1,0,0, 1,0,0, 1,0,0, 1,0,0, 1,0,0, 1,0,0,
+      -1,0,0, -1,0,0, -1,0,0, -1,0,0, -1,0,0, -1,0,0,
+      0,1,0, 0,1,0, 0,1,0, 0,1,0, 0,1,0, 0,1,0,
+      0,-1,0, 0,-1,0, 0,-1,0, 0,-1,0, 0,-1,0, 0,-1,0,
+      0,0,1, 0,0,1, 0,0,1, 0,0,1, 0,0,1, 0,0,1,
+      0,0,-1, 0,0,-1, 0,0,-1, 0,0,-1, 0,0,-1, 0,0,-1
+    ]);
+
+    const PALETTE_WATER_TOP = [
+      rgb(70, 128, 184),
+      rgb(58, 116, 168),
+      rgb(82, 145, 196),
+      rgb(100, 171, 215)
+    ];
+
+    const PALETTE_WATER_DEEP = [
+      rgb(31, 68, 107),
+      rgb(39, 84, 124),
+      rgb(24, 54, 90)
+    ];
+
+    const PALETTE_GRASS = [
+      rgb(94, 143, 74),
+      rgb(78, 128, 68),
+      rgb(112, 157, 86),
+      rgb(100, 150, 80)
+    ];
+
+    const PALETTE_SAND = [
+      rgb(185, 152, 112),
+      rgb(173, 145, 106),
+      rgb(165, 135, 100)
+    ];
+
+    const PALETTE_DIRT = [
+      rgb(107, 94, 76),
+      rgb(96, 84, 68),
+      rgb(113, 99, 81)
+    ];
+
+    const PALETTE_PATH = [
+      rgb(153, 137, 125),
+      rgb(137, 123, 112),
+      rgb(125, 113, 104)
+    ];
+
+    const PALETTE_WOOD = [
+      rgb(122, 83, 49),
+      rgb(105, 71, 44),
+      rgb(134, 96, 60)
+    ];
+
+    const PALETTE_DARK_WOOD = [
+      rgb(63, 45, 31),
+      rgb(71, 53, 39),
+      rgb(57, 41, 29)
+    ];
+
+    const PALETTE_BRICK = [
+      rgb(142, 80, 72),
+      rgb(131, 74, 66),
+      rgb(154, 88, 77)
+    ];
+
+    const PALETTE_GRAY = [
+      rgb(106, 106, 111),
+      rgb(124, 125, 127),
+      rgb(93, 95, 98),
+      rgb(113, 114, 117)
+    ];
+
+    const PALETTE_RED = [
+      rgb(188, 51, 59),
+      rgb(168, 45, 52),
+      rgb(204, 58, 65)
+    ];
+
+    const PALETTE_ROOF_RED = [
+      rgb(187, 46, 56),
+      rgb(171, 44, 53),
+      rgb(199, 54, 62)
+    ];
+
+    const PALETTE_ROOF_DARK = [
+      rgb(62, 66, 71),
+      rgb(76, 80, 86),
+      rgb(54, 58, 63)
+    ];
+
+    const PALETTE_ROOF_GRAY = [
+      rgb(128, 131, 134),
+      rgb(116, 119, 123),
+      rgb(140, 143, 146)
+    ];
+
+    const PALETTE_CREAM = [
+      rgb(244, 235, 218),
+      rgb(236, 228, 210),
+      rgb(248, 242, 228)
+    ];
+
+    const PALETTE_BLACK = [
+      rgb(34, 32, 33),
+      rgb(46, 44, 46),
+      rgb(25, 24, 25)
+    ];
+
+    const PALETTE_YELLOW = [
+      rgb(233, 197, 65),
+      rgb(224, 188, 66),
+      rgb(213, 174, 54)
+    ];
+
+    const PALETTE_WHITE = [
+      rgb(246, 247, 248),
+      rgb(232, 235, 238),
+      rgb(240, 244, 246)
+    ];
+
+    const PALETTE_GREEN = [
+      rgb(72, 146, 73),
+      rgb(84, 162, 82),
+      rgb(62, 128, 64)
+    ];
+
+    const skyColor = [0.42, 0.66, 0.84];
+
+    // Harbor basin.
+    const bounds = { x0: -18, x1: 22, z0: -16, z1: 24 };
+    const waterBounds = { x0: -14, x1: 8, z0: -12, z1: 16 };
+
+    for (let x = bounds.x0; x <= bounds.x1; x++) {
+      for (let z = bounds.z0; z <= bounds.z1; z++) {
+        const isWater =
+          x >= waterBounds.x0 &&
+          x <= waterBounds.x1 &&
+          z >= waterBounds.z0 &&
+          z <= waterBounds.z1;
+
+        if (isWater) {
+          addAnimatedTopBlock(
+            x,
+            z,
+            0.5,
+            pickColor(PALETTE_WATER_TOP, x, z),
+            1,
+            1,
+            0.4,
+            0.035
+          );
+
+          addAnimatedBlock(
+            x,
+            -0.2,
+            z,
+            pickColor(PALETTE_WATER_DEEP, x, z),
+            1,
+            0.6,
+            1,
+            0.035
+          );
+        } else {
+          const edge =
+            (x >= waterBounds.x1 && x <= waterBounds.x1 + 1) ||
+            (z >= waterBounds.z1 && z <= waterBounds.z1 + 1) ||
+            (z <= waterBounds.z0 && z >= waterBounds.z0 - 1);
+
+          addTopBlock(
+            x,
+            z,
+            0.5,
+            edge ? pickColor(PALETTE_SAND, x, z) : pickColor(PALETTE_GRASS, x, z),
+            1,
+            1,
+            0.35
+          );
+
+          addBlock(
+            x,
+            -0.1,
+            z,
+            pickColor(PALETTE_DIRT, x, z),
+            1,
+            0.4,
+            1
+          );
+        }
+      }
+    }
+
+    // Quay road and warehouse area.
+    for (let x = 9; x <= 17; x++) {
+      for (let z = -1; z <= 14; z++) {
+        addTopBlock(
+          x,
+          z,
+          0.7,
+          pickColor(PALETTE_PATH, x, z),
+          1,
+          1,
+          0.2
+        );
+      }
+    }
+
+    // Pier / dock.
+    for (let x = 4; x <= 8; x++) {
+      for (let z = 3; z <= 4; z++) {
+        addAnimatedTopBlock(
+          x,
+          z,
+          0.8,
+          pickColor(PALETTE_WOOD, x, z),
+          1,
+          1,
+          0.2,
+          0.025
+        );
+
+        addAnimatedBlock(
+          x,
+          0.2,
+          z,
+          pickColor(PALETTE_DARK_WOOD, x, z),
+          0.16,
+          0.45,
+          0.16,
+          0.025
+        );
+      }
+    }
+
+    // Bollards.
+    for (let x = 9; x <= 15; x++) {
+      addTopBlock(x, 3, 0.85, pickColor(PALETTE_BLACK, x, z), 0.45, 0.45, 0.15);
+      addTopBlock(x, 5, 0.85, pickColor(PALETTE_BLACK, x, z), 0.45, 0.45, 0.15);
+    }
+
+    // Warehouses / buildings.
+    function addBuilding(x0, z0, w, d, height, wallPalette, roofPalette) {
+      for (let x = x0; x < x0 + w; x++) {
+        for (let z = z0; z < z0 + d; z++) {
+          addTopBlock(
+            x,
+            z,
+            0.7 + height,
+            pickColor(wallPalette, x, z),
+            1,
+            1,
+            height
+          );
+        }
+      }
+
+      for (let x = x0; x < x0 + w; x++) {
+        for (let z = z0; z < z0 + d; z++) {
+          addTopBlock(
+            x,
+            z,
+            0.7 + height + 0.4,
+            pickColor(roofPalette, x, z),
+            1,
+            1,
+            0.4
+          );
+        }
+      }
+
+      // Door along the quay side.
+      for (let x = x0 + 1; x < x0 + w - 1; x++) {
+        addTopBlock(x, z0, 0.7 + height, rgb(43, 37, 35), 0.45, 0.5, 0.45);
+      }
+    }
+
+    addBuilding(10, 0, 5, 4, 1.4, PALETTE_BRICK, PALETTE_ROOF_RED);
+    addBuilding(16, 4, 4, 3, 1.2, PALETTE_GRAY, PALETTE_ROOF_DARK);
+    addBuilding(11, 10, 3, 3, 1.2, PALETTE_GRAY, PALETTE_ROOF_GRAY);
+
+    // Harbor flags.
+    addTopBlock(10, 1, 0.8, pickColor(PALETTE_RED, 10, 1), 0.4, 0.4, 0.16);
+    addTopBlock(13, 2, 0.8, pickColor(PALETTE_RED, 13, 2), 0.4, 0.4, 0.16);
+
+    // Cranes.
+    function addCrane(x, z) {
+      for (let i = 0; i < 6; i++) {
+        addTopBlock(
+          x,
+          z,
+          0.7 + 0.35 + i * 0.35,
+          pickColor(PALETTE_BLACK, x, z),
+          0.35,
+          0.35,
+          0.35
+        );
+      }
+
+      addTopBlock(x + 3, z, 2.5, pickColor(PALETTE_RED, x, z), 3, 0.25, 0.25);
+      addTopBlock(x + 3, z, 2.0, pickColor(PALETTE_BLACK, x, z), 0.08, 0.6, 0.08);
+      addTopBlock(x + 3, z, 1.4, pickColor(PALETTE_GRAY, x, z), 0.2, 0.2, 0.18);
+    }
+
+    addCrane(9, 2);
+    addCrane(10, 7);
+    addCrane(11, 11);
+
+    // Cargo boxes on quay.
+    function addCargo(x, z, palette) {
+      addTopBlock(x, z, 0.7, pickColor(palette, x, z), 1, 1, 0.5);
+    }
+
+    addCargo(10, 3, PALETTE_DARK_WOOD);
+    addCargo(11, 3, PALETTE_WOOD);
+    addCargo(12, 3, PALETTE_GRAY);
+    addCargo(14, 2, PALETTE_WOOD);
+    addCargo(14, 3, PALETTE_DARK_WOOD);
+
+    // Lighthouse on the harbor point.
+    function addLighthouse(cx, cz) {
+      for (let x = cx - 2; x <= cx + 2; x++) {
+        for (let z = cz - 2; z <= cz + 2; z++) {
+          addTopBlock(x, z, 1.1, pickColor(PALETTE_PATH, x, z), 1, 1, 0.4);
+        }
+      }
+
+      for (let i = 0; i < 8; i++) {
+        addTopBlock(
+          cx,
+          cz,
+          1.5 + i * 0.4,
+          pickColor(i % 2 ? PALETTE_WHITE : PALETTE_RED, cx, cz),
+          1,
+          1,
+          0.4
+        );
+      }
+
+      addTopBlock(cx, cz, 4.7, pickColor(PALETTE_YELLOW, cx, cz), 1.1, 1.1, 0.3);
+      addTopBlock(cx, cz, 5.1, pickColor(PALETTE_RED, cx, cz), 0.45, 0.45, 0.3);
+
+      for (let d = 0; d < 4; d++) {
+        addTopBlock(cx + d, cz, 5.0, pickColor(PALETTE_YELLOW, cx + d, cz), 0.45, 0.12, 0.2);
+        addTopBlock(cx, cz + d, 5.0, pickColor(PALETTE_YELLOW, cx, cz + d), 0.12, 0.45, 0.2);
+      }
+    }
+
+    addLighthouse(18, -8);
+
+    // Small boats.
+    function addSmallBoat(x, z, hullPalette) {
+      for (let i = 0; i < 4; i++) {
+        addAnimatedTopBlock(
+          x + i,
+          z + 1,
+          0.8,
+          pickColor(hullPalette, x + i, z + 1),
+          1,
+          1,
+          0.3,
+          0.025
+        );
+      }
+
+      for (let i = 0; i < 2; i++) {
+        addAnimatedTopBlock(
+          x + i,
+          z + 2,
+          0.72,
+          pickColor(hullPalette, x + i, z + 2),
+          1,
+          0.28,
+          0.28,
+          0.02
+        );
+      }
+
+      addAnimatedTopBlock(
+        x + 1,
+        z + 1,
+        1.1,
+        rgb(72, 48, 31),
+        0.15,
+        0.15,
+        0.15,
+        0.02
+      );
+
+      addAnimatedTopBlock(
+        x + 1,
+        z + 1,
+        1.5,
+        pickColor(PALETTE_WHITE, x + 1, z + 1),
+        0.6,
+        0.15,
+        0.5,
+        0.02
+      );
+    }
+
+    addSmallBoat(-10, -4, PALETTE_DARK_WOOD);
+    addSmallBoat(-12, 1, PALETTE_WOOD);
+    addSmallBoat(-7, 12, PALETTE_DARK_WOOD);
+
+    // Buoys.
+    function addBuoy(x, z, palette) {
+      addAnimatedTopBlock(x, z, 0.7, pickColor(palette, x, z), 0.5, 0.5, 0.3, 0.02);
+      addAnimatedBlock(x, 0.2, z, pickColor(PALETTE_BLACK, x, z), 0.08, 0.35, 0.08, 0.02);
+    }
+
+    addBuoy(-13, -5, PALETTE_RED);
+    addBuoy(-13, -4, PALETTE_GREEN);
+    addBuoy(7, -9, PALETTE_RED);
+
+    // Sailing ship.
+    const shipX = -4;
+    const shipZ = 4;
+
+    function shipBlock(dx, dy, dz, color, sx = 1, sy = 1, sz = 1) {
+      const idx = addBlock(shipX + dx, dy, shipZ + dz, color, sx, sy, sz);
+      shipInfo.push({ idx, baseY: dy });
+      return idx;
+    }
+
+    function hullZRange(dx) {
+      if (dx >= -13 && dx <= -2) return [-3, 3];
+      if (dx >= -1 && dx <= 0) return [-2, 2];
+      if (dx >= 1) return [-1, 1];
+      return [0, 0];
+    }
+
+    const hullDark = rgb(46, 43, 45);
+    const hullRed = rgb(174, 45, 45);
+    const deckColor = rgb(133, 91, 55);
+
+    for (let dx = -13; dx <= 2; dx++) {
+      const [z0, z1] = hullZRange(dx);
+
+      for (let dz = z0; dz <= z1; dz++) {
+        shipBlock(dx, 0.75, dz, hullDark, 1, 0.45, 1);
+        shipBlock(dx, 1.15, dz, hullRed, 1, 0.30, 1);
+        shipBlock(dx, 1.45, dz, deckColor, 1, 0.20, 1);
+      }
+    }
+
+    // Stern cabin and stern.
+    shipBlock(-11, 1.85, 0, rgb(240, 225, 205), 4, 0.75, 3.5);
+    shipBlock(-11, 1.40, 0, hullRed, 4.2, 0.45, 3.7);
+    shipBlock(-13, 1.70, 0, rgb(135, 34, 34), 0.45, 0.8, 3.4);
+
+    // Bowsprit.
+    shipBlock(4, 1.45, 0, rgb(96, 66, 47), 3, 0.15, 0.15);
+    shipBlock(3, 1.6, 0, rgb(242, 234, 216), 0.15, 0.8, 0.8);
+
+    function addMast(dx, top, mastColor) {
+      for (let y = 1.65; y <= top; y += 0.25) {
+        shipBlock(dx, y, 0, mastColor, 0.14, 0.30, 0.14);
+      }
+    }
+
+    addMast(-4, 3.7, rgb(100, 72, 54));
+    addMast(-1, 3.4, rgb(100, 72, 54));
+    addMast(-9, 3.0, rgb(100, 72, 54));
+
+    // Main sails.
+    shipBlock(-4, 2.50, 0, rgb(242, 234, 216), 0.24, 1.70, 5);
+    shipBlock(-4, 3.45, 0, rgb(242, 234, 216), 0.24, 1.00, 4);
+
+    shipBlock(-1, 2.40, 0, rgb(242, 234, 216), 0.24, 1.60, 4);
+    shipBlock(-1, 3.35, 0, rgb(242, 234, 216), 0.24, 0.90, 3);
+
+    shipBlock(-9, 2.40, 0, rgb(242, 234, 216), 0.24, 1.40, 4);
+    shipBlock(2, 2.15, 0, rgb(242, 234, 216), 0.24, 1.25, 3);
+
+    // Jibs / fore triangle sails.
+    for (let dx = 0; dx <= 2; dx += 0.25) {
+      for (let y = 1.8; y <= 3.2; y += 0.25) {
+        shipBlock(dx, y, 0, rgb(246, 238, 222), 0.14, 0.25, 0.4);
+      }
+    }
+
+    // Rigging.
+    function addShrouds(dx, top) {
+      for (let y = 1.65; y <= top - 0.4; y += 0.25) {
+        shipBlock(dx, y, -3, rgb(45, 45, 50), 0.08, 0.30, 0.08);
+        shipBlock(dx, y, 3, rgb(45, 45, 50), 0.08, 0.30, 0.08);
+      }
+    }
+
+    addShrouds(-4, 3.7);
+    addShrouds(-1, 3.4);
+    addShrouds(-9, 3.0);
+
+    // Cannons.
+    for (let dx = -12; dx <= -7; dx++) {
+      shipBlock(dx, 1.25, -3, rgb(32, 31, 33), 0.15, 0.25, 0.1);
+      shipBlock(dx, 1.25, 3, rgb(32, 31, 33), 0.15, 0.25, 0.1);
+    }
+
+    // Hatch.
+    shipBlock(-7, 1.60, 0, rgb(210, 210, 210), 1, 0.15, 0.7);
+
+    // Ship flag.
+    shipBlock(-4, 3.85, 0, rgb(230, 60, 60), 0.05, 0.32, 0.32);
+
+    // Mooring lines toward the dock.
+    addBlock(shipX + 3, 1.28, shipZ, rgb(230, 230, 230), 3, 0.05, 0.10);
+    addBlock(shipX + 10, 1.28, shipZ - 1, rgb(220, 220, 220), 5, 0.05, 0.10);
+
+    // Clouds.
+    function addCloud(x, y, z) {
+      addBlock(x, y, z, rgb(255, 252, 250), 4, 0.8, 2);
+      addBlock(x + 2, y - 0.2, z + 1, rgb(250, 248, 246), 3, 0.7, 1.8);
+      addBlock(x - 1, y + 0.1, z - 1, rgb(242, 242, 246), 2, 0.6, 1);
+    }
+
+    addCloud(-10, 8, 10);
+    addCloud(16, 9, -2);
+    addCloud(-14, 8, 3);
+
+    // Convert scene data to typed buffers.
+    const centerData = new Float32Array(centers);
+    const colorData = new Float32Array(colors);
+    const scaleData = new Float32Array(scales);
+
+    function createBuffer(data, usage) {
+      const buffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, data, usage);
+      return buffer;
+    }
+
+    const vertexBuffer = createBuffer(baseVertex, gl.STATIC_DRAW);
+    const normalBuffer = createBuffer(baseNormal, gl.STATIC_DRAW);
+
+    const centerBuffer = createBuffer(centerData, gl.DYNAMIC_DRAW);
+    const colorBuffer = createBuffer(colorData, gl.STATIC_DRAW);
+    const scaleBuffer = createBuffer(scaleData, gl.STATIC_DRAW);
+
+    function setInstancedAttribute(location, buffer, divisor) {
+      if (location < 0) return;
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.vertexAttribPointer(location, 3, gl.FLOAT, false, 0, 0);
+      gl.vertexAttribDivisor(location, divisor);
+      gl.enableVertexAttribArray(location);
+    }
+
+    setInstancedAttribute(attr.aVertex, vertexBuffer, 0);
+    setInstancedAttribute(attr.aNormal, normalBuffer, 0);
+    setInstancedAttribute(attr.aCenter, centerBuffer, 1);
+    setInstancedAttribute(attr.aColor, colorBuffer, 1);
+    setInstancedAttribute(attr.aScale, scaleBuffer, 1);
+
+    const instanceCount = centerData.length / 3;
+
+    function resize() {
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.floor(window.innerWidth * dpr));
+      canvas.height = Math.max(1, Math.floor(window.innerHeight * dpr));
+      gl.viewport(0, 0, canvas.width, canvas.height);
+    }
+
+    window.addEventListener("resize", resize);
+    resize();
+
+    function perspective(fov, aspect, near, far) {
+      const f = 1 / Math.tan(fov / 2);
+      return [
+        f / aspect, 0, 0, 0,
+        0, f, 0, 0,
+        0, 0, (far + near) / (near - far), -1,
+        0, 0, 2 * far * near / (near - far), 0
+      ];
+    }
+
+    function normalize(v) {
+      const n = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+      if (n === 0) return [0, 0, 0];
+      return [v[0] / n, v[1] / n, v[2] / n];
+    }
+
+    function cross(a, b) {
+      return [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0]
+      ];
+    }
+
+    function dot(a, b) {
+      return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    }
+
+    function lookAt(eye, target, up) {
+      const z = normalize([eye[0] - target[0], eye[1] - target[1], eye[2] - target[2]]);
+      const x = normalize(cross(up, z));
+      const y = normalize(cross(z, x));
+
+      return [
+        x[0], y[0], z[0], 0,
+        x[1], y[1], z[1], 0,
+        x[2], y[2], z[2], 0,
+        -dot(x, eye), -dot(y, eye), -dot(z, eye), 1
+      ];
+    }
+
+    const defaultTarget = [0, 3, 5];
+
+    let target = defaultTarget.slice();
+    let theta = -0.75;
+    let phi = 0.45;
+    let dist = 39;
+
+    let dragging = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    canvas.addEventListener("pointerdown", (e) => {
+      dragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+    });
+
+    window.addEventListener("pointerup", () => {
+      dragging = false;
+    });
+
+    canvas.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+
+      theta -= dx * 0.006;
+      phi = clamp(phi - dy * 0.006, -1.2, 1.2);
+
+      lastX = e.clientX;
+      lastY = e.clientY;
+    });
+
+    canvas.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const factor = e.deltaY > 0 ? 1.08 : 0.92;
+      dist = clamp(dist * factor, 10, 120);
+    }, { passive: false });
+
+    canvas.addEventListener("dblclick", () => {
+      target = defaultTarget.slice();
+      theta = -0.75;
+      phi = 0.45;
+      dist = 39;
+    });
+
+    function updateDynamicInstances(time) {
+      for (const w of waterInfo) {
+        const wave =
+          Math.sin((w.x + w.z) * 0.35 + time * 0.7) * w.amp +
+          Math.sin(w.x * 0.12 - time * 1.2) * w.amp * 0.5;
+
+        centerData[w.idx * 3 + 1] = w.baseY + wave;
+      }
+
+      const shipBob = Math.sin(time * 0.7) * 0.06;
+      for (const s of shipInfo) {
+        centerData[s.idx * 3 + 1] = s.baseY + shipBob;
+      }
+    }
+
+    gl.enable(gl.DEPTH_TEST);
+    gl.disable(gl.CULL_FACE);
+    gl.clearDepth(1.0);
+
+    function render(now) {
+      const time = now / 1000;
+
+      if (instanceCount > 0) {
+        updateDynamicInstances(time);
+
+        const camera = [
+          target[0] + dist * Math.sin(theta) * Math.cos(phi),
+          target[1] + dist * Math.sin(phi),
+          target[2] + dist * Math.cos(theta) * Math.cos(phi)
+        ];
+
+        const aspect = canvas.width / canvas.height;
+        const projection = perspective(0.75, aspect, 1, 220);
+        const view = lookAt(camera, target, [0, 1, 0]);
+
+        gl.clearColor(0.38, 0.64, 0.83, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        gl.useProgram(program);
+
+        gl.uniformMatrix4fv(uniforms.uProjection, false, projection);
+        gl.uniformMatrix4fv(uniforms.uView, false, view);
+        gl.uniform3f(uniforms.uCameraPos, camera[0], camera[1], camera[2]);
+        gl.uniform3fv(uniforms.uSky, skyColor);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, centerBuffer);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, centerData);
+
+        gl.drawArraysInstanced(gl.TRIANGLES, 0, 36, instanceCount);
+      }
+
+      requestAnimationFrame(render);
+    }
+
+    requestAnimationFrame(render);
+  })();
+  </script>
+</body>
+</html>
+```
