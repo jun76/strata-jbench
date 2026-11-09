@@ -300,11 +300,11 @@ dialog#viewer::backdrop { background: rgba(0, 0, 0, .55); }
 <div class="sample" id="x-think"></div>
 <div id="c-think"></div>
 
-<div id="games-wrap">
-<h2 id="s-games"><span class="L ja">コーディングの成果物</span><span class="L en">The coding results</span><span class="L zh">编程的成果</span></h2>
+<div id="coding-wrap">
+<h2 id="s-coding"><span class="L ja">コーディングの成果物</span><span class="L en">The coding results</span><span class="L zh">编程的成果</span></h2>
 <p class="lead"><span class="L ja">コーディングのケースの成果物を seed ごとに並べる。サムネイルを押すと、そのページを画面の中で開く（sandbox 付きの枠で動かし、このページには触れさせない。外部のライブラリは CDN から読むので、ネットワークが要る）。サムネイルは headless Chrome でページを 10 秒動かしてから撮ったもの。「描画あり」はそこに何かが描かれていたもの、「空白」はほぼ一色か輪郭がほとんどない画面（背景だけ、タイトルや読み込み中の文字だけ）、「固まった」はその後 20 秒応答しなかったもの。コンソールのエラーは、捕まえられなかった例外、console.error、読み込みの失敗の数で、エラーがあっても描画されていることはある。</span><span class="L en">The result of every coding case, per seed. Click a thumbnail to open the page here (it runs in a sandboxed frame that cannot reach this page; libraries load from CDNs, so it needs the network). Each thumbnail is taken after the page has run for 10 s in headless Chrome. "Drawn": something was drawn by then; "empty": the screen is nearly one colour or has almost no edges (a background only, a title or a loading text); "froze": the page did not answer for 20 s after that. Console errors count uncaught exceptions, console.error calls and failed loads; a page with errors may still draw.</span><span class="L zh">按 seed 排列编程用例的成果。点击缩略图即在本页内打开该页面（在带 sandbox 的框中运行，不能访问本页；外部库从 CDN 加载，需要网络）。缩略图是在 headless Chrome 中让页面运行 10 秒后截取的。“已绘制”表示此时画面上画出了内容，“空白”表示画面几乎是一种颜色或几乎没有轮廓（只有背景、标题或加载中的文字），“卡死”表示此后 20 秒没有响应。控制台错误是未捕获的异常、console.error 与加载失败的数量；有错误也可能已绘制。</span></p>
-<div class="sample" id="x-games"></div>
-<div id="c-games"></div>
+<div class="sample" id="x-coding"></div>
+<div id="c-coding"></div>
 </div>
 </section>
 
@@ -1171,16 +1171,15 @@ function sThink() {
       let ok = 0, all = 0; for (const c of cs) if (c.correct) { const [a, b] = c.correct.split('/').map(Number); ok += a; all += b; }
       if (cs.length) notes.push(`${e.k}: ${L('正答', 'correct', '正确')} ${all ? ok + '/' + all : '–'}`);
     }
-    const games = (byModel[r.key] || []).filter(c => c.step === '3' && c.effort === 'high' && CODING(c.fixture) && done(c));
-    const game = games[0];
-    return { ...r, vals, toks, game: game ? game.total_ms / 1000 : null, drawn: game && game.drawn, note: notes.join(' / '), missing: null };
+    const coding = (byModel[r.key] || []).find(c => c.step === '3' && c.effort === 'high' && CODING(c.fixture) && done(c));
+    return { ...r, vals, toks, coding: coding ? coding.total_ms / 1000 : null, drawn: coding && coding.drawn, note: notes.join(' / '), missing: null };
   });
   dots(k, data, KEYS, { fmt: fmtS, tick: fmtTick, x: L('回答が終わるまでの時間（s）', 'time until the answer is complete (s)', '回答完成所需时间（s）'), y: MODEL_AXIS(), emptyMsg: NO_RESULT('3'), aria: L('thinking の有無と回答時間', 'thinking and answer time', '有无 thinking 与回答时间') });
   const tok = v => v == null ? '–' : Math.round(v).toLocaleString();
   table(k, [MODEL(), 'none', 'high', L('出力 token none', 'output tokens, none', '输出 token none'), L('出力 token high', 'output tokens, high', '输出 token high'),
             L('コーディング（帆船、high）', 'coding (sailing ship, high)', '编程（帆船，high）'), L('正答・注', 'correct, notes', '正确・注')],
     data.map(r => [r.label, fmtS(r.vals.none), fmtS(r.vals.high), tok(r.toks.none), tok(r.toks.high),
-      fmtS(r.game) + (r.drawn ? ` · ${L('描画', 'drawn', '绘制')} ${r.drawn}` : ''), r.note || '–']), i => i >= 1 && i <= 5);
+      fmtS(r.coding) + (r.drawn ? ` · ${L('描画', 'drawn', '绘制')} ${r.drawn}` : ''), r.note || '–']), i => i >= 1 && i <= 5);
 }
 
 function divbar(k, groups, o) {
@@ -1481,10 +1480,10 @@ function sHarness() {
 
 // the coding cases: coding-harbor in plain, game-minecraft in the harness divisions
 const CODING = fx => /^(coding|game)-/.test(fx);
-const GAME_NAME = { 'coding-harbor': ['帆船の寄港', 'Sailing ship at a harbor', '帆船靠港'], 'game-minecraft': ['マイクラ', 'Minecraft', 'Minecraft'] };
+const CODING_NAME = { 'coding-harbor': ['帆船の寄港', 'Sailing ship at a harbor', '帆船靠港'], 'game-minecraft': ['マイクラ', 'Minecraft', 'Minecraft'] };
 function openViewer(c, a) {
   const d = $('viewer');
-  $('viewer-title').textContent = `${L(...(GAME_NAME[c.fixture] || [c.fixture, c.fixture, c.fixture]))} · ${c.family} ${c.model} · seed ${a.seed} · RUN_ID ${c.run_id}`;
+  $('viewer-title').textContent = `${L(...(CODING_NAME[c.fixture] || [c.fixture, c.fixture, c.fixture]))} · ${c.family} ${c.model} · seed ${a.seed} · RUN_ID ${c.run_id}`;
   const tab = $('viewer-tab'); tab.href = a.page; tab.textContent = L('新しいタブで開く（sandbox なし）', 'open in a new tab (no sandbox)', '在新标签页打开（无 sandbox）');
   const folder = $('viewer-folder'); folder.href = a.folder; folder.textContent = L('ファイル', 'files', '文件');
   const close = $('viewer-close'); close.textContent = L('閉じる', 'Close', '关闭');
@@ -1496,18 +1495,18 @@ function openViewer(c, a) {
 
 const LOOK = { drawn: () => L('描画あり', 'drawn', '已绘制'), empty: () => L('空白', 'empty', '空白'), hung: () => L('固まった', 'froze', '卡死') };
 
-function sGames() {
-  const box = $('c-games'); box.replaceChildren();
+function sCoding() {
+  const box = $('c-coding'); box.replaceChildren();
   const shown = new Set(modelsShown().map(m => m.key));
-  const games = CASES.filter(c => CODING(c.fixture) && (c.artifacts || []).length && shown.has(c.family + ' ' + c.model));
-  if (!games.length) { h('div', { class: 'empty' }, box, NO_RESULT(D.harness ? 'G' : '3')); return; }
+  const coding = CASES.filter(c => CODING(c.fixture) && (c.artifacts || []).length && shown.has(c.family + ' ' + c.model));
+  if (!coding.length) { h('div', { class: 'empty' }, box, NO_RESULT(D.harness ? 'G' : '3')); return; }
   const groups = {};
-  for (const c of games) (groups[[c.fixture, c.step, c.effort].join('|')] ||= []).push(c);
+  for (const c of coding) (groups[[c.fixture, c.step, c.effort].join('|')] ||= []).push(c);
   // the plain coding task first, then by Tier
   const rank = k => (k.startsWith('coding-') ? 0 : 1);
   for (const key of Object.keys(groups).sort((a, b) => rank(a) - rank(b) || b.localeCompare(a))) {
     const [fx, step, effort] = key.split('|');
-    h('h3', { class: 'opt-h' }, box, `${L(...(GAME_NAME[fx] || [fx, fx, fx]))} · Tier ${step} · effort ${effort}`);
+    h('h3', { class: 'opt-h' }, box, `${L(...(CODING_NAME[fx] || [fx, fx, fx]))} · Tier ${step} · effort ${effort}`);
     const g = h('div', { class: 'gallery' }, box);
     for (const c of groups[key].sort(modelOrder)) {
       const grp = h('div', { class: 'mgroup' }, g);
@@ -1544,18 +1543,18 @@ function sGames() {
   }
 }
 
-// The tabs: a harness division's page has its own tab only (with the games); plain's page has no harness tab.
+// The tabs: a harness division's page has its own tab only (with the coding results); plain's page has no harness tab.
 // Only the tab shown is drawn: the charts take their width from their box, which a hidden tab does not have.
 const TAB_DRAW = {
   overview: () => { tiles(); sCompare(); sTable(); },
   t1: () => { sDecode(); sPrefillTtft(); sTemp(); sSize(); sDrafter(); sLong(); },
-  t2: () => sStd(), t3: () => { sThink(); sGames(); }, t4a: () => sCtx(), t4bc: () => sDoc(), t4d: () => sYarn(), t5: () => sOpts(),
-  harness: () => { sHarness(); sGames(); }, env: () => sEnv(),
+  t2: () => sStd(), t3: () => { sThink(); sCoding(); }, t4a: () => sCtx(), t4bc: () => sDoc(), t4d: () => sYarn(), t5: () => sOpts(),
+  harness: () => { sHarness(); sCoding(); }, env: () => sEnv(),
 };
 const TABS = [...document.querySelectorAll('section.tab')].map(t => t.dataset.tab).filter(t => D.harness ? t === 'harness' : t !== 'harness');
 let tab = TABS[0];
 function sections() {
-  if (D.harness) $('tab-harness').append($('games-wrap'));
+  if (D.harness) $('tab-harness').append($('coding-wrap'));
   for (const t of document.querySelectorAll('section.tab')) if (!TABS.includes(t.dataset.tab)) t.remove();
   for (const b of document.querySelectorAll('nav.tabs button')) {
     if (!TABS.includes(b.dataset.tab)) { b.remove(); continue; }

@@ -178,7 +178,7 @@ SAMPLE = {
     'yarn': ('4d', ['T4d-{ref}-yarn-300K-ctx384K-yarn1.5-q-d10']),
     'opts': ('5', ['T5-{ref}-kv-q4_0-decode-prose-ja']),
     # the coding results: the reference model's coding case in whatever Tier has one (plain 3, a harness division G)
-    'games': (None, ['T3-{ref}-coding-harbor-high', 'TG-{ref}-game-minecraft-high'], ('coding-', 'game-')),
+    'coding': (None, ['T3-{ref}-coding-harbor-high', 'TG-{ref}-game-minecraft-high'], ('coding-', 'game-')),
 }
 SAMPLE_CHARS = 700          # how much of a prompt or an answer the page shows (head and tail of a longer one)
 REQUEST_KEYS = ['max_tokens', 'temperature', 'seed', 'top_p', 'top_k', 'min_p', 'presence_penalty', 'repetition_penalty',
