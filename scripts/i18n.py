@@ -293,7 +293,7 @@ SCRIPT = '''<script>
   set(start);   // now, so that scripts drawing the page see it
   document.addEventListener('DOMContentLoaded', () => {
     apply(start, false);
-    document.getElementById('lang')?.addEventListener('click', e => {
+    document.addEventListener('click', e => {   // every copy of the switch (a page may repeat it in a sticky bar)
       const lang = e.target.closest('[data-lang-btn]')?.dataset.langBtn;
       if (!lang || lang === window.LANG()) return;
       try { localStorage.setItem(KEY, lang); } catch (err) {}
@@ -313,7 +313,7 @@ SCRIPT = '''<script>
   os.addEventListener('change', show);
   document.addEventListener('DOMContentLoaded', () => {
     show();
-    document.getElementById('theme')?.addEventListener('click', e => {
+    document.addEventListener('click', e => {
       const t = e.target.closest('[data-theme-btn]')?.dataset.themeBtn;
       if (!t || t === now()) return;
       root.dataset.theme = t;
