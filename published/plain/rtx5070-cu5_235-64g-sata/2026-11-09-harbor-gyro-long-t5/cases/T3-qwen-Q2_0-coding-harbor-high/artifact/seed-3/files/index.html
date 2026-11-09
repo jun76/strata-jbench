@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Voxel Sailing Ship in Harbor</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #0b1321;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #help {
+      position: fixed;
+      left: 10px;
+      bottom: 10px;
+      color: #d6e3f0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      font-size: 12px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+  <div id="help">Drag to rotate, scroll to zoom, double-click to reset.</div>
+
+  <script>
+    const canvas = document.getElementById("scene");
+    const ctx = canvas.getContext("2d");
+
+    // Camera / view state
+    let yaw = 0.9;
+    let pitch = 0.38;
+    let zoom = 1.15;
+    let dirty = true;
+
+    const target = { x: 0, y: 6, z: 4 };
+
+    // Current camera basis vectors are updated each render
+    let fx = 0, fy = 0, fz = 0;
+
+    // Voxel scene
+    let voxels = [];
+    const occupied = new Map();
+
+    function key(x, y, z) {
+      return (x + 128) * 1000000 + (y + 128) * 10000 + (z + 128);
+    }
+
+    function addVoxel(x, y, z, color) {
+      const k = key(x, y, z);
+      const idx = occupied.get(k);
+
+      if (idx !== undefined) {
+        voxels[idx].c = color;
+      } else {
+        occupied.set(k, voxels.length);
+        voxels.push({ x, y, z, c: color, mask: 0, d: 0, sx: 0, sy: 0 });
+      }
+    }
+
+    function addBox(x0, x1, y0, y1, z0, z1, color) {
+      if (x0 > x1) {
+        const t = x0; x0 = x1; x1 = t;
+      }
+      if (y0 > y1) {
+        const t = y0; y0 = y1; y1 = t;
+      }
+      if (z0 > z1) {
+        const t = z0; z0 = z1; z1 = t;
+      }
+
+      for (let x = x0; x <= x1; x++) {
+        for (let y = y0; y <= y1; y++) {
+          for (let z = z0; z <= z1; z++) {
+            if (x === x0 || x === x1 || y === y0 || y === y1 || z === z0 || z === z1) {
+              addVoxel(x, y, z, color);
+            }
+          }
+        }
+      }
+    }
+
+  function buildScene() {
+    const water = 0x296f95;
+    const waterLight = 0x3e8bb3;
+    const waterDark = 0x1f5b7e;
+
+    const grass = 0x6a9152;
+    const dock = 0x8f5d3b;
+    const dockDark = 0x6e4026;
+    const stone = 0x9d9d9d;
+    const wall = 0xf1e2c8;
+    const roof = 0xa03a2e;
+    const hullDark = 0x493529;
+    const hullLight = 0x685440;
+    const hullStripe = 0x785f48;
+    const sail = 0xf6f9ff;
+    const mast = 0x6a5239;
+    const red = 0xc0382c;
+    const yellow = 0xffd46a;
+
+    // Ocean slab
+    addBox(-40, 39, -1, 0, -40, 39, water);
+
+    // Small water variation
+    for (let x = -40; x <= 39; x++) {
+      for (let z = -40; z <= 39; z++) {
+        if (((x + z) & 7) === 0) addVoxel(x, 0, z, waterLight);
+        if (((x - z) & 7) === 3) addVoxel(x, 0, z, waterDark);
+      }
+    }
+
+    // Harbor land / quay
+    addBox(-25, 24, 0, 2, 23, 39, grass);
+    addBox(-25, 24, 0, 4, 22, 22, stone);
+
+    // Dock pier
+    addBox(-8, 8, 0, 4, 14, 21, dockDark);
+    addBox(-8, 8, 1, 4, 14, 21, dock);
+
+    // Houses on the harbor
+    const houses = [
+      [-14, 32],
+      [-6, 32],
+      [4, 32],
+      [14, 30]
+    ];
+
+    for (const [hx, hz] of houses) {
+      addBox(hx - 2, hx + 2, 3, 5, hz - 2, hz + 2, wall);
+      addBox(hx - 2, hx + 2, 6, 6, hz - 2, hz + 2, roof);
+    }
+
+    // Lighthouse
+    addBox(20, 21, 2, 10, 35, 36, 0xe8e8e8);
+    addBox(20, 21, 4, 4, 35, 36, red);
+    addBox(20, 21, 6, 6, 35, 36, red);
+    addBox(20, 21, 8, 8, 35, 36, red);
+    addBox(20, 21, 11, 11, 35, 36, red);
+    addVoxel(20, 12, 36, yellow);
+
+    // Cargo crates near dock
+    addBox(-11, -10, 5, 6, 16, 17, 0x9c6b3c);
+    addBox(9, 10, 5, 6, 16, 17, 0x8b6035);
+
+    addShip();
+  }
+
+  function addShip() {
+    const zS = -18;
+    const zB = 8;
+
+    // Hull
+    for (let z = zS; z <= zB; z++) {
+      const t = (z - zS) / (zB - zS);
+
+      let half;
+      if (t < 0.25) {
+        half = 4 + Math.floor((t / 0.25) * 3);
+      } else if (t > 0.75) {
+        half = 4 + Math.floor(((1 - t) / 0.25) * 3);
+      } else {
+        half = 7;
+      }
+
+      let maxHeight = 4;
+      if (z > 3) maxHeight = Math.max(2, 4 - Math.floor((z - 3) / 2));
+      if (z < -15) maxHeight = 3;
+
+      for (let x = -half; x <= half; x++) {
+        for (let y = 0; y <= maxHeight; y++) {
+          let c;
+          if (y <= 2) c = hullDark;
+          else c = hullLight;
+
+          if (z % 4 === 0 && y === 2) c = hullStripe;
+
+          if (x === -half || x === half) {
+            c = (y <= 2) ? 0x3e2b20 : 0x5d4a3a;
+          }
+
+          addVoxel(x, y, z, c);
+        }
+      }
+    }
+
+    // Bow tip
+    addVoxel(0, 0, 9, 0x3e2b20);
+    addVoxel(0, 1, 9, hullLight);
+
+    // Masts and sails
+    const masts = [-14, -7, 0];
+
+    for (const mz of masts) {
+      addBox(0, 0, 5, 11, mz, mz, mast);
+
+      // Yard
+      addBox(-6, 6, 5, 5, mz - 1, mz + 1, 0x5f4731);
+
+      // Lower sail
+      addBox(-6, 6, 6, 8, mz - 1, mz + 1, sail);
+
+      // Upper sail
+      addBox(-5, 5, 9, 10, mz - 1, mz + 1, sail);
+    }
+
+    // Flag
+    addBox(1, 3, 10, 11, -14, -14, red);
+
+    // Bowsprit
+    addBox(1, 1, 5, 7, 8, 11, mast);
+  }
+
+  function computeMasks() {
+    const out = [];
+
+    for (const v of voxels) {
+      let m = 0;
+
+      if (occupied.get(key(v.x + 1, v.y, v.z)) === undefined) m |= 1;  // +x
+      if (occupied.get(key(v.x - 1, v.y, v.z)) === undefined) m |= 2;  // -x
+      if (occupied.get(key(v.x, v.y + 1, v.z)) === undefined) m |= 4;  // +y
+      if (occupied.get(key(v.x, v.y - 1, v.z)) === undefined) m |= 8;  // -y
+      if (occupied.get(key(v.x, v.y, v.z + 1)) === undefined) m |= 16; // +z
+      if (occupied.get(key(v.x, v.y, v.z - 1)) === undefined) m |= 32; // -z
+
+      v.mask = m;
+      if (m !== 0) out.push(v);
+    }
+
+    voxels = out;
+  }
+
+  function drawQuad(x1, y1, x2, y2, x3, y3, x4, y4, color, nx, ny, nz) {
+    const dot = -(nx * fx + ny * fy + nz * fz);
+    const bright = 0.55 + 0.45 * Math.max(0, dot);
+
+    const r = Math.min(255, Math.round(((color >> 16) & 255) * bright));
+    const g = Math.min(255, Math.round(((color >> 8) & 255) * bright));
+    const b = Math.min(255, Math.round((color & 255) * bright));
+
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.lineTo(x3, y3);
+    ctx.lineTo(x4, y4);
+    ctx.closePath();
+
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  function render() {
+    const w = canvas.width;
+    const h = canvas.height;
+
+    if (w <= 0 || h <= 0) return;
+
+    // Background
+    const gradient = ctx.createLinearGradient(0, 0, 0, h);
+    gradient.addColorStop(0, "#162842");
+    gradient.addColorStop(1, "#091120");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+
+    // Camera basis
+    const cy = Math.cos(yaw);
+    const sy = Math.sin(yaw);
+    const cp = Math.cos(pitch);
+    const sp = Math.sin(pitch);
+
+    // Forward direction from camera into scene
+    fx = -sy * cp;
+    fy = -sp;
+    fz = -cy * cp;
+
+    // Right and up camera vectors
+    let rx = -fz;
+    let ry = 0;
+    let rz = fx;
+
+    const rl = Math.hypot(rx, ry, rz) || 1;
+    rx /= rl;
+    ry /= rl;
+    rz /= rl;
+
+    let ux = ry * fz - rz * fy;
+    let uy = rz * fx - rx * fz;
+    let uz = rx * fy - ry * fx;
+
+    const ul = Math.hypot(ux, uy, uz) || 1;
+    ux /= ul;
+    uy /= ul;
+    uz /= ul;
+
+    const scale = Math.min(w, h) * 0.0065 * zoom;
+
+    ctx.lineWidth = Math.max(0.5, scale * 0.05);
+    ctx.strokeStyle = "rgba(4, 12, 24, 0.35)";
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+
+    const cxPix = w / 2;
+    const cyPix = h / 2;
+    const tx = target.x;
+    const ty = target.y;
+    const tz = target.z;
+
+    // Project all voxels and sort by depth
+    for (const v of voxels) {
+      const dx = v.x - tx;
+      const dy = v.y - ty;
+      const dz = v.z - tz;
+
+      v.d = dx * fx + dy * fy + dz * fz;
+      v.sx = cxPix + (dx * rx + dy * ry + dz * rz) * scale;
+      v.sy = cyPix - (dx * ux + dy * uy + dz * uz) * scale;
+    }
+
+    voxels.sort((a, b) => a.d - b.d);
+
+    const margin = scale * 1.5 + 10;
+    const half = 0.5;
+
+    for (const v of voxels) {
+      if (v.sx < -margin || v.sx > w + margin || v.sy < -margin || v.sy > h + margin) {
+        continue;
+      }
+
+      const sx = v.sx;
+      const syPix = v.sy;
+
+      const rxh = rx * half;
+      const ryp = ry * half;
+      const rzh = rz * half;
+
+      const uxh = ux * half;
+      const uyh = uy * half;
+      const uzh = uz * half;
+
+      // Eight cube corners in screen space.
+      // 0: (-, -, -)
+      // 1: (+, -, -)
+      // 2: (-, +, -)
+      // 3: (+, +, -)
+      // 4: (-, -, +)
+      // 5: (+, -, +)
+      // 6: (-, +, +)
+      // 7: (+, +, +)
+      const x0 = sx - rxh - ryp - rzh;
+      const y0 = syPix + uxh + uyh + uzh;
+
+      const x1 = sx + rxh - ryp - rzh;
+      const y1 = syPix - uxh + uyh + uzh;
+
+      const x2 = sx - rxh + ryp - rzh;
+      const y2 = syPix + uxh - uyh + uzh;
+
+      const x3 = sx + rxh + ryp - rzh;
+      const y3 = syPix - uxh - uyh + uzh;
+
+      const x4 = sx - rxh - ryp + rzh;
+      const y4 = syPix + uxh + uyh - uzh;
+
+      const x5 = sx + rxh - ryp + rzh;
+      const y5 = syPix - uxh + uyh - uzh;
+
+      const x6 = sx - rxh + ryp + rzh;
+      const y6 = syPix + uxh - uyh - uzh;
+
+      const x7 = sx + rxh + ryp + rzh;
+      const y7 = syPix - uxh - uyh - uzh;
+
+      const m = v.mask;
+
+      // Draw only exposed faces that face the camera.
+      if ((m & 1) && fx < 0) {
+        drawQuad(x1, y1, x5, y5, x7, y7, x3, y3, v.c, 1, 0, 0);
+      }
+
+      if ((m & 2) && fx > 0) {
+        drawQuad(x0, y0, x4, y4, x6, y6, x2, y2, v.c, -1, 0, 0);
+      }
+
+      if ((m & 4) && fy < 0) {
+        drawQuad(x2, y2, x6, y6, x7, y7, x3, y3, v.c, 0, 1, 0);
+      }
+
+      if ((m & 8) && fy > 0) {
+        drawQuad(x0, y0, x1, y1, x5, y5, x4, y4, v.c, 0, -1, 0);
+      }
+
+      if ((m & 16) && fz < 0) {
+        drawQuad(x4, y4, x5, y5, x7, y7, x6, y6, v.c, 0, 0, 1);
+      }
+
+      if ((m & 32) && fz > 0) {
+        drawQuad(x0, y0, x1, y1, x3, y3, x2, y2, v.c, 0, 0, -1);
+      }
+    }
+  }
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.floor(window.innerWidth * dpr);
+    canvas.height = Math.floor(window.innerHeight * dpr);
+    dirty = true;
+  }
+
+  let dragging = false;
+  let lastX = 0;
+  let lastY = 0;
+
+  canvas.addEventListener("mousedown", e => {
+    dragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    dirty = true;
+  });
+
+  window.addEventListener("mouseup", () => {
+    dragging = false;
+  });
+
+  canvas.addEventListener("mousemove", e => {
+    if (!dragging) return;
+
+    const dx = e.clientX - lastX;
+    const dy = e.clientY - lastY;
+
+    yaw += dx * 0.004;
+    pitch -= dy * 0.004;
+
+    pitch = Math.max(-1.4, Math.min(1.4, pitch));
+
+    lastX = e.clientX;
+    lastY = e.clientY;
+
+    dirty = true;
+  });
+
+  canvas.addEventListener("wheel", e => {
+    e.preventDefault();
+
+    zoom *= Math.exp(-e.deltaY * 0.001);
+    zoom = Math.max(0.25, Math.min(4, zoom));
+
+    dirty = true;
+  }, { passive: false });
+
+  canvas.addEventListener("dblclick", () => {
+    yaw = 0.9;
+    pitch = 0.38;
+    zoom = 1.15;
+    dirty = true;
+  });
+
+  window.addEventListener("resize", resize);
+
+  function loop() {
+    if (dirty) {
+      render();
+      dirty = false;
+    }
+    requestAnimationFrame(loop);
+  }
+
+  resize();
+  buildScene();
+  computeMasks();
+  render();
+  loop();
+</script>
+</body>
+</html>

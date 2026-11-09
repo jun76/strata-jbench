@@ -1,0 +1,1303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Calling at the Harbour — a voxel marine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,600;1,300&family=Karla:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root{ --brass:#d9a648; --ink:#f4ead2; --mute:#b9ab91; }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;overflow:hidden;background:#0b1418}
+  canvas{display:block}
+
+  #veil{position:fixed;inset:0;pointer-events:none;z-index:5;
+        background:radial-gradient(115% 95% at 48% 42%, transparent 52%, rgba(5,10,13,.6) 100%);}
+
+  #plate{position:fixed;left:38px;bottom:36px;z-index:6;pointer-events:none;max-width:46ch;
+         filter:drop-shadow(0 10px 26px rgba(0,0,0,.45))}
+  #plate .frame{border-top:1px solid rgba(217,166,72,.65);padding-top:14px}
+  #plate .frame::before{content:"";display:block;width:78px;height:1px;background:rgba(217,166,72,.9);margin-bottom:14px}
+  h1{font-family:'Cormorant Garamond',serif;font-weight:300;font-size:clamp(34px,4.6vw,62px);
+     line-height:.92;margin:0 0 12px;color:var(--ink);letter-spacing:.005em}
+  h1 em{font-style:italic;font-weight:600;color:var(--brass)}
+  .tag{font-family:'Karla',sans-serif;font-size:10.5px;font-weight:400;letter-spacing:.44em;
+       text-transform:uppercase;color:var(--mute)}
+  .note{margin-top:16px;font-family:'Karla',sans-serif;font-size:12.5px;font-weight:300;
+        line-height:1.6;color:#c9bba4;letter-spacing:.04em}
+
+  #coord{position:fixed;right:30px;top:28px;z-index:6;pointer-events:none;text-align:right;
+         font-family:'Karla',sans-serif;font-size:10px;letter-spacing:.3em;color:rgba(226,214,192,.55)}
+  #coord b{display:block;font-weight:400;color:rgba(217,166,72,.8);letter-spacing:.3em;margin-bottom:6px}
+
+  #keys{position:fixed;right:28px;bottom:30px;z-index:7;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;max-width:58vw}
+  #keys button{background:rgba(10,20,24,.34);border:1px solid rgba(244,234,210,.22);color:#e4d9c3;
+     font-family:'Karla',sans-serif;font-size:9.5px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;
+     padding:9px 13px;cursor:pointer;transition:transform .18s ease,border-color .18s ease,color .18s ease,background .18s ease}
+  #keys button kbd{display:inline-block;border:1px solid rgba(244,234,210,.28);border-radius:2px;
+     padding:0 4px;margin-right:8px;font-size:9px;color:var(--brass);opacity:.9}
+  #keys button:hover{transform:translateY(-2px);border-color:rgba(217,166,72,.9);color:var(--brass);background:rgba(28,24,16,.5)}
+  #keys button.on{border-color:rgba(217,166,72,.85);color:var(--brass)}
+
+  #load{position:fixed;inset:0;z-index:20;background:#0b1418;display:flex;align-items:center;justify-content:center;
+        flex-direction:column;gap:18px;transition:opacity .8s ease}
+  #load .t{font-family:'Cormorant Garamond',serif;font-weight:300;font-size:26px;color:#e7dcc4;letter-spacing:.08em}
+  #load .l{font-family:'Karla',sans-serif;font-size:9.5px;letter-spacing:.4em;text-transform:uppercase;color:#8f8674}
+  #load.gone{opacity:0;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="veil"></div>
+
+<div id="coord"><b>N&nbsp;51°14'&nbsp;·&nbsp;W&nbsp;004°23'</b>roads &nbsp;/&nbsp; deep water 9 fathoms</div>
+
+<div id="plate">
+  <div class="frame">
+    <h1>Calling <em>at the Harbour</em></h1>
+    <div class="tag">A voxel marine &nbsp;·&nbsp; the barque <i>Halcyon</i></div>
+    <p class="note">Courses still sheeted home, dress‑overall loosed to the last halyard,
+       the pilot already in her gig. She rides to her starboard bower with the flood just making.</p>
+  </div>
+</div>
+
+<div id="keys">
+  <button id="b-motion"><kbd>space</kbd>still</button>
+  <button id="b-light"><kbd>n</kbd>noon</button>
+  <button id="b-orbit" class="on"><kbd>o</kbd>orbit</button>
+  <button id="b-reset"><kbd>r</kbd>reset</button>
+</div>
+
+<div id="load"><div class="t">Halcyon</div><div class="l">rigging the scene</div></div>
+
+<script type="importmap">
+{ "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ============================================================
+   0. helpers
+============================================================ */
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const lerp=(a,b,t)=>a+(b-a)*t;
+function mulberry32(a){return function(){a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const rnd=mulberry32(0x5E11A7);
+const pick=a=>a[(rnd()*a.length)|0];
+function segDist(px,pz,a,b){
+  const vx=b[0]-a[0],vz=b[1]-a[1], wx=px-a[0],wz=pz-a[1];
+  const L=vx*vx+vz*vz; let t=L?clamp((wx*vx+wz*vz)/L,0,1):0;
+  const dx=px-(a[0]+vx*t), dz=pz-(a[1]+vz*t); return Math.hypot(dx,dz);
+}
+const GEO_BOX = new THREE.BoxGeometry(1,1,1);
+
+/* palette — low‑saturation marine, golden hour */
+const P = {
+  seaDeep:0x123a45, seaMid:0x245f6c, seaFar:0x2c7280, seaHi:0x5fada2, foam:0xe8f4ef,
+  rockD:0x474b50, rockM:0x616669, rockL:0x878b8d, weed:0x4a5c41,
+  granite:0x8e887e, graniteD:0x726d66, cobble:0x9b9288, cobbleD:0x7d766d, road:0x8b8377,
+  earth:0x5b5545, grass:0x5c7a52, grassD:0x4a6644,
+  woodD:0x563d2c, wood:0x7a5839, woodL:0xa07b4e, deck:0xa0764a, deckD:0x8c6239, trim:0x6b4a28,
+  iron:0x3a4049, gold:0xd9a648, copper:0x9c5a3a,
+  brick:0x8c5239, brickL:0xa96a49, stone:0x938d82, stoneD:0x797367,
+  plaster:0xd7c6a3, plasterW:0xe8dcc4, timber:0x5d4128,
+  slate:0x454b53, slateL:0x59616d, tile:0xa2523b, tileD:0x8a4632, copperR:0x4a7d6a,
+  glass:0xffd590, winDark:0x24262b, lamp:0xffcb80,
+  leafD:0x37563f, leaf:0x487050, leafA:0xb37a34, leafB:0x6e8845,
+  clothR:0xb13a33, clothB:0x2d5a8a, clothY:0xd8ac3f, clothG:0x3a7558, clothW:0xe9dfc7,
+  coatR:0x8e3a30, coatB:0x2f4a6c, coatG:0x47603f, coatY:0xb08a3e, coatK:0x3a3a40,
+  skin:0xd2a071, skinD:0x9c6f4c, hat:0x2f3138, sail:0xf1e7d3, sailD:0xd6cbb1,
+  hull:0x21252b, hull2:0x181c21, stripe:0xe7dbc0, bot:0x78392a, bot2:0x6a3325,
+  black:0x0d1013, mast:0x8a6339, mastD:0x64482a, brass:0xc99a4e, white:0xe9e2d3
+};
+
+/* ============================================================
+   1. renderer / scene / camera
+============================================================ */
+const renderer = new THREE.WebGLRenderer({antialias:true, powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.8));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.02;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0xd9b68d, 120, 700);
+
+const camera = new THREE.PerspectiveCamera(46, innerWidth/innerHeight, 0.6, 2400);
+camera.position.set(-310, 148, 330);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(6, 16, 4);
+controls.enableDamping = true;
+controls.dampingFactor = 0.055;
+controls.minDistance = 40;
+controls.maxDistance = 430;
+controls.maxPolarAngle = 1.49;
+controls.minPolarAngle = 0.16;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.22;
+
+/* ============================================================
+   2. voxel set
+============================================================ */
+const MATS = new Map();
+function mkMat(color, glow, flat){
+  const k = color+'|'+glow+'|'+(flat?1:0);
+  let m = MATS.get(k);
+  if(!m){
+    m = new THREE.MeshLambertMaterial({color});
+    if(glow){ m.emissive = new THREE.Color(color); m.emissiveIntensity = glow; }
+    MATS.set(k,m);
+  }
+  return m;
+}
+class VSet{
+  constructor(){ this.map = new Map(); }
+  add(color,p,s,r,opt){
+    opt = opt||{};
+    const glow = opt.glow||0, flat=!!opt.flat;
+    const k = color+'|'+glow+'|'+(flat?1:0);
+    let b=this.map.get(k); if(!b){b={color,glow,flat,items:[]};this.map.set(k,b);}
+    let mul = 1;
+    if(opt.mul!==undefined) mul=opt.mul;
+    else if(opt.jit) mul = 1 + (rnd()-0.5)*opt.jit;
+    b.items.push({p,s,r,mul});
+  }
+  commit(group, noCast){
+    const m4=new THREE.Matrix4(), e=new THREE.Euler(), q=new THREE.Quaternion(), v=new THREE.Vector3(), sc=new THREE.Vector3(), c=new THREE.Color();
+    for(const b of this.map.values()){
+      const n=b.items.length; if(!n) continue;
+      const im=new THREE.InstancedMesh(GEO_BOX, mkMat(b.color,b.glow,b.flat), n);
+      im.castShadow = !noCast && !b.flat;
+      im.receiveShadow = true;
+      for(let i=0;i<n;i++){
+        const it=b.items[i];
+        if(it.r instanceof THREE.Quaternion) m4.makeRotationQuaternion(it.r);
+        else if(it.r){ e.set(it.r[0],it.r[1],it.r[2]); m4.makeRotationFromEuler(e); }
+        else m4.identity();
+        v.set(it.p[0],it.p[1],it.p[2]); sc.set(it.s[0],it.s[1],it.s[2]);
+        m4.scale(sc); m4.setPosition(v);
+        im.setMatrixAt(i,m4);
+        c.setRGB(it.mul,it.mul,it.mul); im.setColorAt(i,c);
+      }
+      im.instanceMatrix.needsUpdate=true;
+      if(im.instanceColor) im.instanceColor.needsUpdate=true;
+      group.add(im);
+    }
+    this.map.clear();
+  }
+}
+let SET = new VSet();
+const B = (color,p,s,r,opt)=>SET.add(color,p,s,r,opt);
+function inSet(set,fn){ const prev=SET; SET=set; fn(); SET=prev; }
+
+/* a box that runs between two points */
+const ZAX = new THREE.Vector3(0,0,1);
+function beam(color,a,b,w,h,opt){
+  const dx=b[0]-a[0], dy=b[1]-a[1], dz=b[2]-a[2];
+  const L=Math.hypot(dx,dy,dz)+0.12;
+  const q=new THREE.Quaternion().setFromUnitVectors(ZAX,new THREE.Vector3(dx,dy,dz).normalize());
+  B(color,[(a[0]+b[0])/2,(a[1]+b[1])/2,(a[2]+b[2])/2],[w,h,L],q,opt);
+}
+
+/* ============================================================
+   3. light + sky
+============================================================ */
+const sun = new THREE.DirectionalLight(0xffcd92, 3.1);
+sun.position.set(-165, 66, -243);
+sun.target.position.set(34, 8, 0);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048,2048);
+{
+  const s=132;
+  sun.shadow.camera.left=-s; sun.shadow.camera.right=s;
+  sun.shadow.camera.top=s;   sun.shadow.camera.bottom=-s;
+  sun.shadow.camera.near=10; sun.shadow.camera.far=720;
+  sun.shadow.bias=-0.0009; sun.shadow.normalBias=0.42;
+}
+scene.add(sun, sun.target);
+
+const fill = new THREE.DirectionalLight(0x87a8c6, 0.55); fill.position.set(120,90,180); scene.add(fill);
+const hemi = new THREE.HemisphereLight(0x9fc0d6, 0x6d6451, 0.8); scene.add(hemi);
+const amb  = new THREE.AmbientLight(0x3b4650, 0.32); scene.add(amb);
+
+/* gradient sky with a low sun */
+const skyUni = {
+  uTop:{value:new THREE.Color(0x2e4d6e)},
+  uHor:{value:new THREE.Color(0xe4b585)},
+  uSun:{value:new THREE.Color(0xffb06a)},
+  uDir:{value:sun.position.clone().normalize()}
+};
+const sky = new THREE.Mesh(
+  new THREE.SphereGeometry(1100, 32, 20),
+  new THREE.ShaderMaterial({
+    side:THREE.BackSide, depthWrite:false, fog:false, uniforms:skyUni,
+    vertexShader:`varying vec3 vW; void main(){ vec4 w=modelMatrix*vec4(position,1.); vW=w.xyz; gl_Position=projectionMatrix*viewMatrix*w; }`,
+    fragmentShader:`
+      uniform vec3 uTop,uHor,uSun,uDir; varying vec3 vW;
+      void main(){
+        vec3 d=normalize(vW);
+        float t=pow(clamp((d.y*0.5+0.5-0.44)/0.56,0.0,1.0),0.72);
+        vec3 c=mix(uHor,uTop,t);
+        c=mix(c,uSun,pow(clamp(1.0-abs(d.y*3.1),0.0,1.0),3.2)*0.62);
+        float sd=max(dot(d,normalize(uDir)),0.0);
+        c+=uSun*pow(sd,340.0)*2.6;
+        c+=uSun*pow(sd,14.0)*0.42;
+        gl_FragColor=vec4(c,1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`
+  })
+);
+sky.renderOrder=-1; scene.add(sky);
+
+/* glow sprite texture */
+function glowTex(){
+  const c=document.createElement('canvas'); c.width=c.height=64;
+  const g=c.getContext('2d'); const rg=g.createRadialGradient(32,32,0,32,32,32);
+  rg.addColorStop(0,'rgba(255,255,255,1)'); rg.addColorStop(.28,'rgba(255,232,190,.65)');
+  rg.addColorStop(1,'rgba(255,210,150,0)');
+  g.fillStyle=rg; g.fillRect(0,0,64,64);
+  const t=new THREE.Texture(c); t.needsUpdate=true; return t;
+}
+const GTEX = glowTex();
+function halo(color,size,pos,parent){
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:GTEX,color,transparent:true,
+    blending:THREE.AdditiveBlending,depthWrite:false,opacity:.85}));
+  s.scale.set(size,size,1); s.position.set(pos[0],pos[1],pos[2]);
+  (parent||scene).add(s); return s;
+}
+halo(0xffc27a, 190, sun.position.clone().multiplyScalar(1.9).toArray());
+
+/* ============================================================
+   4. animated sea
+============================================================ */
+const GROUND=7, QUAY_X=42, LH={x:-38,z:-56}, SHIP={x:-8,z:4,rot:Math.PI/2};
+const BW1=[[42,-64],[-50,-47]], BW2=[[42,72],[-42,62]];
+
+function foamAt(x,z){
+  let f=0;
+  if(z>-118&&z<158) f=Math.max(f,1-Math.abs(x-QUAY_X)/10);
+  f=Math.max(f,1-segDist(x,z,BW1[0],BW1[1])/11);
+  f=Math.max(f,1-segDist(x,z,BW2[0],BW2[1])/10);
+  f=Math.max(f,1-(Math.hypot((x-SHIP.x)/26,(z-SHIP.z)/10)-1)/5);
+  f=Math.max(f,1-(Math.hypot(x-LH.x,z-LH.z)-12)/9);
+  return Math.pow(clamp(f,0,1),1.7);
+}
+function foamNear(x,z){ return foamAt(x,z); }
+
+const STEP=4, RN=56, NX=RN*2+1, NZ=RN*2+1;
+const WN=NX*NZ, WX=new Float32Array(WN), WZ=new Float32Array(WN), WF=new Float32Array(WN), WP=new Float32Array(WN);
+let ocean, fx=new Float32Array(NX), fz=new Float32Array(NZ), fsum=new Float32Array(NX+NZ), fdif=new Float32Array(NX+NZ);
+
+function buildOcean(){
+  /* far flat */
+  const far=new THREE.Mesh(new THREE.PlaneGeometry(2600,2600).rotateX(-Math.PI/2),
+      new THREE.MeshLambertMaterial({color:0x215a66}));
+  far.position.y=-1.1; scene.add(far);
+
+  const cells=[];
+  for(let i=0;i<NX;i++) for(let j=0;j<NZ;j++){
+    const x=-RN*STEP+i*STEP, z=-RN*STEP+j*STEP;
+    cells.push([x,z]);
+  }
+  const im=new THREE.InstancedMesh(GEO_BOX,new THREE.MeshLambertMaterial({color:0xffffff}),cells.length);
+  im.receiveShadow=true; im.frustumCulled=false; im.castShadow=false;
+
+  const m=new THREE.Matrix4(), col=new THREE.Color(), shade=[P.seaDeep,P.seaMid,P.seaMid,P.seaFar,P.seaHi];
+  const sunAz=new THREE.Vector2(sun.position.x,sun.position.z).normalize();
+  const o0=[8,10];
+  cells.forEach((c,i)=>{
+    const x=c[0],z=c[1]; WX[i]=x; WZ[i]=z;
+    const f=foamAt(x,z); WF[i]=f; WP[i]=rnd()*6.28;
+    /* sun‑glitter band */
+    const px=x-o0[0], pz=z-o0[1];
+    const along=px*sunAz.x+pz*sunAz.y;
+    const perp=Math.abs(px*sunAz.y-pz*sunAz.x);
+    const gl = along<-30 ? Math.exp(-(perp*perp)/(2*26*26)) : 0;
+    const s=shade[( (Math.abs(x*0.31+z*0.17)|0) % shade.length )];
+    col.setHex(s);
+    const k=0.86+rnd()*0.22;
+    col.multiplyScalar(k*(1-f*0.15));
+    col.lerp(new THREE.Color(P.foam), f*0.72);
+    col.lerp(new THREE.Color(0xffd9a2), gl*0.42);
+    im.setColorAt(i,col);
+    m.makeScale(STEP*1.12, 9, STEP*1.12); m.setPosition(x,-4,z);
+    im.setMatrixAt(i,m);
+  });
+  im.instanceMatrix.needsUpdate=true; im.instanceColor.needsUpdate=true;
+  ocean=im; scene.add(im);
+
+  /* distant swell — static */
+  for(let x=-420;x<=420;x+=13) for(let z=-420;z<=420;z+=13){
+    const r=Math.hypot(x,z);
+    if(r<RN*STEP-2||r>400) continue;
+    B(rnd()<0.5?P.seaMid:P.seaFar,[x+(rnd()-0.5)*4,-1.4+(rnd()-0.5)*1.6,z+(rnd()-0.5)*4],[14,7,14],null,{jit:0.14,flat:true});
+  }
+  /* flecks */
+  const FN=900;
+  const fl=new THREE.InstancedMesh(GEO_BOX,new THREE.MeshBasicMaterial({color:0xe9f5f1,transparent:true,opacity:.55,depthWrite:false}),FN);
+  fl.frustumCulled=false; fl.renderOrder=2;
+  const fdata=[];
+  for(let i=0;i<FN;i++){
+    const a=rnd()*Math.PI*2, rr=Math.sqrt(rnd())*220;
+    const x=Math.cos(a)*rr+20, z=Math.sin(a)*rr;
+    fdata.push({x,z,s:0.5+rnd()*1.6,p:rnd()*6.28,f:foamAt(x,z)});
+    fl.setColorAt(i,new THREE.Color(1,1,1));
+  }
+  fl.userData.d=fdata; scene.add(fl);
+  return fl;
+}
+let FLECKS;
+const WAVE=(x,z,t)=>{ /* lattice-friendly */ };
+
+/* ============================================================
+   5. land, quay, breakwaters
+============================================================ */
+function buildLand(){
+  /* the mass of the town */
+  B(P.graniteD,[194,-4,20],[300,20,280],null,{flat:true});
+  /* grass / fields inland */
+  for(let x=64;x<=340;x+=10) for(let z=-120;z<=158;z+=10){
+    const h=7.1+ (x>150? (rnd()*3) : 0);
+    B(rnd()<0.75?P.grass:P.grassD,[x,h,z],[10.4,1.2,10.4],null,{jit:0.16,flat:true});
+  }
+  /* waterfront cobbles */
+  for(let x=QUAY_X;x<=64;x+=2) for(let z=-112;z<=146;z+=2){
+    B(rnd()<0.6?P.cobble:P.cobbleD,[x+1,6.5,z+1],[2.05,1.05,2.05],null,{jit:0.14});
+  }
+  /* quay face */
+  for(let z=-118;z<=152;z+=2) for(let y=-4;y<7;y+=2){
+    const xn=QUAY_X+0.9, yy=y+1;
+    let c = y<=0 ? (rnd()<.4?P.weed:P.graniteD) : (rnd()<.55?P.granite:P.graniteD);
+    B(c,[xn,yy,z+1],[1.8,2.05,2.05],null,{jit:0.12});
+  }
+  /* permanent waterline foam strip */
+  for(let z=-118;z<=152;z+=3) B(P.foam,[QUAY_X-0.5,0.5,z],[1.5,1.2,2.6],null,{jit:0.1,mul:0.9});
+
+  /* timber fenders + rings + bollards */
+  for(let z=-112;z<=146;z+=9){
+    B(P.woodD,[QUAY_X-1.1,2.2,z],[1.4,9,2.4],null,{jit:0.1});
+    B(P.iron,[QUAY_X-1.6,4.4,z],[0.6,0.6,0.6]);
+  }
+  for(let z=-104;z<=140;z+=16){
+    B(P.graniteD,[QUAY_X+3.4,GROUND+0.6,z],[2.6,1.2,2.6],null,{jit:0.1});
+    B(P.iron,[QUAY_X+3.4,GROUND+1.9,z],[1.9,1.6,1.9],null,{jit:0.08});
+    B(P.iron,[QUAY_X+3.4,GROUND+2.9,z],[2.6,0.7,2.6],null,{jit:0.08});
+  }
+  /* steps down to the water */
+  for(let s=0;s<5;s++){
+    B(P.cobble,[QUAY_X-0.7+s*1.4,GROUND-1.3-s*1.35,31],[1.6,1.4,12],null,{jit:0.12});
+  }
+  /* slipway timbers */
+  for(let i=0;i<4;i++) B(P.woodD,[QUAY_X-7,0.4+i*0.05,27+i*3],[3,1,1.4],null,{jit:0.1});
+}
+
+function boulders(a,b,w,topJit){
+  const len=Math.hypot(b[0]-a[0],b[1]-a[1]);
+  const n=Math.ceil(len/2.6);
+  for(let i=0;i<=n;i++){
+    const t=i/n, x=lerp(a[0],b[0],t)+(rnd()-0.5)*2.2, z=lerp(a[1],b[1],t)+(rnd()-0.5)*2.2;
+    for(let k=0;k<3;k++){
+      const s=2.4+rnd()*3.4;
+      const y=lerp(-4,7+rnd()*topJit, k/2.4+rnd()*0.15);
+      B(rnd()<0.35?P.rockD:(rnd()<0.7?P.rockM:P.rockL),[x+(rnd()-0.5)*3.4,y,z+(rnd()-0.5)*3.4],[s,s,s],null,{jit:0.17});
+    }
+  }
+}
+function buildBreakwaters(){
+  boulders(BW1[0],BW1[1],10,6);
+  boulders(BW2[0],BW2[1],8,2);
+  /* wooden beacon at the north arm */
+  const bx=BW2[1][0]-3, bz=BW2[1][1]-2;
+  B(P.woodD,[bx,-1,bz],[3,10,3],null,{jit:0.1});
+  B(P.wood,[bx,6.4,bz],[2.2,6,2.2],null,{jit:0.1});
+  B(P.clothR,[bx,10.2,bz],[2.6,2.2,2.6],null,{jit:0.08});
+  B(P.black,[bx,11.9,bz],[3,0.7,3]);
+  halo(P.lamp,12,[bx,12.4,bz]);
+}
+
+/* ============================================================
+   6. town
+============================================================ */
+function walls(x0,x1,y0,y1,z0,z1,color,opt){
+  opt=opt||{}; const p=opt.pitch||2, jit=opt.jit??0.12;
+  for(let x=x0+p/2;x<=x1;x+=p) for(let z=z0+p/2;z<=z1;z+=p) for(let y=y0+p/2;y<=y1;y+=p){
+    if(x>x0+p/2 && x<x1-p/2 && z>z0+p/2 && z<z1-p/2) continue;
+    B(color,[x,y,z],[p,p,p],null,{jit});
+  }
+}
+function roofHip(x0,x1,z0,z1,y,rcol,rise){
+  rise=rise||1.55;
+  const p=2, cx=(x0+x1)/2, cz=(z0+z1)/2, eW=x1-x0+2.6, eD=z1-z0+2.6;
+  B(rcol,[cx,y+0.7,cz],[eW,1.4,eD],null,{jit:0.12});
+  const steps=Math.floor(Math.min(eW,eD)/(p*1.25));
+  for(let i=0;i<steps;i++){
+    const ww=eW-(i+1)*p*1.15, dd=eD-(i+1)*p*1.15;
+    if(ww<0.8||dd<0.8) break;
+    B(rcol,[cx,y+1.4+(i+1)*rise*0.75,cz],[ww,rise*1.5,dd],null,{jit:0.12});
+  }
+}
+function roofGable(x0,x1,z0,z1,y,rcol,axis){
+  axis=axis||'z';
+  const p=2, cx=(x0+x1)/2, cz=(z0+z1)/2;
+  const eaveL=(axis==='z'?(x1-x0):(z1-z0))+3.2;
+  const runL  =(axis==='z'?(z1-z0):(x1-x0))+3.2;
+  B(rcol,[cx,y+0.7,cz],[axis==='z'?eaveL:runL,1.4,axis==='z'?runL:eaveL],null,{jit:0.12});
+  const steps=Math.floor(eaveL/2/p);
+  for(let i=0;i<steps;i++){
+    const off=(i+0.5)*p, hh=y+1.4+i*1.6;
+    if(off>eaveL/2) break;
+    for(const s of [-1,1]){
+      if(axis==='z') B(rcol,[cx+s*off,hh,cz],[p*1.35,1.5,runL],null,{jit:0.12});
+      else           B(rcol,[cx,hh,cz+s*off],[runL,1.5,p*1.35],null,{jit:0.12});
+    }
+  }
+  const ry=y+1.4+steps*1.6;
+  if(axis==='z') B(P.slateL,[cx,ry,cz],[2.4,1.2,runL+1],null,{jit:0.08});
+  else           B(P.slateL,[cx,ry,cz],[runL+1,1.2,2.4],null,{jit:0.08});
+}
+function addWindows(x0,x1,y0,y1,z0,z1,faces,opt){
+  opt=opt||{}; const step=opt.step||4.6, ph=opt.ph||3.6, lit=opt.lit??0.5;
+  for(const face of faces){
+    const a0 = (face==='w'||face==='e')?z0:x0, a1=(face==='w'||face==='e')?z1:x1;
+    for(let y=y0+ph;y<=y1-2;y+=step){
+      for(let a=a0+3;a<=a1-3;a+=step){
+        if(opt.skipFront && Math.abs(a-(-16))<3) continue;
+        const on=rnd()<lit;
+        const o = on?{glow:0.9,jit:0.12}:{jit:0.2,mul:0.85};
+        const c = on?P.glass:P.winDark;
+        if(face==='w') B(c,[x0-0.3,y,a],[0.6,2.4,2],null,o);
+        if(face==='e') B(c,[x1+0.3,y,a],[0.6,2.4,2],null,o);
+        if(face==='s') B(c,[a,y,z0-0.3],[2,2.4,0.6],null,o);
+        if(face==='n') B(c,[a,y,z1+0.3],[2,2.4,0.6],null,o);
+      }
+    }
+  }
+}
+function door(x,y,z,axis,color){
+  if(axis==='x') B(color||P.woodD,[x-0.3,y,z],[0.7,3.4,2.6],null,{jit:0.1});
+  else           B(color||P.woodD,[x,y,z-0.3],[2.6,3.4,0.7],null,{jit:0.1});
+}
+function chimney(x,y,z,h,smoke,col){
+  B(col||P.brickD,[x,y+h/2,z],[2.6,h,2.6],null,{jit:0.12});
+  B(P.stoneD,[x,y+h+0.7,z],[3.4,1.3,3.4],null,{jit:0.08});
+  if(smoke) EMIT.push({x,y:y+h+1.9,z,t:rnd()*2,rate:0.55+rnd()*0.3,c:0x9aa0a2,s:1.7,r:2.4});
+}
+const EMIT=[];
+
+function buildTown(){
+  /* ── Custom House ── */
+  let b={x0:66,x1:94,z0:-38,z1:-8};
+  B(P.stoneD,[(b.x0+b.x1)/2,GROUND+1.4,(b.z0+b.z1)/2],[b.x1-b.x0+3.4,3,b.z1-b.z0+3.4],null,{jit:0.1});
+  walls(b.x0,b.x1,GROUND+2.6,26,b.z0,b.z1,P.stone,{pitch:2});
+  addWindows(b.x0,b.x1,GROUND+2.6,26,b.z0,b.z1,['w','e','s','n'],{step:4.6,lit:0.55});
+  door(65.7,GROUND+1.7,-23,'x');
+  for(const zx of [[67,-11],[93,-11],[67,-35],[93,-35]]) B(P.stoneD,[zx[0],GROUND+2.4,zx[1]],[2.6,2.6,2.6],null,{jit:0.08});
+  roofHip(b.x0,b.x1,b.z0,b.z1,26,P.slate);
+  roofHip(b.x0,b.x1,b.z0,b.z1,26,P.copperR,1.3);
+  B(P.gold,[65.4,22.5,-23],[0.8,3.2,1.6],null,{glow:0.25});
+  chimney(70,26,-12,5,true); chimney(90,26,-34,5,true);
+
+  /* ── tavern: The Gull & Anchor ── */
+  b={x0:66,x1:84,z0:-4,z1:14};
+  walls(b.x0,b.x1,GROUND+1.4,19,b.z0,b.z1,P.brick,{pitch:2});
+  addWindows(b.x0,b.x1,GROUND+1.4,19,b.z0,b.z1,['w','e','n'],{step:4.2,lit:0.78});
+  door(65.7,GROUND+1.7,5,'x',P.wood);
+  roofGable(b.x0,b.x1,b.z0,b.z1,19,P.tile,'z');
+  chimney(80,19,12,5,true,P.brickL);
+  /* hanging sign */
+  beam(P.iron,[65,21,9],[60.5,21,9],[0.5,0.5,0.5]);
+  const sign=new THREE.Group(); sign.position.set(60.3,21,9); scene.add(sign);
+  inSet(SET,[0,0,0].length&&0); // no-op keeps SET stable
+  inSet(sign,new THREE.Vectors?0:0);
+  B(P.timber,[0,-1.6,0],[0.4,3.2,2.6],null,{jit:0.1});
+  const signSet=SET; // blocks above went to global SET; rebuild into group properly
+  function resetSet(){ SET=new VSet(); }
+  /* (sign board is added as its own small set below) */
+  resetSet();
+  SET.add(P.clothY,[0,-1.7,0],[0.5,3.0,3.4],null,{jit:0.08});
+  SET.add(P.clothR,[0,-1.7,1.2],[0.7,0.7,0.9],null,{jit:0.05});
+  SET.add(P.clothB,[0,-2.6,0],[0.7,0.7,0.9],null,{jit:0.05});
+  SET.commit(sign); dyn.sign={g:sign,ph:0};
+
+  /* ── Harbour Office + clock tower ── */
+  b={x0:66,x1:88,z0:20,z1:40};
+  walls(b.x0,b.x1,GROUND+1.4,24,b.z0,b.z1,P.plaster,{pitch:2});
+  addWindows(b.x0,b.x1,GROUND+1.4,24,b.z0,b.z1,['w','e','s','n'],{step:4.4,lit:0.5});
+  for(let z=b.z0;z<=b.z1;z+=2) B(P.timber,[65.7,GROUND+10,z],[0.7,1.6,2.05],null,{jit:0.1});
+  roofHip(b.x0,b.x1,b.z0,b.z1,24,P.tile,1.3);
+  /* tower */
+  walls(70,80,24,44,26,36,P.plasterW,{pitch:2});
+  roofHip(69,81,25,37,44,P.copperR,1.5);
+  /* clock face, facing the sea */
+  B(P.black,[69.4,38,31],[0.8,6,6]);
+  B(P.glass,[69.0,38,31],[0.5,5.2,5.2],null,{glow:0.8});
+  const clock=new THREE.Group(); clock.position.set(68.6,38,31); scene.add(clock);
+  const hMin=new THREE.Mesh(GEO_BOX,mkMat(P.black,0,false)); hMin.scale.set(0.5,4.4,0.5); hMin.position.y=2.0;
+  const hHr =new THREE.Mesh(GEO_BOX,mkMat(P.black,0,false)); hHr.scale.set(0.5,3.0,0.5); hHr.position.y=1.4; hHr.rotation.z=0.7;
+  const hgrp=new THREE.Group(); hgrp.add(hMin); const hg2=new THREE.Group(); hg2.add(hHr);
+  clock.add(hgrp,hg2); dyn.hands={m:hgrp,h:hg2};
+  halo(0xffd79a,16,[68.2,38,31]);
+  chimney(86,24,38,4,false);
+
+  /* ── Great Warehouse ── */
+  b={x0:66,x1:98,z0:46,z1:82};
+  walls(b.x0,b.x1,GROUND+1.4,36,b.z0,b.z1,P.stoneD,{pitch:2});
+  addWindows(b.x0,b.x1,GROUND+1.4,36,b.z0,b.z1,['w','e','s','n'],{step:6,lit:0.22});
+  for(const zz of [54,64,74]){ B(P.woodD,[65.4,GROUND+6,zz],[0.9,4,4.4],null,{jit:0.1}); B(P.wood,[65.0,GROUND+4.4,zz],[1.2,1,5],null,{jit:0.1}); }
+  roofGable(b.x0,b.x1,b.z0,b.z1,36,P.slate,'z');
+  /* loading crane arm */
+  beam(P.woodD,[65,26,58],[60,23,58],[1.2,1.2,1.2]);
+  beam(P.woodD,[65,26,58],[65,29,58],[0.9,0.9,0.9]);
+  const load=new THREE.Group(); load.position.set(60,23,58); scene.add(load);
+  SET=new VSet();
+  SET.add(P.iron,[0,-4.5,0],[0.35,9,0.35]);
+  SET.add(P.wood,[0,-7.2,0],[3,2.6,3],null,{jit:0.14});
+  SET.commit(load); dyn.load={g:load};
+
+  /* ── Sail loft (timber) ── */
+  b={x0:98,x1:116,z0:-42,z1:-26};
+  walls(b.x0,b.x1,GROUND+1.4,19,b.z0,b.z1,P.woodD,{pitch:2});
+  for(let x=b.x0;x<=b.x1;x+=2) B(P.wood,[x,GROUND+7,-42.6],[1.9,12,0.8],null,{jit:0.12});
+  addWindows(b.x0,b.x1,GROUND+1.4,19,b.z0,b.z1,['s','e','n'],{step:5,lit:0.3});
+  door(107,GROUND+1.7,-42.6,'z',P.wood);
+  roofGable(b.x0,b.x1,b.z0,b.z1,19,P.slateL,'x');
+  chimney(114,19,-30,4,true);
+  /* coils of rope outside */
+  for(let i=0;i<3;i++) for(let a=0;a<8;a++){
+    const r=1.6+ (a%2)*0.4;
+    B(P.clothW,[95+Math.cos(a/8*6.28)*r, GROUND+0.5+i*0.8, -20+Math.sin(a/8*6.28)*r],[1.1,0.75,1.1],null,{jit:0.12});
+  }
+
+  /* ── terraced cottages along the waterfront ── */
+  const cott=[[94,112,22,38],[94,112,42,58],[94,112,62,78],[94,112,82,96]];
+  cott.forEach((c,i)=>{
+    const y1=14+((i*3)%6)+4;
+    walls(c[0],c[1],GROUND+1.4,y1,c[2],c[3],i%2?P.plasterW:P.brickL,{pitch:2});
+    addWindows(c[0],c[1],GROUND+1.4,y1,c[2],c[3],['w','n','s'],{step:4.2,lit:0.62});
+    for(let z=c[2];z<=c[3];z+=2) B(P.timber,[93.7,GROUND+9,z],[0.7,1.4,2.05],null,{jit:0.12});
+    door(93.7,GROUND+1.7,c[2]+5,'x',P.wood);
+    roofGable(c[0],c[1],c[2],c[3],y1,i%2?P.tileD:P.slate,'z');
+    chimney(c[0]+3,y1,c[2]+2,4,i%2===0);
+  });
+
+  /* ── inland cluster ── */
+  for(let i=0;i<7;i++){
+    const x=126+rnd()*34, z=-64+rnd()*120;
+    const w=10+rnd()*10, d=10+rnd()*10, y1=GROUND+8+rnd()*7;
+    walls(x-w/2,x+w/2,GROUND+1.4,y1,z-d/2,z+d/2,pick([P.plaster,P.brick,P.stone,P.plasterW]),{pitch:2});
+    roofHip(x-w/2,x+w/2,z-d/2,z+d/2,y1,pick([P.tile,P.slate,P.tileD]));
+    addWindows(x-w/2,x+w/2,GROUND+1.4,y1,z-d/2,z+d/2,['w','e','s','n'],{step:4.2,lit:0.4});
+    chimney(x,y1,z,3,rnd()<0.5);
+    tree(x+w/2+3,GROUND+1,z+d/2+2);
+  }
+
+  /* ── church on the rise ── */
+  const ch={x0:96,x1:122,z0:-92,z1:-62};
+  walls(ch.x0,ch.x1,GROUND+1.4,26,ch.z0,ch.z1,P.stone,{pitch:2});
+  roofGable(ch.x0,ch.x1,ch.z0,ch.z1,26,P.slate,'x');
+  walls(92,106,GROUND+1.4,44,-72,-58,P.stoneD,{pitch:2});
+  roofHip(91,107,-73,-57,44,P.copperR,1.6);
+  B(P.glass,[91.4,36,-65],[0.6,5,5],null,{glow:0.7});
+  B(P.glass,[106.6,36,-65],[0.6,5,5],null,{glow:0.7});
+  B(P.gold,[99,47,-65],[1.2,3,1.2]);
+  for(let a=0;a<6;a++) B(P.glass,[109,34+a*0,-68],[0.5,3.5,2.6],null,{glow:0.5});
+  addWindows(ch.x0,ch.x1,GROUND+1.4,26,ch.z0,ch.z1,['w','e'],{step:4.4,lit:0.2});
+
+  /* hillock + windmill */
+  for(let r=26;r>0;r-=2){
+    const y=GROUND+1+((26-r)/26)*17;
+    for(let a=0;a<6.3;a+=0.26){
+      const x=132+Math.cos(a)*r*1.15, z=-110+Math.sin(a)*r;
+      B(r>20?P.grass:(rnd()<0.6?P.grassD:P.earth),[x,y,z],[6,6,6],null,{jit:0.16,flat:true});
+    }
+  }
+  windmill(132, GROUND+16, -110);
+}
+
+function windmill(x,y,z){
+  for(let i=0;i<10;i++){
+    const r=6.6-i*0.35, yy=y+i*2.6;
+    for(let a=0;a<6.28;a+=0.24){
+      B(i%2?P.plasterW:P.stone,[x+Math.cos(a)*r,yy,z+Math.sin(a)*r],[2.4,2.7,2.4],null,{jit:0.1});
+    }
+  }
+  B(P.woodD,[x,y+28,z],[7,3,7],null,{jit:0.1});
+  B(P.wood,[x,y+30.5,z-3.2],[6,3,3],null,{jit:0.1});
+  const g=new THREE.Group(); g.position.set(x,y+30,z-5.2); scene.add(g);
+  for(let b=0;b<4;b++){
+    const arm=new THREE.Group(); arm.rotation.z=b*Math.PI/2; g.add(arm);
+    SET=new VSet();
+    SET.add(P.woodD,[0,7,0],[0.7,13,0.7],null,{jit:0.1});
+    SET.add(P.clothW,[1.6,9,0],[3.2,10,0.5],null,{jit:0.06});
+    SET.commit(arm);
+  }
+  dyn.mill=g;
+  halo(0xffcf8a,10,[x,y+30,z-5.6]);
+}
+
+/* quay furniture, people, trees */
+function lamp(x,y,z,on=true){
+  B(P.iron,[x,y+4,z],[0.7,8,0.7],null,{jit:0.1});
+  B(P.iron,[x,y+8.1,z],[2.6,0.7,0.7]);
+  B(P.iron,[x,y+9,z],[0.6,1.6,0.6]);
+  B(on?P.lamp:P.winDark,[x,y+10.2,z],[1.5,1.6,1.5],on?{glow:0.95}:{jit:0.2});
+  B(P.iron,[x,y+11.2,z],[1.9,0.6,1.9]);
+  if(on) halo(0xffc67a,16,[x,y+10.2,z]);
+}
+function crate(x,y,z,s,col){ B(col||P.wood,[x,y+s/2,z],[s,s,s],null,{jit:0.15}); B(col||P.woodD,[x,y+s/2,z+s*0.42],[s*1.02,s*0.24,s*0.2],null,{jit:0.1}); }
+function barrel(x,y,z){
+  B(P.wood,[x,y+1.4,z],[2.2,2.8,2.2],null,{jit:0.12});
+  B(P.iron,[x,y+0.7,z],[2.5,0.5,2.5]); B(P.iron,[x,y+2.1,z],[2.5,0.5,2.5]);
+}
+function sack(x,y,z){ B(rnd()<0.5?P.clothW:P.clothY,[x,y+0.9,z],[2,1.8,1.4],null,{jit:0.14}); }
+
+function tree(x,y,z){
+  B(P.woodD,[x,y+3,z],[1.1,6,1.1],null,{jit:0.1});
+  const col=pick([P.leaf,P.leafD,P.leafA,P.leafB]);
+  for(let i=0;i<4;i++){
+    const s=2.6+rnd()*3.2;
+    B(col,[x+(rnd()-0.5)*5,y+7+rnd()*3,z+(rnd()-0.5)*5],[s,s,s],null,{jit:0.2});
+  }
+}
+function person(x,y,z,o){
+  o=o||{};
+  const coat=o.coat||pick([P.coatR,P.coatB,P.coatG,P.coatY,P.coatK,P.clothB]);
+  const tr=o.tr||P.coatK, sk=rnd()<0.7?P.skin:P.skinD;
+  const ry=(o.face!==undefined?o.face:(rnd()-0.5)*1.4);
+  const q=new THREE.Quaternion().setFromEuler(new THREE.Euler(0,ry,0));
+  B(tr,[x,y+0.45,z],[0.62,0.9,0.42],q,{jit:0.1});
+  B(coat,[x,y+1.62,z],[1.0,1.5,0.62],q,{jit:0.1});
+  B(sk,[x,y+2.55,z],[0.62,0.62,0.62],q,{jit:0.06});
+  if(o.hat==='cap') B(P.woodD,[x,y+2.92,z],[0.85,0.28,0.9],q);
+  else if(o.hat==='brolly'){ B(P.clothB,[x,y+2.95,z],[2.6,0.3,2.6],null,{jit:0.06}); B(P.woodD,[x,y+1.8,z],[0.2,2.4,0.2]); }
+  else B(P.hat,[x,y+2.92,z],[0.8,0.3,0.8],q);
+  if(o.wave){
+    const g=new THREE.Group(); g.position.set(x+0.5*Math.cos(ry),y+2.15,z-0.5*Math.sin(ry)); scene.add(g);
+    SET=new VSet();
+    const gg=new THREE.BoxGeometry(0.3,1.1,0.3); gg.translate(0,-0.55,0);
+    const m=new THREE.Mesh(gg,mkMat(coat,false)); m.castShadow=true; g.add(m);
+    SET.add(sk,[0,-1.3,0],[0.34,0.4,0.34]);
+    SET.commit(g);
+    dyn.wavers.push({g,ph:rnd()*6.28,base:-1.9+ (o.tall?0.5:0)});
+  }
+}
+function buildQuayLife(){
+  for(let x=47;x<=60;x+=14) for(let z=-100;z<=138;z+=28){
+    if(rnd()<0.75) lamp(x,GROUND,z);
+  }
+  /* stacked goods along the wall */
+  let zc=-30;
+  while(zc<132){
+    const kind=rnd();
+    if(kind<0.42){ const n=1+((rnd()*3)|0); for(let i=0;i<n;i++) crate(48+Math.floor(i/2)*2.4,GROUND+(i%2)*2.4,zc,2.4,i%2?P.woodD:P.wood); }
+    else if(kind<0.7){ barrel(48,GROUND,zc); if(rnd()<0.5) barrel(50.6,GROUND,zc+1); }
+    else { sack(48,GROUND,zc); sack(50.4,GROUND,zc+0.9); sack(49.2,GROUND+1.8,zc); }
+    zc+=8+rnd()*8;
+  }
+  /* market stalls */
+  for(let i=0;i<3;i++){
+    const mz=-70+i*14, mx=56;
+    B(P.woodD,[mx,GROUND+3,mz],[1.4,6,1.4]); B(P.woodD,[mx+8,GROUND+3,mz],[1.4,6,1.4]);
+    B(P.wood,[mx+4,GROUND+6.2,mz],[10,0.8,7],null,{jit:0.1});
+    for(let k=0;k<4;k++) B(k%2?P.clothR:P.clothW,[mx-3+k*2.2,GROUND+6.9,mz-3.4],[2,1.4,0.5],null,{jit:0.05});
+    crate(mx+2,GROUND,mz+1.4,2,P.woodD); crate(mx+5.6,GROUND,mz+1,2,P.wood);
+    person(mx+1,GROUND+1,mz+4.5,{coat:P.coatR,hat:'cap'});
+    person(mx+6,GROUND+1,mz+4.2,{coat:P.clothG});
+  }
+  /* fish drying frames */
+  for(let i=0;i<4;i++){
+    const fz=-96+i*3.2;
+    B(P.woodD,[46,GROUND+2,fz],[0.6,4,0.6]); B(P.wood,[46,GROUND+3.6,fz],[0.5,0.5,3]);
+  }
+  /* figures watching the ship arrive */
+  const spots=[[43.8,-8],[45.4,-13],[44.1,-19],[43.6,6],[45.8,11],[43.9,18],[44.6,25],[47,26],[44.2,37],[46.4,42],[43.7,58],[45.2,63],[43.6,84],[46.8,92]];
+  spots.forEach((s,i)=>{
+    person(s[0],GROUND+1,s[1],{face:-1.57,hat:i%3===0?'cap':undefined,wave:i%4===1});
+  });
+  person(43.4,-2+GROUND+1,30,{coat:P.coatB,hat:'brolly',face:-1.6});
+  person(48.5,GROUND+1,34,{coat:P.clothY});
+  person(49.4,GROUND+1,35.6,{coat:P.coatG,wave:true});
+  /* child on shoulders */
+  B(P.coatR,[50.8,GROUND+2.6,37],[1.0,1.5,0.6],null,{jit:0.1});
+  B(P.skin,[50.8,GROUND+3.55,37],[0.62,0.62,0.62],null,{jit:0.06});
+  B(P.hat,[50.8,GROUND+3.95,37],[0.8,0.3,0.8]);
+  /* fisherman with rod at the south corner */
+  person(43.6,GROUND+1,-104,{coat:P.coatK,hat:'cap',face:-1.6});
+  beam(P.woodD,[43.9,GROUND+2.4,-104],[52,GROUND+6.5,-108],[0.25,0.25,0.25]);
+  scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(52,GROUND+6.5,-108),new THREE.Vector3(52,0.6,-110.5)]),
+    new THREE.LineBasicMaterial({color:0x2f2f2f,transparent:true,opacity:0.5})));
+  B(P.foam,[52,0.4,-110.5],[0.8,0.8,0.8],null,{mul:0.9});
+
+  /* trees */
+  for(let z=-100;z<=132;z+=18) if(rnd()<0.8) tree(66.5,GROUND+1,z);
+  for(let i=0;i<10;i++) tree(74+rnd()*30,GROUND+1,-96+rnd()*220);
+}
+
+/* ============================================================
+   7. lighthouse
+============================================================ */
+function buildLighthouse(){
+  const x=LH.x, z=LH.z;
+  /* rock pedestal */
+  for(let i=0;i<160;i++){
+    const a=rnd()*6.28, r=rnd()*13;
+    B(rnd()<0.4?P.rockD:P.rockM,[x+Math.cos(a)*r, -4+rnd()*9, z+Math.sin(a)*r],[2.4+rnd()*2,2.4+rnd()*2,2.4+rnd()*2],null,{jit:0.18});
+  }
+  /* base house */
+  walls(x-8,x+8,-3.5,3,z-7,z+7,P.plasterW,{pitch:2});
+  roofHip(x-9,x+9,z-8,z+8,3,P.slate,1.2);
+  B(P.glass,[x-8.4,-0.5,z],[0.6,2,2],null,{glow:0.7});
+  B(P.glass,[x+8.4,-0.5,z],[0.6,2,2],null,{glow:0.7});
+  /* tower shell */
+  const y0=3, y1=38;
+  for(let y=y0;y<y1;y+=1){
+    const t=(y-y0)/(y1-y0);
+    const r=lerp(6.4,3.9,t);
+    for(let a=0;a<6.28;a+=0.22){
+      const rr=r;
+      const band=Math.floor((y-y0)/3.4)%2;
+      B(band?P.white:P.clothR,[x+Math.cos(a)*rr,y+0.5,z+Math.sin(a)*rr],[1.5,1.05,1.5],null,{jit:0.07});
+    }
+  }
+  /* gallery */
+  B(P.black,[x,38.5,z],[11,1.2,11]);
+  B(P.iron,[x,39.6,z],[10,1.2,10]);
+  for(let a=0;a<6.28;a+=0.34) B(P.iron,[x+Math.cos(a)*5,40.4,z+Math.sin(a)*5],[0.5,1.6,0.5]);
+  /* lantern room */
+  for(let y=40.5;y<45;y+=1){
+    for(let a=0;a<6.28;a+=0.26){
+      B(a%0.9<0.3?P.black:P.glass,[x+Math.cos(a)*3.4,y+0.5,z+Math.sin(a)*3.4],[1.15,1.05,1.15],a%0.9<0.3?null:{glow:1.0});
+    }
+  }
+  B(P.glass,[x,42.5,z],[4.4,3.4,4.4],null,{glow:1.0});
+  /* dome */
+  for(let i=0;i<5;i++){
+    const r=3.6-i*0.65;
+    for(let a=0;a<6.28;a+=0.3) B(i%2?P.copperR:P.black,[x+Math.cos(a)*r,45.6+i*0.9,z+Math.sin(a)*r],[1.4,0.9,1.4],null,{jit:0.1});
+  }
+  B(P.iron,[x,51,z],[0.5,5,0.5]);
+  B(P.gold,[x,53.8,z],[1.4,1.4,1.4]);
+  /* rotating beacon */
+  const bea=new THREE.Group(); bea.position.set(x,42.5,z); scene.add(bea);
+  const beamMat=new THREE.MeshBasicMaterial({color:0xffe3ac,transparent:true,opacity:0.13,
+    blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide});
+  for(const s of [1,-1]){
+    const g=new THREE.ConeGeometry(7.5,78,4,1,true);
+    g.rotateX(Math.PI/2); g.translate(0,0,s*39);
+    const m=new THREE.Mesh(g,beamMat); m.renderOrder=3; bea.add(m);
+  }
+  const beaconLight=new THREE.PointLight(0xffdcae,420,190,2); beaconLight.position.set(x,42.5,z); scene.add(beaconLight);
+  halo(0xffe0a8,34,[x,42.5,z]);
+  dyn.beacon={g:bea,light:beaconLight};
+}
+
+/* ============================================================
+   8. THE SHIP
+============================================================ */
+function buildShip(){
+  const set=new VSet();
+  const rig=[];
+  inSet(set,()=>{
+    const HB=z=> z>10 ? 7.6*Math.sqrt(Math.max(0.02,1-Math.pow((z-10)/12,2)))
+             : z<-16 ? 7.6*(1-0.34*Math.pow((-16-z)/7,2))
+             : 7.6;
+    const SH=z=>{ let y=6.0;
+      if(z>2)  y+=5.6*Math.pow(Math.min(1,(z-2)/20),1.7);
+      if(z<-6) y+=3.8*Math.pow(Math.min(1,(-6-z)/18),1.5);
+      return y; };
+    const DY=z=>Math.round(SH(z)-1.1);
+
+    /* ---- hull shell ---- */
+    for(let z=-23;z<=21;z++){
+      const w=HB(z), top=SH(z), xMax=Math.round(w);
+      for(let x=-xMax;x<=xMax;x++){
+        const xn=Math.abs(x)/(w+0.001);
+        if(xn>1.05) continue;
+        const wall = xn>0.6;
+        const yb=Math.round(-4.5+3.4*xn*xn);
+        const yt=Math.round(wall? top : top-1.0);
+        for(let y=yb;y<=yt;y++){
+          if(!wall && y>yb && y<yt) continue;
+          let c;
+          if(y<-2.2) c = (y&1)?P.bot:P.bot2;
+          else if(y<-0.4) c = P.black;
+          else if(y<3.4) c = (((z+y)>>1)&1)?P.hull:P.hull2;
+          else if(y<4.7) c = P.stripe;
+          else if(y<yt) c = (z&1)?P.hull:P.hull2;
+          else c = wall?P.trim:P.deck;
+          B(c,[x,y,z],[1,1,1],null,{jit:0.09});
+        }
+      }
+    }
+    /* gun ports */
+    for(let z=-13;z<=13;z+=4){
+      if(z===0) continue;
+      for(const side of [-1,1]){
+        const w=HB(z)+0.05, x=side*(Math.round(w)-0.25);
+        B(P.black,[x,2.4,z],[0.5,2.2,2.3],null,{jit:0.05});
+        B(P.brass,[x,1.1,z],[0.55,0.5,2.9],null,{jit:0.08});
+        B(P.brass,[x,3.7,z],[0.55,0.5,2.9],null,{jit:0.08});
+        if(rnd()<0.5) B(P.iron,[x-side*0.9,2.2,z],[1.6,1.2,1.2]); /* gun run out */
+      }
+    }
+    /* wales */
+    for(let z=-22;z<=20;z++){ const w=HB(z)+0.35;
+      for(const side of [-1,1]) for(const yy of [0.6,5.1]){
+        B(P.woodD,[side*(w-0.4),yy,z],[0.5,0.8,1.05],null,{jit:0.12});
+      }
+    }
+    /* stern galleries */
+    for(let z=-24.4;z<=-24;z+=0.6) for(let y=4;y<=7;y++) B(P.gold,[0,y,z],[6.6,1,0.8],null,{jit:0.1});
+    for(const x of [-2.5,0,2.5]) B(P.glass,[x,5.4,-24.8],[1.6,1.8,0.5],null,{glow:0.8});
+    for(const x of [-2.5,0,2.5]) B(P.glass,[x,6.8,-24.8],[1.6,1.2,0.5],null,{glow:0.7});
+    B(P.gold,[0,8.6,-24],[7.6,1.2,1.2],null,{jit:0.08});
+    /* figurehead */
+    B(P.gold,[0,3.2,23.6],[1.4,2.6,2.4],null,{jit:0.1});
+    B(P.gold,[0,5.0,23.2],[1,1,1.4],null,{jit:0.1});
+    B(P.gold,[-1.6,3.8,23],[1,1.4,2.2],null,{jit:0.1});
+    B(P.gold,[1.6,3.8,23],[1,1.4,2.2],null,{jit:0.1});
+
+    /* ---- decks ---- */
+    for(let z=-23;z<=20;z++){
+      const w=HB(z)-1.1, d=DY(z);
+      if(w<0.4) continue;
+      for(let x=-Math.round(w);x<=Math.round(w);x++){
+        if(Math.abs(x)>w) continue;
+        B((x&1)?P.deck:P.deckD,[x,d,z],[1,0.7,1],null,{jit:0.1});
+      }
+    }
+    /* poop deck aft */
+    for(let z=-22;z<=-9;z++) for(let x=-Math.round(HB(z)-1.4);x<=Math.round(HB(z)-1.4);x++)
+      B((z&1)?P.deck:P.deckD,[x,DY(z)+1,z],[1,0.7,1],null,{jit:0.1});
+    /* forecastle */
+    for(let z=12;z<=19;z++) for(let x=-Math.round(HB(z)-1.6);x<=Math.round(HB(z)-1.6);x++)
+      B((z&1)?P.deckD:P.deck,[x,DY(z)+1,z],[1,0.7,1],null,{jit:0.1});
+    /* hatches, bulwark cap, rails */
+    [[3,0],[-8,-1],[13,1]].forEach(h=>{ for(let dx=-2;dx<=2;dx++) for(let dz=-2;dz<=2;dz++)
+      B(P.woodD,[dx+ (h[1]?h[1]:0),DY(h[0])+0.35,h[0]+dz],[1,0.55,1],null,{jit:0.14}); });
+    for(let z=-22;z<=20;z+=1){
+      const w=HB(z), top=SH(z);
+      if(w<1) continue;
+      for(const side of [-1,1]){
+        B(P.trim,[side*(w-0.4),Math.round(top)+0.35,z],[1,0.8,1.05],null,{jit:0.1});
+        if(z%2===0) B(P.woodD,[side*(w-0.4),Math.round(top)+1.6,z],[0.4,1.8,0.4],null,{jit:0.1});
+      }
+    }
+    for(let z=-22;z<=18;z+=2){
+      const w=HB(z)+0.1;
+      for(const side of [-1,1])
+        beam(P.woodL,[side*(w-0.4),Math.round(SH(z))+2.4,z],[side*(HB(z+2)+0.1)-0,Math.round(SH(z+2))+2.4,z+2],0.35,0.35,{jit:0.1});
+    }
+    /* fenders over the side */
+    for(let z=-12;z<=14;z+=6) for(const side of [-1,1])
+      B(P.clothW,[side*(HB(z)+0.7),5.4,z],[0.9,2.2,1.6],null,{jit:0.12});
+
+    /* ---- deck furniture ---- */
+    /* capstan */
+    for(let a=0;a<6.28;a+=0.7) beam(P.woodD,[Math.cos(a)*2.4,DY(-4)+2.6,Math.sin(a)*2.4-4],[Math.cos(a)*3.4,DY(-4)+2.2,Math.sin(a)*3.4-4],[0.4,0.4,0.4],null,{jit:0.1});
+    B(P.wood,[0,DY(-4)+2.1,-4],[2.6,2.2,2.6],null,{jit:0.1});
+    B(P.iron,[0,DY(-4)+3.4,-4],[1,0.6,1]);
+    /* barrels & spares on deck */
+    for(const p of [[-3,4],[3,6],[-2,-6],[4,-19],[-4,-17],[2,16]]){
+      B(P.wood,[p[0],DY(p[1])+1.6,p[1]],[1.7,2,1.7],null,{jit:0.12});
+      B(P.iron,[p[0],DY(p[1])+1.1,p[1]],[1.9,0.4,1.9]);
+    }
+    for(const p of [[0,9],[1,2]]) beam(P.mast,[p[0],DY(p[1])+1.6,p[1]-4],[p[0],DY(p[1])+1.6,p[1]+4],[0.8,0.8,0.8],null,{jit:0.1});
+    /* galley firebox + chimney */
+    B(P.iron,[-3.4,DY(7)+2,7],[2.4,2.2,2.4],null,{jit:0.1});
+    B(P.iron,[-3.4,DY(7)+4.6,7],[0.9,3.4,0.9],null,{jit:0.1});
+    EMIT.push({x:-3.4+SHIP.x*0,y:DY(7)+7,z:7,t:0,rate:0.9,c:0x8f8f92,s:1.3,r:2.0,local:true,parent:null});
+    const ggalley=EMIT.pop();
+    /* ship's boat on the aft deck */
+    for(let bz=-21;dz<1;bz!==undefined&&(bz!==undefined));
+    /* (built below cleanly) */
+    const BOAT={y:DY(-15)+1.4};
+    for(let i=-3;i<=3;i++){
+      const wdt=2.4-Math.abs(i)*0.25;
+      for(const side of [-1,1]) B(P.woodD,[side*wdt,BOAT.y,-15+i],[1,1.4,1],null,{jit:0.1});
+      B(P.deck,[0,BOAT.y-0.4,-15+i],[wdt*2,0.5,1],null,{jit:0.1});
+    }
+    for(let i=-1;i<=1;i+=2) B(P.mastD,[i*1.6,BOAT.y+2.2,-15],[0.5,0.5,0.5],null,{jit:0.1});
+
+    /* ---- masts, yards, sails ---- */
+    const mast=(zm,h,w,head)=>{
+      const y0=DY(zm)-0.2;
+      beam(P.mast,[0,y0,zm],[0,y0+h,zm],w,w,{jit:0.08});
+      B(P.mastD,[0,y0+h*0.52,zm],[3.6,0.8,2.6],null,{jit:0.1});
+      for(const s of [-1,1]) for(let a=-1;a<=1;a++)
+        B(P.mastD,[s*(2.2),y0+h*0.52+1.6,zm+a*0.9],[0.5,2.4,0.5]);
+      for(let y=y0+3;y<y0+h;y+=5) B(P.iron,[0,y,zm],[w+0.25,0.5,w+0.25],null,{jit:0.1});
+      return y0+h;
+    };
+    const yard=(zm,y,w)=>beam(P.mastD,[-w/2,y,zm],[w/2,y,zm],0.85,0.85,{jit:0.1});
+    const sail=(zm,y0,w,h,belly,ry)=>{
+      const slices=6, prof=[0.4,0.78,1.0,1.05,0.8,0.45];
+      const q=new THREE.Quaternion().setFromEuler(new THREE.Euler(0,ry||0,0));
+      for(let i=0;i<slices;i++){
+        const yy=y0+h*(i+0.5)/slices;
+        const d=belly*prof[i];
+        B(P.sail,[0,yy,(0.9+(prof[i]-0.6)*0.8),][0]||0,[w*(1-0.015*i),h/slices+0.14,d],q,{jit:0.05});
+        B(P.sail,[0,yy,0.6+(prof[i]-0.5)*0.7],[w*(1-0.015*i),h/slices+0.14,d],q,{jit:0.05});
+      }
+      for(let a=-w/2+1.5;a<w/2;a+=w/4) B(P.sailD,[a,y0+h/2,1.9],[0.45,h*1.02,0.3],q,{jit:0.05});
+    };
+    const furl=(zm,y,w)=>{ B(P.sail,[0,y-0.9,zm],[w*0.96,1.0,1.7],null,{jit:0.06});
+                           B(P.sailD,[0,y-0.2,zm],[w*0.9,0.7,1.3],null,{jit:0.06}); };
+
+    const mH=mast(-1,40,1.5), fH=mast(11,36,1.35), zH=mast(-14,30,1.2);
+    yard(-1,21,21); yard(-1,28.5,17); yard(-1,34,12.4); yard(-1,38,8.6);
+    yard(11,21.5,18); yard(11,27.5,14); yard(11,32,10);
+    yard(-14,18,14); yard(-14,23.5,10.4); yard(-14,28,7);
+
+    sail(-1,10.2,21,10.6,3.2,0.14);     /* main course, set */
+    sail(11,10.8,18,10.2,2.9,0.18);     /* fore course, set */
+    furl(-1,28.5,17); furl(-1,34,12.4); furl(-1,38,8.6);
+    furl(11,27.5,14); furl(11,32,10);
+    furl(-14,23.5,10.4); furl(-14,28,7);
+
+    /* spanker (gaff sail) on the mizzen */
+    const tri=(a,b,c,col,n)=>{
+      n=n||9;
+      for(let i=1;i<=n;i++){
+        const t=i/n;
+        const p1=[lerp(a[0],b[0],t),lerp(a[1],b[1],t),lerp(a[2],b[2],t)];
+        const p2=[lerp(a[0],c[0],t),lerp(a[1],c[1],t),lerp(a[2],c[2],t)];
+        beam(col,p1,p2,0.45,1.0,{jit:0.05});
+      }
+    };
+    tri([0,8,-16.4],[0,8,-24],[0,22,-16.6],P.sail,10);
+    beam(P.mastD,[0,22,-16.6],[0,26,-17.5],[0.6,0.6,0.6]);
+    /* jibs */
+    tri([0,13.6,31.5],[0,24,11],[0,24,17],P.sail,9);
+    tri([0,10.4,24],[0,21,11],[0,20,17],P.sail,8);
+    /* gaff foresail already the fore course */
+
+    /* ---- bowsprit ---- */
+    beam(P.mast,[0,7.6,20],[0,12.4,31.5],1.6,1.6,{jit:0.1});
+    beam(P.mastD,[0,12.4,31.5],[0,14.2,38.5],0.9,0.9,{jit:0.1});
+    B(P.iron,[0,12.4,33],[1.6,1.6,1.6]);
+
+    /* ---- rigging ---- */
+    const push=(a,b)=>rig.push(a[0],a[1],a[2],b[0],b[1],b[2]);
+    [[-1,mH,2.0],[11,fH,1.9],[-14,zH,1.7]].forEach(([zm,hh,rw])=>{
+      for(const s of [-1,1]) for(const o of [-2.2,0,2.2]){
+        push([s*(HB(zm)+rw-1.5),DY(zm)+2.4,zm+o],[0,hh-1,zm]);
+      }
+      push([0,hh,zm],[0,hh+2.6,zm]);
+    });
+    push([0,mH,−0||-1],[0,10,20]);
+    push([0,fH,11],[0,13.6,31.5]);
+    push([0,fH-6,11],[0,10.4,24]);
+    push([0,mH-2,-1],[0,20,-24.2]);
+    push([0,zH,-14],[0,15,-24.2]);
+    push([0,12.4,31.5],[0,7.6,20]);
+    /* ratlines */
+    [[-1,2],[11,2]].forEach(([zm,rw])=>{
+      for(const s of [-1,1]) for(let y=DY(zm)+4;y<mH-2;y+=2.4){
+        push([s*(HB(zm)+rw-1.3),y,zm-1],[s*(HB(zm)+rw-1.6),y+1.6,zm-1]);
+      }
+    });
+
+    /* ---- cable & anchor ---- */
+    for(let i=0;i<14;i++){
+      const t=i/13;
+      B(P.iron,[2.4,lerp(2,-7,t),lerp(20,34,t)],[0.85,0.85,0.85],null,{jit:0.14});
+    }
+    B(P.iron,[2.4,-7.5,34],[3.2,1,1.2],null,{jit:0.1});
+    /* cathead & anchor fluke stowed */
+    for(const s of [-1,1]) B(P.mastD,[s*3.8,7,19],[1.2,2.4,1.2],null,{jit:0.1});
+    B(P.iron,[3.9,8.6,19],[2.4,0.9,1.1],null,{jit:0.1});
+  });
+
+  /* the set's blocks into a group */
+  const g=new THREE.Group();
+  g.position.set(SHIP.x,0,SHIP.z);
+  g.rotation.y=SHIP.rot;
+  set.commit(g);
+  scene.add(g);
+
+  /* rigging lines */
+  const rg=new THREE.BufferGeometry();
+  rg.setAttribute('position',new THREE.Float32BufferAttribute(rig,3));
+  const lines=new THREE.LineSegments(rg,new THREE.LineBasicMaterial({color:0x30281f,transparent:true,opacity:0.62}));
+  g.add(lines);
+
+  /* flags + dress overall (inside ship group so they ride the hull) */
+  const flagMat={};
+  const FM=c=>flagMat[c]||(flagMat[c]=new THREE.MeshLambertMaterial({color:c}));
+  const flag=(pos,color,s,droop)=>{
+    const m=new THREE.Mesh(GEO_BOX,FM(color));
+    m.scale.set(s,s*0.72,0.16);
+    m.position.set(pos[0],pos[1],pos[2]+s/2);
+    m.userData={ph:rnd()*6.28,droop:droop||0};
+    g.add(m); dyn.flags.push(m); return m;
+  };
+  const flagPole=(pos,h,color)=>{ B; beam(P.iron,[pos[0],pos[1],pos[2]],[pos[0],pos[1]+h,pos[2]],0.35,0.35); };
+
+  const ensignG=new THREE.Group(); ensignG.position.set(0,SH_STERN,-25.2); g.add(ensignG);
+  SET=new VSet();
+  SET.add(P.iron,[0,0.5,0],[0.4,7,0.4]);
+  SET.commit(ensignG);
+  const ens=[[P.clothB,0.7],[P.clothW,0.34],[P.clothR,0.55]];
+  ens.forEach((e,i)=>{
+    const m=new THREE.Mesh(GEO_BOX,FM(e[0])); m.scale.set(4.4,e[1],0.15);
+    m.position.set(2.2,3.6+i*0.85,0.1); m.userData={ph:1.4,droop:0};
+    ensignG.add(m); dyn.flags.push(m);
+  });
+  {
+    const cross1=new THREE.Mesh(GEO_BOX,FM(P.clothW)); cross1.scale.set(4.6,0.45,0.18); cross1.position.set(2.2,3.6,0.14); ensignG.add(cross1);
+    const cross2=new THREE.Mesh(GEO_BOX,FM(P.clothR)); cross2.scale.set(4.6,0.28,0.2); cross2.position.set(2.2,3.6,0.2); ensignG.add(cross2);
+    const diag=new THREE.Mesh(GEO_BOX,FM(P.clothW)); diag.scale.set(4.2,0.35,0.17); diag.position.set(2.2,3.6,0.17); diag.rotation.z=0.42; ensignG.add(diag);
+  }
+  dyn.ensign=ensignG;
+
+  /* jack at the bowsprit head */
+  const jackG=new THREE.Group(); jackG.position.set(0,14.2,38.5); g.add(jackG);
+  SET=new VSet(); SET.add(P.iron,[0,0.4,0],[0.3,3.4,0.3]); SET.commit(jackG);
+  [P.clothB,P.clothW,P.clothR].forEach((c,i)=>{
+    const m=new THREE.Mesh(GEO_BOX,FM(c)); m.scale.set(2.6,0.42,0.13); m.position.set(1.4,2.6-i*0.42,0.05);
+    m.userData={ph:0.7,droop:0}; jackG.add(m); dyn.flags.push(m);
+  });
+
+  /* dress overall along the stay line */
+  const pts=[[2,9,20],[0,13.6,31.5]].map(p=>p);
+  const chain=[[0,7.6,20],[0,fH-1,11],[0,mH-1,-1],[0,zH-1,-14],[0,8.5,-22]];
+  let fcol=[P.clothR,P.clothY,P.clothB,P.clothW,P.clothG,P.clothR,P.clothY,P.clothB];
+  for(let i=0;i<chain.length-1;i++){
+    const a=chain[i], b=chain[i+1], seg=Math.ceil(Math.hypot(b[0]-a[0],b[1]-a[1],b[2]-a[2])/7);
+    for(let k=1;k<seg;k++){
+      const t=k/seg;
+      flag([lerp(a[0],b[0],t),lerp(a[1],b[1],t)-1.4,lerp(a[2],b[2],t)],fcol[(i*3+k)%fcol.length],1.7,true);
+    }
+  }
+  /* stern lanterns */
+  for(const s of [-1,1]){
+    B(P.lamp,[s*3.4,7.6,-24.2],[1.1,1.4,1.1],{glow:0.95});
+    B(P.black,[s*3.4,8.5,-24.2],[1.4,0.5,1.4]);
+    halo(0xffc884,10,[s*3.4,7.6,-24.2],g);
+  }
+  /* two crew on deck */
+  const crewY=DY(-15)+2.1;
+  B(P.coatB,[-1.4,crewY,-12],[1,1.5,0.6],null,{jit:0.1});
+  B(P.skin,[-1.4,crewY+1,-12],[0.6,0.6,0.6],null,{jit:0.05});
+  B(P.hat,[-1.4,crewY+1.35,-12],[0.8,0.3,0.8]);
+  B(P.coatY,[2.2,DY(16)+2.1,16],[1,1.5,0.6],null,{jit:0.1});
+  B(P.skin,[2.2,DY(16)+3.1,16],[0.6,0.6,0.6],null,{jit:0.05});
+  B(P.hat,[2.2,DY(16)+3.45,16],[0.8,0.3,0.8]);
+
+  dyn.ship=g;
+  dyn.shipBeam=new THREE.Vector3(SHIP.x,0,SHIP.z);
+  return g;
+}
+
+/* ============================================================
+   9. small craft
+============================================================ */
+function buildTug(){
+  const g=new THREE.Group(); g.position.set(20,0,-20); g.rotation.y=-0.55; scene.add(g);
+  SET=new VSet();
+  for(let z=-7;z<=7;z++){
+    const w=3.2-Math.abs(z)*0.14;
+    for(const s of [-1,1]) for(let y=-2;y<=1;y++) B(y<0?P.black:P.hull,[s*w,y,z],[1,1,1],null,{jit:0.08});
+    B(P.deck,[0,1.4,z],[w*2-0.4,0.5,1],null,{jit:0.1});
+  }
+  B(P.white,[0,3,-1],[5,2.4,7],null,{jit:0.06});
+  B(P.white,[0,4.6,-1],[3.6,1,4],null,{jit:0.06});
+  for(const s of [-1,1]) for(let z=-3.4;z<=1.4;z+=1.2) B(P.winDark,[s*2.4,3.6,z],[0.4,1.1,1.1],null,{jit:0.05});
+  for(const s of [-1,1]) B(P.glass,[s*2.6,3.6,-2.4],[0.4,1.1,1.1],{glow:0.7});
+  B(P.black,[0,7,-1],[3,2.6,3],null,{jit:0.08});
+  B(P.clothR,[0,9.4,-1],[3.4,1.4,3.4],null,{jit:0.06});
+  B(P.black,[0,10.7,-1],[3.6,0.8,3.6]);
+  beam(P.mastD,[0,6,3],[0,14,3],[0.7,0.7,0.7],null,{jit:0.1});
+  B(P.lamp,[0,14.2,3],[1,1,1],{glow:0.9});
+  SET.commit(g);
+  halo(0xffc884,8,[0,14.2,3],g);
+  EMIT.push({x:20+3*Math.sin(0.55),y:11.4,z:-20-3*Math.cos(0.55)*0,t:0,rate:0.34,c:0x6f6a66,s:2.2,r:2.9});
+  dyn.rockers.push({g,by:0,br:-0.55,a:0.03,p:1.1});
+  /* tow line to the barque */
+  const from=new THREE.Vector3(20+5*Math.cos(-0.55),2.6,-20-5*Math.sin(-0.55));
+  const to=new THREE.Vector3(SHIP.x+14,7,SHIP.z-3);
+  const mid=from.clone().add(to).multiplyScalar(0.5).setY(1.4);
+  const q=new THREE.QuadraticBezierCurve3(from,mid,to);
+  const l=new THREE.Line(new THREE.BufferGeometry().setFromPoints(q.getPoints(24)),
+    new THREE.LineBasicMaterial({color:0x2b2620,transparent:true,opacity:0.8}));
+  scene.add(l);
+}
+function buildGig(){
+  const g=new THREE.Group(); g.position.set(22,0,16); g.rotation.y=2.4; scene.add(g);
+  SET=new VSet();
+  for(let z=-4;z<=4;z++){
+    const w=1.7-Math.abs(z)*0.14;
+    for(const s of [-1,1]) B(P.wood,[s*w,0.6,z],[0.7,1.6,1],null,{jit:0.1});
+    B(P.deckD,[0,0.1,z],[w*2-0.5,0.4,1],null,{jit:0.1});
+  }
+  B(P.wood,[0,0.6,-4.4],[2.4,1,1.4],null,{jit:0.1});
+  person(0.4,-0.2,-1.6,{coat:P.coatK,hat:'cap'});
+  person(-0.4,-0.2,0.6,{coat:P.clothG,hat:'cap'});
+  B(P.iron,[0,1.4,4.2],[0.4,2,0.4],null,{jit:0.1});
+  SET.commit(g);
+  const oars=[];
+  for(const s of [-1,1]) for(const z of [-1.4,1.0]){
+    const og=new THREE.Group(); og.position.set(s*1.7,1.2,z); g.add(og);
+    SET=new VSet();
+    SET.add(P.mastD,[s*1.4,-0.3,0],[0.3,0.3,3.0],null,{jit:0.1});
+    SET.add(P.mastD,[s*2.7,-0.3,0],[0.9,0.35,1.1],null,{jit:0.1});
+    SET.commit(og);
+    oars.push({g:og,s,ph:z});
+  }
+  dyn.oars=oars;
+  dyn.rockers.push({g,by:0,br:2.4,a:0.05,p:2.3});
+}
+function buildMooredBoats(){
+  const spots=[[-34,1.1],[58,2.6],[88,-0.6]];
+  spots.forEach((sp,i)=>{
+    const g=new THREE.Group(); g.position.set(QUAY_X-3,0,sp[0]); g.rotation.y=sp[1]; scene.add(g);
+    SET=new VSet();
+    for(let z=-5;z<=5;z++){
+      const w=2.2-Math.abs(z)*0.16;
+      for(const s of [-1,1]) for(let y=-1;y<=1;y++) B(y<0?P.woodD:P.wood,[s*w,y,z],[1,1,1],null,{jit:0.1});
+      B(P.deckD,[0,1.3,z],[w*2-0.6,0.5,1],null,{jit:0.1});
+    }
+    beam(P.mast,[0,1.5,-0.5],[0,13,-0.5],0.7,0.7,null,{jit:0.1});
+    B(P.mastD,[0,9,-0.5],[6,0.6,0.6],null,{jit:0.1});
+    B(P.sail,[0,6.2,-0.5],[5.2,1.2,1.3],null,{jit:0.06});
+    for(const s of [-1,1]) for(let k=0;k<4;k++)
+      B(P.mastD,[s*(2.6+k*0.5),2.6,3+k],[0.4,0.4,3.2],null,{jit:0.1});
+    SET.commit(g);
+    dyn.rockers.push({g,by:0,br:sp[1],a:0.035,p:1.4+i});
+  });
+}
+
+/* ============================================================
+   10. birds, clouds, distant traffic, headland
+============================================================ */
+function buildBirds(){
+  const bodyM=mkMat(P.white,false), wingM=mkMat(P.clothW,false);
+  const gGeo=new THREE.BoxGeometry(1.4,0.6,0.7);
+  const wlGeo=new THREE.BoxGeometry(2.6,0.14,0.7); wlGeo.translate(-1.3,0,0);
+  const wrGeo=new THREE.BoxGeometry(2.6,0.14,0.7); wrGeo.translate(1.3,0,0);
+  for(let i=0;i<13;i++){
+    const g=new THREE.Group();
+    const body=new THREE.Mesh(gGeo,bodyM); body.castShadow=true;
+    const wl=new THREE.Mesh(wlGeo,wingM), wr=new THREE.Mesh(wrGeo,wingM);
+    wl.position.x=-0.6; wr.position.x=0.6;
+    g.add(body,wl,wr); scene.add(g);
+    dyn.birds.push({g,wl,wr,
+      a:rnd()*6.28, sp:(0.16+rnd()*0.14)*(rnd()<0.5?-1:1),
+      r:26+rnd()*58, y:26+rnd()*26, cx:8+rnd()*30, cz:6+rnd()*24, ph:rnd()*6.28, flap:6+rnd()*4});
+  }
+}
+let CLOUDS;
+function buildClouds(){
+  const N=230;
+  const im=new THREE.InstancedMesh(GEO_BOX,new THREE.MeshLambertMaterial({color:0xffffff}),N);
+  im.frustumCulled=false; im.castShadow=false; im.receiveShadow=false;
+  const groups=[]; let idx=0; const m=new THREE.Matrix4(), q=new THREE.Quaternion(), v=new THREE.Vector3(), s=new THREE.Vector3(), c=new THREE.Color();
+  while(idx<N){
+    const cl=Math.min(1+((rnd()*7)|0), N-idx);
+    const cx=-420+rnd()*840, cy=64+rnd()*54, cz=-420+rnd()*840;
+    const blobs=[];
+    for(let k=0;k<cl && idx<N;k++,idx++){
+      const sx=14+rnd()*30, sy=7+rnd()*13, sz=12+rnd()*26;
+      const px=(rnd()-0.5)*30, py=(rnd()-0.5)*10, pz=(rnd()-0.5)*30;
+      blobs.push([px,sy,py,pz,sx,sz]);
+      const top=clamp(0.5+(py+sy/2)/22,0.25,1);
+      c.setHex(0xffffff).lerp(new THREE.Color(0xffe0b8), top*0.5).lerp(new THREE.Color(0x8f9aa8),(1-top)*0.55);
+      im.setColorAt(idx,c);
+      m.compose(v.set(cx+px,cy+py,cz+pz),q,s.set(sx,sy,sz));
+      im.setMatrixAt(idx,m);
+    }
+    groups.push({i0:idx-blobs.length,n:blobs.length,x:cx,z:cz,sp:0.6+rnd()*1.8});
+  }
+  im.instanceMatrix.needsUpdate=true; im.instanceColor.needsUpdate=true;
+  CLOUDS={im,groups}; scene.add(im);
+}
+function buildFarTraffic(){
+  const spots=[[-300,-150],[ -250,190],[-330,60],[210,-330],[-190,-300]];
+  spots.forEach(s=>{
+    const x=s[0]+(rnd()-0.5)*40, z=s[1]+(rnd()-0.5)*40, sc=2.4;
+    inSet(SET,()=>{
+      for(let i=-4;i<=4;i++) for(const sd of [-1,1]) for(let y=0;y<2;y++)
+        B(P.hull,[x+sd*sc,y*sc,z+i*sc],[sc,sc,sc],null,{jit:0.1});
+      for(let i=-1;i<=1;i++) beam(P.mast,[x,0,z+i*sc*3],[x,sc*9,z+i*sc*3],sc*0.55,sc*0.55);
+      for(let i=-1;i<=1;i++) B(P.sail,[x,sc*4,z+i*sc*3],[sc*0.6,sc*5,sc*2.4],null,{jit:0.06});
+    });
+  });
+  /* distant headland */
+  for(let x=-460;x<=-330;x+=18) for(let z=-380;z<=380;z+=18){
+    const h=Math.sin(x*0.017)+Math.cos(z*0.012)*1.2;
+    const hh=6+Math.max(0,h)*16+rnd()*6;
+    B(rnd()<0.6?0x3d5650:0x465c54,[x,hh/2,z],[19,hh,19],null,{jit:0.12,flat:true});
+  }
+  /* harbour mouth marker posts */
+  for(const p of [[-16,26],[-24,-28]]){
+    B(P.woodD,[p[0],-1,p[1]],[1.4,10,1.4],null,{jit:0.1});
+    B(p[1]>0?P.clothG:P.clothR,[p[0],4,p[1]],[1.8,1.6,1.8],null,{jit:0.1});
+    halo(p[1]>0?0x6fe0a0:0xff7a62,10,[p[0],4,p[1]]);
+  }
+}
+
+/* ============================================================
+   11. smoke / puffs
+============================================================ */
+const puffs=[];
+function initPuffs(){
+  for(let i=0;i<34;i++){
+    const m=new THREE.Mesh(GEO_BOX,new THREE.MeshLambertMaterial({color:0xffffff,transparent:true,depthWrite:false,opacity:0}));
+    m.visible=false; scene.add(m);
+    puffs.push({m,life:0,em:null});
+  }
+}
+function updateSmoke(dt,t){
+  for(const e of EMIT){
+    e.t-=dt;
+    if(e.t<=0){
+      e.t=e.rate*(0.6+rnd()*0.8);
+      const p=puffs.find(p=>p.life<=0);
+      if(!p) continue;
+      p.em=e; p.life=1;
+      p.m.position.set(e.x+(rnd()-0.5)*0.6,e.y,e.z+(rnd()-0.5)*0.6);
+      p.m.visible=true;
+      p.m.material.color.setHex(e.c);
+      p.s0=e.s;
+    }
+  }
+  for(const p of puffs){
+    if(p.life<=0){ if(p.m.visible)p.m.visible=false; continue; }
+    p.life-=dt*0.28;
+    if(p.life<=0){ p.m.visible=false; continue; }
+    const age=1-p.life;
+    const s=p.s0*(0.5+age*1.9);
+    p.m.scale.set(s,s,s);
+    p.m.position.y+=p.em.r*dt;
+    p.m.position.x+=Math.sin(t*0.6+p.m.position.y)*0.035+dt*1.1;
+    p.m.position.z+=Math.cos(t*0.4+p.m.position.y)*0.03;
+    p.m.material.opacity=clamp(p.life*0.62,0,0.62);
+    p.m.rotation.y+=dt*0.3;
+  }
+}
+
+/* ============================================================
+   12. dynamic registry + build
+============================================================ */
+const dyn={flags:[],birds:[],rockers:[],oars:[],wavers:[],beacon:null,ship:null,mill:null,hands:null,sign:null,ensign:null};
+
+/* fix for SH_STERN used above */
+const SH_STERN=11;
+
+buildOcean(); FLECKS=buildOcean; /* placeholder (see below) */
+</script>
+</body>
+</html>

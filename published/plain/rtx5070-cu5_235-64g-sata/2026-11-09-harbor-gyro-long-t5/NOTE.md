@@ -1,0 +1,1 @@
+まだ測っていなかったケースを測った: 全11モデルのコーディング「港に寄港する帆船」（Tier 0・3）、gyro Gyro-S・Gyro-M と unsloth UD-Q2_K_XL の長文（Tier 4b・4c）、Gyro-S・Gyro-M の起動オプション（Tier 5）。帆船は Tier 3 の33回中16回が描画あり、途中で切れたのは1回。vram-reserve 40%・50% の12ケースは VRAM 12 GB に収まらず起動できなかった

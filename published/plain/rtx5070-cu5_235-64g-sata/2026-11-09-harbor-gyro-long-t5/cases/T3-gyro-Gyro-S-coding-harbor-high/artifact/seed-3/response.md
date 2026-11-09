@@ -1,0 +1,711 @@
+```html
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Voxel harbor — sailing ship calling at harbor</title>
+<style>
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  body {
+    background: linear-gradient(180deg, #4d7fac 0%, #85b9cc 35%, #e5a56b 62%, #4a7286 100%);
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<script>
+"use strict";
+
+function main() {
+  const canvas = document.getElementById("c");
+  const gl = canvas.getContext("webgl2", { antialias: true, alpha: true });
+
+  if (!gl) {
+    const msg = document.createElement("div");
+    msg.style.cssText = "color:#fff;font:16px sans-serif;padding:20px";
+    msg.textContent = "WebGL2 is required.";
+    document.body.appendChild(msg);
+    return;
+  }
+
+  // ---------- helpers ----------
+  function normalize(v) {
+    const l = Math.hypot(v[0], v[1], v[2]);
+    if (l === 0) return [0, 0, 1];
+    return [v[0] / l, v[1] / l, v[2] / l];
+  }
+
+  function cross(a, b) {
+    return [
+      a[1] * b[2] - a[2] * b[1],
+      a[2] * b[0] - a[0] * b[2],
+      a[0] * b[1] - a[1] * b[0]
+    ];
+  }
+
+  function dot(a, b) {
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  }
+
+  function hex(h) {
+    const n = parseInt(h.slice(1), 16);
+    return [
+      ((n >> 16) & 255) / 255,
+      ((n >> 8) & 255) / 255,
+      (n & 255) / 255
+    ];
+  }
+
+  function rand(x, z) {
+    const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
+    return s - Math.floor(s);
+  }
+
+  function makePerspective(fov, aspect, near, far) {
+    const f = 1 / Math.tan(fov / 2);
+    const nf = near - far;
+    const m = new Float32Array(16);
+    m[0] = f / aspect;
+    m[5] = f;
+    m[10] = (far + near) / nf;
+    m[11] = -1;
+    m[14] = (2 * far * near) / nf;
+    return m;
+  }
+
+  function makeView(pos, tgt) {
+    const z = normalize([pos[0] - tgt[0], pos[1] - tgt[1], pos[2] - tgt[2]]);
+    const x = normalize(cross(z, [0, 1, 0]));
+    const y = normalize(cross(z, x));
+
+    const m = new Float32Array(16);
+    m[0] = x[0]; m[1] = y[0]; m[2] = z[0]; m[3] = 0;
+    m[4] = x[1]; m[5] = y[1]; m[6] = z[1]; m[7] = 0;
+    m[8] = x[2]; m[9] = y[2]; m[10] = z[2]; m[11] = 0;
+    m[12] = -dot(x, pos);
+    m[13] = -dot(y, pos);
+    m[14] = -dot(z, pos);
+    m[15] = 1;
+    return m;
+  }
+
+  // ---------- shaders ----------
+  const vs = `
+#version 300 es
+precision highp float;
+
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec3 aNormal;
+layout(location=2) in vec3 iCenter;
+layout(location=3) in vec3 iSize;
+layout(location=4) in vec3 iColor;
+layout(location=5) in float iAnim;
+
+uniform mat4 uView;
+uniform mat4 uProj;
+uniform float uTime;
+
+out vec3 vColor;
+out vec3 vNormal;
+out vec3 vWorld;
+out float vAnim;
+
+void main() {
+  vec3 center = iCenter;
+
+  // water wave animation
+  if (iAnim > 0.5 && iAnim < 1.5) {
+    center.y += sin(uTime * 1.55 + iCenter.x * 0.34 + iCenter.z * 0.22) * 0.22;
+  }
+
+  // ship bobbing / gentle sway
+  if (iAnim > 1.5 && iAnim < 2.5) {
+    center.y += sin(uTime * 1.2) * 0.12;
+    center.x += cos(uTime * 0.78) * 0.06;
+    center.z += sin(uTime * 0.58) * 0.04;
+  }
+
+  vec3 world = center + aPos * iSize;
+  vWorld = world;
+  vColor = iColor;
+  vNormal = aNormal;
+  vAnim = iAnim;
+
+  gl_Position = uProj * uView * vec4(world, 1.0);
+}
+`;
+
+  const fs = `
+#version 300 es
+precision highp float;
+
+in vec3 vColor;
+in vec3 vNormal;
+in vec3 vWorld;
+in float vAnim;
+
+uniform vec3 uLightDir;
+uniform vec3 uCamPos;
+uniform vec3 uFog;
+uniform float uTime;
+
+out vec4 frag;
+
+void main() {
+  vec3 n = normalize(vNormal);
+  vec3 L = normalize(uLightDir);
+
+  float diff = max(dot(n, L), 0.0);
+  float ao = clamp(0.72 + 0.22 * n.y, 0.68, 1.0);
+
+  vec3 ambient = mix(
+    vec3(0.34, 0.43, 0.53),
+    vec3(0.52, 0.42, 0.36),
+    0.5 - 0.5 * n.y
+  );
+
+  vec3 sun = vec3(1.0, 0.77, 0.56);
+  vec3 col = vColor * (ambient + sun * diff * 0.88) * ao;
+
+  vec3 V = normalize(uCamPos - vWorld);
+  vec3 R = reflect(-L, n);
+  float spec = pow(max(dot(R, V), 0.0), 28.0) * 0.18;
+  col += sun * spec;
+
+  // pulsing harbor lights
+  if (vAnim > 2.5) {
+    col *= 1.12 + 0.42 * sin(uTime * 2.3);
+  }
+
+  float d = length(vWorld - uCamPos);
+  float fog = clamp((d - 28.0) / 70.0, 0.0, 1.0) * 0.55;
+  col = mix(col, uFog, fog);
+
+  frag = vec4(col, 1.0);
+}
+`;
+
+  function compileShader(type, src) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      throw new Error(gl.getShaderInfoLog(s));
+    }
+    return s;
+  }
+
+  const prog = gl.createProgram();
+  gl.attachShader(prog, compileShader(gl.VERTEX_SHADER, vs));
+  gl.attachShader(prog, compileShader(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+    throw new Error(gl.getProgramInfoLog(prog));
+  }
+  gl.useProgram(prog);
+
+  const uView = gl.getUniformLocation(prog, "uView");
+  const uProj = gl.getUniformLocation(prog, "uProj");
+  const uTime = gl.getUniformLocation(prog, "uTime");
+  const uLightDir = gl.getUniformLocation(prog, "uLightDir");
+  const uCamPos = gl.getUniformLocation(prog, "uCamPos");
+  const uFog = gl.getUniformLocation(prog, "uFog");
+
+  // ---------- cube geometry ----------
+  const cubePos = [];
+  const cubeNormal = [];
+
+  function quad(nx, ny, nz, pts) {
+    const push = p => {
+      cubePos.push(p[0], p[1], p[2]);
+      cubeNormal.push(nx, ny, nz);
+    };
+    push(pts[0]); push(pts[1]); push(pts[2]);
+    push(pts[0]); push(pts[2]); push(pts[3]);
+  }
+
+  // +X
+  quad(1, 0, 0, [
+    [0.5, -0.5, -0.5],
+    [0.5,  0.5, -0.5],
+    [0.5,  0.5,  0.5],
+    [0.5, -0.5,  0.5]
+  ]);
+  // -X
+  quad(-1, 0, 0, [
+    [-0.5, -0.5,  0.5],
+    [-0.5,  0.5,  0.5],
+    [-0.5,  0.5, -0.5],
+    [-0.5, -0.5, -0.5]
+  ]);
+  // +Y
+  quad(0, 1, 0, [
+    [-0.5, 0.5, -0.5],
+    [ 0.5, 0.5, -0.5],
+    [ 0.5, 0.5,  0.5],
+    [-0.5, 0.5,  0.5]
+  ]);
+  // -Y
+  quad(0, -1, 0, [
+    [-0.5, -0.5, 0.5],
+    [ 0.5, -0.5, 0.5],
+    [ 0.5, -0.5, -0.5],
+    [-0.5, -0.5, -0.5]
+  ]);
+  // +Z
+  quad(0, 0, 1, [
+    [-0.5, -0.5, 0.5],
+    [ 0.5, -0.5, 0.5],
+    [ 0.5,  0.5, 0.5],
+    [-0.5,  0.5, 0.5]
+  ]);
+  // -Z
+  quad(0, 0, -1, [
+    [ 0.5, -0.5, -0.5],
+    [-0.5, -0.5, -0.5],
+    [-0.5,  0.5, -0.5],
+    [ 0.5,  0.5, -0.5]
+  ]);
+
+  const posBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(cubePos), gl.STATIC_DRAW);
+
+  const normalBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, normalBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(cubeNormal), gl.STATIC_DRAW);
+
+  // ---------- scene construction ----------
+  const centers = [];
+  const sizes = [];
+  const colors = [];
+  const anims = [];
+
+  function addCube(cx, cy, cz, sx, sy, sz, color, anim = 0) {
+    centers.push(cx, cy, cz);
+    sizes.push(sx, sy, sz);
+    colors.push(color[0], color[1], color[2]);
+    anims.push(anim);
+  }
+
+  const COL = {
+    seaDeep: hex("#255c75"),
+    seaMid: hex("#337289"),
+    foam: hex("#8db6c8"),
+
+    dockDark: hex("#3b2b20"),
+    dock: hex("#956646"),
+    dockLight: hex("#b68757"),
+
+    hullLow: hex("#493222"),
+    hullMid: hex("#694a31"),
+    deck: hex("#947358"),
+    cabin: hex("#573928"),
+    wood: hex("#5b4330"),
+    rope: hex("#a78a62"),
+
+    sail: hex("#ece3d2"),
+    sail2: hex("#d5c7ad"),
+
+    stone: hex("#8f897c"),
+    stoneLight: hex("#a7a08f"),
+
+    brick: hex("#b3694b"),
+    roof: hex("#585c63"),
+    roofDark: hex("#3f454e"),
+    window: hex("#2b333a"),
+
+    white: hex("#e6dfd2"),
+    red: hex("#c24334"),
+    light: hex("#ffd682"),
+    bollard: hex("#b3463b"),
+    flag: hex("#c64538"),
+
+    cargo: hex("#74593a"),
+    cargoGreen: hex("#4f7752"),
+    cargoBlue: hex("#3b6d8f"),
+
+    grass: hex("#688e51"),
+    grassDark: hex("#557643"),
+    trunk: hex("#5d4430"),
+    leaf: hex("#608b4d"),
+    leafDark: hex("#4b6d3b")
+  };
+
+  // Harbor water
+  addCube(4, -1.0, 0, 80, 2.0, 50, COL.seaDeep, 0);
+
+  // Animated waves
+  for (let x = -34; x <= 38; x += 2) {
+    for (let z = -22; z <= 22; z += 2) {
+      if (x >= 11 && x <= 30 && Math.abs(z) <= 15) continue;
+      const r = rand(x, z);
+      if (r < 0.38) continue;
+      const col = r > 0.8 ? COL.foam : COL.seaMid;
+      addCube(x, 0.1 + r * 0.2, z, 1.4, 0.35, 1.4, col, 1);
+    }
+  }
+
+  // Dock: supports, quay wall, deck
+  for (let x = 14; x <= 28; x += 4) {
+    for (let z = -14; z <= 14; z += 4) {
+      addCube(x, 0.5, z, 2.0, 1.0, 2.0, COL.dockDark, 0);
+    }
+  }
+
+  for (let z = -14; z <= 14; z += 2) {
+    addCube(12.5, 1.0, z, 1.1, 1.2, 2.0, COL.stone, 0);
+    addCube(12.5, 1.65, z, 1.2, 0.3, 2.0, COL.stoneLight, 0);
+  }
+
+  for (let x = 14; x <= 28; x += 2) {
+    for (let z = -14; z <= 14; z += 2) {
+      const r = rand(x, z);
+      addCube(x, 1.25, z, 2.0, 0.5, 2.0, r > 0.5 ? COL.dock : COL.dockLight, 0);
+    }
+  }
+
+  // Bollards and mooring rope
+  for (const z of [0, 3, -3]) {
+    addCube(12.7, 1.9, z, 0.9, 1.0, 0.9, COL.bollard, 0);
+  }
+  addCube(11.8, 2.7, 0, 2.0, 0.25, 0.25, COL.rope, 0);
+
+  // Dock lamps
+  function addLamp(x, z) {
+    addCube(x, 2.1, z, 0.6, 1.2, 0.6, hex("#3a4047"), 0);
+    addCube(x, 2.9, z, 1.2, 0.8, 1.2, COL.light, 3);
+  }
+  addLamp(25, 0);
+  addLamp(22, 14);
+  addLamp(20, -14);
+
+  // Cargo on dock near the ship
+  for (let x = 14; x <= 18; x += 2) {
+    for (let z = -12; z <= 12; z += 4) {
+      const r = rand(x, z);
+      if (r > 0.55) {
+        const c = r > 0.8 ? COL.cargoGreen : r > 0.7 ? COL.cargoBlue : COL.cargo;
+        addCube(x, 2.0, z, 2.0, 2.0, 2.0, c, 0);
+        if (r > 0.92) {
+          addCube(x + 0.2, 3.8, z, 1.4, 1.4, 1.4, COL.cargo, 0);
+        }
+      } else if (r > 0.35) {
+        addCube(x, 1.9, z, 1.4, 1.4, 1.4, COL.cargo, 0);
+      }
+    }
+  }
+
+  // Warehouses behind the dock
+  function addWarehouse(cx, cz, w, h, d) {
+    const left = cx - w / 2;
+    const base = 1.5;
+
+    addCube(cx, base + h / 2, cz, w, h, d, COL.brick, 0);
+    addCube(cx, base + h + 0.75, cz, w + 1.0, 1.5, d + 1.0, COL.roof, 0);
+    addCube(cx, base + h + 1.6, cz, w + 1.0, 0.6, 1.2, COL.roofDark, 0);
+
+    // Door facing dock side
+    addCube(left - 0.1, base + 1.2, cz, 0.2, 2.4, 2.0, COL.window, 0);
+
+    // Windows facing dock side
+    for (let z = cz - d / 2 + 1; z <= cz + d / 2 - 1; z += 2) {
+      addCube(left - 0.1, base + h * 0.35, z, 0.2, 1.2, 1.2, COL.window, 0);
+      addCube(left - 0.1, base + h * 0.65, z, 0.2, 1.2, 1.2, COL.window, 0);
+    }
+  }
+
+  addWarehouse(22, -8, 10, 5, 8);
+  addWarehouse(24, 8, 8, 4, 6);
+
+  // Lighthouse
+  function addLighthouse(x, z) {
+    addCube(x, 2.2, z, 3.5, 2.2, 3.5, COL.stone, 0);
+    addCube(x, 4.2, z, 2.6, 1.6, 2.6, COL.white, 0);
+    addCube(x, 5.2, z, 2.4, 1.2, 2.4, COL.red, 0);
+    addCube(x, 6.2, z, 2.2, 1.2, 2.2, COL.white, 0);
+    addCube(x, 7.0, z, 2.6, 1.0, 2.6, COL.roofDark, 0);
+    addCube(x, 7.6, z, 1.2, 0.9, 1.2, COL.light, 3);
+    addCube(x, 8.1, z, 1.5, 0.4, 1.5, COL.roofDark, 0);
+  }
+  addLighthouse(26, -12);
+
+  // Land behind harbor
+  for (let x = 30; x <= 36; x += 2) {
+    for (let z = -16; z <= 16; z += 2) {
+      const r = rand(x, z);
+      addCube(x, 2.1, z, 2.0, 0.6, 2.0, r > 0.6 ? COL.grassDark : COL.grass, 0);
+    }
+  }
+
+  function addTree(x, z) {
+    addCube(x, 3.2, z, 0.8, 2.0, 0.8, COL.trunk, 0);
+    addCube(x, 4.7, z, 3.2, 2.2, 3.2, COL.leaf, 0);
+    addCube(x, 5.8, z, 2.4, 1.4, 2.4, COL.leafDark, 0);
+  }
+  addTree(32, -12);
+  addTree(33, 4);
+  addTree(32, 14);
+
+  // ---------- ship ----------
+  function addShipHull() {
+    for (let xi = -10; xi <= 8; xi++) {
+      const t = (xi + 12) / 22;
+      const prof = 1 - Math.pow(2 * t - 1, 2);
+      const halfZ = Math.max(0, Math.round(2.6 * prof));
+
+      addCube(xi, 0.9, 0, 1.1, 1.6, halfZ * 2 + 1, COL.hullLow, 2);
+      const upperHalf = Math.max(0, halfZ - 1);
+      addCube(xi, 2.0, 0, 1.1, 1.1, upperHalf * 2 + 1, COL.hullMid, 2);
+      addCube(xi, 3.0, 0, 1.2, 0.6, halfZ * 2 + 1, COL.deck, 2);
+    }
+
+    // Bow stem
+    addCube(10.5, 2.2, 0, 1.0, 1.2, 1.4, COL.hullLow, 2);
+    addCube(10.5, 3.0, 0, 1.2, 0.6, 1.4, COL.deck, 2);
+    addCube(10.9, 2.8, 0, 0.7, 0.5, 0.6, COL.cabin, 2); // cleat
+
+    // Stern post / sterncastle
+    addCube(-13.0, 2.4, 0, 0.8, 1.4, 2.6, COL.hullLow, 2);
+    addCube(-12.0, 3.9, 0, 2.6, 1.8, 4.2, COL.cabin, 2);
+    addCube(-13.3, 3.9, -1, 0.3, 1.0, 0.9, COL.window, 2);
+    addCube(-13.3, 3.9, 1, 0.3, 1.0, 0.9, COL.window, 2);
+
+    // Cargo on deck
+    addCube(-9, 4.0, -2, 1.5, 1.5, 1.5, COL.cargoGreen, 2);
+    addCube(-6, 3.8, 2, 1.2, 1.2, 1.2, COL.cargoBlue, 2);
+    addCube(-1, 3.8, -2, 1.2, 1.2, 1.2, COL.cargo, 2);
+    addCube(2, 3.9, 1, 1.4, 1.4, 1.4, COL.cargo, 2);
+  }
+
+  function addMast(x, topY, yardY, yardLen, sailLen, upper) {
+    for (let y = 3.5; y <= topY; y += 1.0) {
+      addCube(x, y, 0, 0.6, 1.0, 0.6, COL.wood, 2);
+    }
+
+    addCube(x, yardY, 0, 0.8, 0.7, yardLen, COL.wood, 2);
+    addCube(x, yardY - 1.4, 0, 0.45, 2.6, sailLen, COL.sail, 2);
+
+    if (upper) {
+      addCube(x, yardY + 1.0, 0, 0.7, 0.6, yardLen * 0.75, COL.wood, 2);
+      addCube(x, yardY + 0.3, 0, 0.4, 1.3, sailLen * 0.65, COL.sail2, 2);
+    }
+  }
+
+  addShipHull();
+
+  addMast(5, 7.6, 6.3, 5.8, 5.0, false);
+  addMast(-2, 8.8, 7.2, 8.8, 7.6, true);
+  addMast(-8, 7.5, 6.3, 5.2, 4.4, false);
+
+  // Ship flag
+  addCube(-2, 8.9, 0, 0.8, 0.8, 0.2, COL.flag, 2);
+  addCube(-12, 5.2, 0, 0.5, 1.0, 0.2, COL.flag, 2);
+
+  // ---------- upload instanced scene ----------
+  const instanceCount = centers.length / 3;
+
+  const centerBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, centerBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(centers), gl.STATIC_DRAW);
+
+  const sizeBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, sizeBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(sizes), gl.STATIC_DRAW);
+
+  const colorBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, colorBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+
+  const animBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, animBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(anims), gl.STATIC_DRAW);
+
+  const vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+  gl.vertexAttribDivisor(0, 0);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, normalBuf);
+  gl.enableVertexAttribArray(1);
+  gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
+  gl.vertexAttribDivisor(1, 0);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, centerBuf);
+  gl.enableVertexAttribArray(2);
+  gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
+  gl.vertexAttribDivisor(2, 1);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, sizeBuf);
+  gl.enableVertexAttribArray(3);
+  gl.vertexAttribPointer(3, 3, gl.FLOAT, false, 0, 0);
+  gl.vertexAttribDivisor(3, 1);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, colorBuf);
+  gl.enableVertexAttribArray(4);
+  gl.vertexAttribPointer(4, 3, gl.FLOAT, false, 0, 0);
+  gl.vertexAttribDivisor(4, 1);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, animBuf);
+  gl.enableVertexAttribArray(5);
+  gl.vertexAttribPointer(5, 1, gl.FLOAT, false, 0, 0);
+  gl.vertexAttribDivisor(5, 1);
+
+  gl.bindVertexArray(null);
+
+  // ---------- camera / mouse ----------
+  let target = [3, 4, 0];
+  let theta = 2.25;
+  let phi = 1.05;
+  let dist = 34;
+
+  const minDist = 6;
+  const maxDist = 90;
+  const minPhi = 0.18;
+  const maxPhi = 1.42;
+
+  const pointers = new Map();
+  let pinchDist = 0;
+
+  canvas.addEventListener("contextmenu", e => e.preventDefault());
+
+  canvas.addEventListener("pointerdown", e => {
+    canvas.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, button: e.button });
+    if (pointers.size === 2) {
+      const pts = [...pointers.values()];
+      pinchDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    }
+  });
+
+  canvas.addEventListener("pointermove", e => {
+    const p = pointers.get(e.pointerId);
+    if (!p) return;
+
+    const dx = e.clientX - p.x;
+    const dy = e.clientY - p.y;
+    p.x = e.clientX;
+    p.y = e.clientY;
+
+    if (pointers.size === 1) {
+      if (p.button === 2) {
+        const sinPhi = Math.sin(phi);
+        const cosPhi = Math.cos(phi);
+        const z = normalize([
+          sinPhi * Math.cos(theta),
+          cosPhi,
+          sinPhi * Math.sin(theta)
+        ]);
+        const x = normalize(cross(z, [0, 1, 0]));
+        const y = normalize(cross(z, x));
+
+        const factor = dist * 0.0015;
+        target[0] += (x[0] * dx - y[0] * dy) * factor;
+        target[1] += (x[1] * dx - y[1] * dy) * factor;
+        target[2] += (x[2] * dx - y[2] * dy) * factor;
+
+        target[0] = Math.max(-30, Math.min(36, target[0]));
+        target[1] = Math.max(1.5, Math.min(9, target[1]));
+        target[2] = Math.max(-22, Math.min(22, target[2]));
+      } else {
+        theta -= dx * 0.006;
+        phi -= dy * 0.005;
+        phi = Math.max(minPhi, Math.min(maxPhi, phi));
+      }
+    } else if (pointers.size === 2) {
+      const pts = [...pointers.values()];
+      const newDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      dist = Math.max(minDist, Math.min(maxDist, dist * (pinchDist / newDist)));
+      pinchDist = newDist;
+    }
+  });
+
+  function endPointer(e) {
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) pinchDist = 0;
+  }
+
+  canvas.addEventListener("pointerup", endPointer);
+  canvas.addEventListener("pointercancel", endPointer);
+
+  canvas.addEventListener("wheel", e => {
+    e.preventDefault();
+    dist *= Math.exp(e.deltaY * 0.001);
+    dist = Math.max(minDist, Math.min(maxDist, dist));
+  }, { passive: false });
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.floor(window.innerWidth * dpr);
+    const h = Math.floor(window.innerHeight * dpr);
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    gl.viewport(0, 0, canvas.width, canvas.height);
+  }
+
+  const lightDir = normalize([0.28, 0.42, 0.20]);
+  const fogColor = hex("#d8b391");
+
+  gl.enable(gl.DEPTH_TEST);
+  gl.depthFunc(gl.LEQUAL);
+  gl.disable(gl.CULL_FACE);
+
+  gl.useProgram(prog);
+  gl.uniform3fv(uLightDir, lightDir);
+  gl.uniform3fv(uFog, fogColor);
+
+  const start = performance.now();
+
+  function render() {
+    resize();
+
+    const time = (performance.now() - start) * 0.001;
+    const aspect = canvas.width / canvas.height;
+    const proj = makePerspective(52 * Math.PI / 180, aspect, 0.1, 200);
+
+    const sinPhi = Math.sin(phi);
+    const cosPhi = Math.cos(phi);
+
+    const pos = [
+      target[0] + dist * sinPhi * Math.cos(theta),
+      target[1] + dist * cosPhi,
+      target[2] + dist * sinPhi * Math.sin(theta)
+    ];
+
+    const view = makeView(pos, target);
+
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    gl.uniformMatrix4fv(uProj, false, proj);
+    gl.uniformMatrix4fv(uView, false, view);
+    gl.uniform3fv(uCamPos, pos);
+    gl.uniform1f(uTime, time);
+
+    gl.bindVertexArray(vao);
+    gl.drawArraysInstanced(gl.TRIANGLES, 0, 36, instanceCount);
+    gl.bindVertexArray(null);
+
+    requestAnimationFrame(render);
+  }
+
+  render();
+}
+
+main();
+</script>
+</body>
+</html>
+```

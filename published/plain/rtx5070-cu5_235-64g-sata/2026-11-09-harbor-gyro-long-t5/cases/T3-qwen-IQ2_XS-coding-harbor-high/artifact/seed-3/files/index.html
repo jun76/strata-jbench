@@ -1,0 +1,590 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Voxel Ship Calling at a Harbor</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #6c90b4;
+      font-family: Arial, system-ui, sans-serif;
+    }
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      cursor: grab;
+    }
+    #ui {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      color: #eef8ff;
+      font-size: 14px;
+      text-shadow: 0 1px 3px rgba(0,0,0,.45);
+      pointer-events: none;
+    }
+    #ui b {
+      display: block;
+      margin-bottom: 4px;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+  <div id="ui">
+    <b>Voxel sailing ship calling at a harbor</b>
+    drag to rotate, scroll/wheel to zoom
+  </div>
+
+  <script>
+    const canvas = document.getElementById("scene");
+    const ctx = canvas.getContext("2d");
+
+    let W = 0;
+    let H = 0;
+    let dpr = 1;
+
+    function resize() {
+      W = window.innerWidth;
+      H = window.innerHeight;
+      dpr = Math.min(2, window.devicePixelRatio || 1);
+      canvas.width = Math.floor(W * dpr);
+      canvas.height = Math.floor(H * dpr);
+    }
+
+    resize();
+
+    const C = {
+      water: [0x376f88, 0x3f809b, 0x4893ae, 0x306077, 0x3a6e87, 0x478dab],
+      foam: 0x95d5cb,
+
+      sand: 0xb28d56,
+      grass: 0x567a42,
+      grassDark: 0x435e35,
+
+      stone: 0x656d79,
+      stoneDark: 0x52575d,
+
+      wood: 0x7d5538,
+      woodDark: 0x48352a,
+
+      hull: 0x423a36,
+      deck: 0x8d653f,
+      mast: 0x2c2825,
+
+      sail: 0xf1f0ea,
+      sailAlt: 0xd7e1d5,
+
+      red: 0xc84e46,
+      white: 0xf3f1ea,
+      yellow: 0xd7b03d,
+      dark: 0x2b2827,
+
+      roof: 0x4b3f2c,
+      glass: 0x82c2c4,
+      gold: 0xcf9d4d
+    };
+
+    // Faces of a voxel cube. Cube coordinates are lower-left-front corners.
+    const FACES = [
+      {
+        n: [1, 0, 0],
+        neighbor: [1, 0, 0],
+        center: [1, 0.5, 0.5],
+        shade: 0.85,
+        vertices: [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]]
+      },
+      {
+        n: [-1, 0, 0],
+        neighbor: [-1, 0, 0],
+        center: [0, 0.5, 0.5],
+        shade: 0.70,
+        vertices: [[0, 0, 1], [0, 1, 1], [0, 1, 0], [0, 0, 0]]
+      },
+      {
+        n: [0, 1, 0],
+        neighbor: [0, 1, 0],
+        center: [0.5, 1, 0.5],
+        shade: 1.00,
+        vertices: [[0, 1, 0], [1, 1, 0], [1, 1, 1], [0, 1, 1]]
+      },
+      {
+        n: [0, -1, 0],
+        neighbor: [0, -1, 0],
+        center: [0.5, 0, 0.5],
+        shade: 0.35,
+        vertices: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]]
+      },
+      {
+        n: [0, 0, 1],
+        neighbor: [0, 0, 1],
+        center: [0.5, 0.5, 1],
+        shade: 0.80,
+        vertices: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]]
+      },
+      {
+        n: [0, 0, -1],
+        neighbor: [0, 0, -1],
+        center: [0.5, 0.5, 0],
+        shade: 0.62,
+        vertices: [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]]
+      }
+    ];
+
+    const TOP = 2;
+
+    function key(x, y, z) {
+      return (((x + 64) * 128 + (z + 64)) * 128 + (y + 64));
+    }
+
+    const voxels = new Map();
+
+    function shadeRGB(c, f) {
+      const r = Math.round(((c >> 16) & 255) * f);
+      const g = Math.round(((c >> 8) & 255) * f);
+      const b = Math.round((c & 255) * f);
+      return `rgb(${r},${g},${b})`;
+    }
+
+    function set(x, y, z, c, flat = false) {
+      const k = key(x, y, z);
+      let obj = voxels.get(k);
+
+      if (obj) {
+        obj.c = c;
+        obj.flat = flat;
+        return obj;
+      }
+
+      obj = { x, y, z, c, flat, exposed: [] };
+      voxels.set(k, obj);
+      return obj;
+    }
+
+    function fillCube(x1, x2, y1, y2, z1, z2, c, flat = false) {
+      for (let x = x1; x <= x2; x++) {
+        for (let y = y1; y <= y2; y++) {
+          for (let z = z1; z <= z2; z++) {
+            set(x, y, z, c, flat);
+          }
+        }
+      }
+    }
+
+    function clamp(v, lo, hi) {
+      if (v < lo) return lo;
+      if (v > hi) return hi;
+      return v;
+    }
+
+    function addShip() {
+      function half(z) {
+        return Math.max(1, Math.min(8, z + 13, 12 - z));
+      }
+
+      function sailRect(z0, z1, y0, y1, color) {
+        for (let x = -2; x <= 2; x++) {
+          for (let y = y0; y <= y1; y++) {
+            for (let z = z0; z <= z1; z++) {
+              set(x, y, z, color, false);
+            }
+          }
+        }
+      }
+
+      function addMastAndFlag(z, top, flagColor) {
+        for (let y = 4; y <= top; y++) {
+          set(0, y, z, C.mast, false);
+        }
+        set(1, top, z, flagColor, false);
+      }
+
+      // Hull.
+      for (let z = -13; z <= 5; z++) {
+        const h = half(z);
+        for (let x = -h; x <= h; x++) {
+          for (let y = 1; y <= 3; y++) {
+            let c;
+            if (y === 3) c = C.deck;
+            else if (y === 2 && Math.abs(x) === h && z >= -11 && z <= 3) c = C.red;
+            else c = C.hull;
+
+            set(x, y, z, c, false);
+          }
+        }
+      }
+
+      // Bowsprit.
+      for (let z = -17; z <= -12; z++) {
+        set(0, 4, z, C.dark, false);
+      }
+      set(0, 4, -13, C.gold, false);
+
+      // Square sails.
+      sailRect(-11, -6, 5, 10, C.sail);
+      sailRect(-11, -6, 11, 14, C.sailAlt);
+
+      sailRect(-6, 2, 6, 12, C.sail);
+      sailRect(-6, 2, 13, 16, C.sailAlt);
+
+      sailRect(0, 6, 5, 9, C.sail);
+      sailRect(0, 6, 10, 13, C.sailAlt);
+
+      // Simple rigging lines.
+      for (let z = -8; z <= -2; z++) {
+        set(0, 5, z, C.dark, false);
+      }
+      for (let z = -2; z <= 3; z++) {
+        set(0, 6, z, C.dark, false);
+      }
+
+      // Deck furniture kept outside the sail planes.
+      fillCube(-5, -3, 4, 4, -11, -10, C.deck, false);
+      fillCube(-4, -4, 5, 5, -10, -10, C.deck, false);
+
+      fillCube(3, 4, 4, 4, 3, 5, C.deck, false);
+      fillCube(3, 4, 5, 5, 4, 5, C.deck, false);
+
+      set(0, 5, 6, C.yellow, false);
+
+      // Masts and pennants.
+      addMastAndFlag(-8, 15, C.red);
+      addMastAndFlag(-2, 16, C.red);
+      addMastAndFlag(3, 14, C.red);
+    }
+
+    function buildScene() {
+      const waterColors = C.water;
+
+      // Harbor water surface.
+      for (let z = -30; z <= 30; z++) {
+        for (let x = -30; x <= 30; x++) {
+          const idx = ((x * 3 + z * 5 + 11) % waterColors.length + waterColors.length) % waterColors.length;
+          set(x, 0, z, waterColors[idx], true);
+        }
+      }
+
+      // Shore and quay.
+      for (let z = 23; z <= 32; z++) {
+        for (let x = -18; x <= 30; x++) {
+          const c = z === 23 ? C.sand : (x >= 20 && z >= 28 ? C.grassDark : C.grass);
+          set(x, 1, z, c, true);
+        }
+      }
+
+      // Small grassy rise.
+      for (let z = 28; z <= 32; z++) {
+        for (let x = 20; x <= 30; x++) {
+          set(x, 2, z, C.grassDark, true);
+        }
+      }
+
+      for (let x = 8; x <= 30; x++) {
+        set(x, 1, 23, C.stone, true);
+      }
+
+      // Harbor entrance jetties.
+      for (let z = -24; z <= 16; z++) {
+        for (let x = -15; x <= -14; x++) {
+          const idx = Math.abs(x * 5 + z * 2 + 7) % 4;
+          set(x, 1, z, idx === 0 ? C.stoneDark : C.stone, true);
+        }
+
+        for (let x = 14; x <= 15; x++) {
+          const idx = Math.abs(x * 3 + z * 11 + 9) % 4;
+          set(x, 1, z, idx === 0 ? C.stoneDark : C.stone, true);
+        }
+      }
+
+      // Lighthouse on the jetty.
+      for (let y = 2; y <= 7; y++) {
+        const c = y % 2 === 0 ? C.white : C.red;
+        for (let x = 13; x <= 15; x++) {
+          for (let z = 17; z <= 19; z++) {
+            set(x, y, z, c, false);
+          }
+        }
+      }
+
+      set(14, 8, 18, C.glass, false);
+      set(14, 9, 18, C.red, false);
+
+      // Buoy lights.
+      set(-10, 1, -12, C.red, true);
+      set(-10, 2, -12, C.dark, false);
+      set(-10, 3, -12, C.red, false);
+
+      set(10, 1, -12, C.yellow, true);
+      set(10, 2, -12, C.dark, false);
+      set(10, 3, -12, C.yellow, false);
+
+      // Dock.
+      fillCube(6, 12, 2, 2, 20, 23, C.wood, true);
+      fillCube(7, 7, 1, 1, 21, 22, C.woodDark, false);
+      fillCube(11, 11, 1, 1, 22, 23, C.woodDark, false);
+
+      // Small crane.
+      set(11, 3, 21, C.dark, false);
+      set(11, 4, 21, C.dark, false);
+      set(11, 5, 21, C.dark, false);
+      set(10, 5, 21, C.dark, false);
+      set(12, 5, 21, C.dark, false);
+
+      // Warehouses.
+      fillCube(22, 26, 2, 4, 24, 26, C.red, false);
+      fillCube(22, 26, 5, 5, 24, 26, C.roof, false);
+
+      fillCube(27, 30, 2, 3, 24, 25, C.wood, false);
+      fillCube(27, 30, 4, 4, 24, 25, C.roof, false);
+
+      fillCube(17, 19, 2, 3, 24, 25, C.white, false);
+      fillCube(17, 19, 4, 4, 24, 25, C.roof, false);
+
+      // Small harbor boat.
+      fillCube(3, 5, 1, 1, 14, 16, C.woodDark, true);
+      fillCube(4, 4, 2, 2, 15, 15, C.white, false);
+      fillCube(3, 5, 3, 3, 15, 15, C.sailAlt, false);
+
+      // Ship.
+      addShip();
+
+      // Wake.
+      for (let z = -18; z <= -14; z++) {
+        for (let x = -2; x <= 2; x++) {
+          set(x, 0, z, C.foam, true);
+        }
+      }
+
+      for (let z = -11; z <= -6; z++) {
+        for (let x = -1; x <= 1; x++) {
+          set(x, 0, z, C.foam, true);
+        }
+      }
+    }
+
+    buildScene();
+
+    function computeExposed() {
+      for (const obj of voxels.values()) {
+        obj.exposed = [];
+
+        if (obj.flat) {
+          if (!voxels.has(key(obj.x, obj.y + 1, obj.z))) {
+            obj.exposed.push({
+              fi: TOP,
+              fill: shadeRGB(obj.c, FACES[TOP].shade)
+            });
+          }
+        } else {
+          for (let i = 0; i < FACES.length; i++) {
+            const f = FACES[i];
+
+            if (!voxels.has(key(obj.x + f.neighbor[0], obj.y + f.neighbor[1], obj.z + f.neighbor[2]))) {
+              obj.exposed.push({
+                fi: i,
+                fill: shadeRGB(obj.c, f.shade)
+              });
+            }
+          }
+        }
+      }
+    }
+
+    computeExposed();
+
+    let yaw = 0.45;
+    let pitch = -0.65;
+    let dist = 115;
+
+    const faces = [];
+    let queued = false;
+
+    function queueRender() {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        render();
+      });
+    }
+
+    function render() {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      const sky = ctx.createLinearGradient(0, 0, 0, H);
+      sky.addColorStop(0, "#6480a3");
+      sky.addColorStop(0.42, "#81a7c0");
+      sky.addColorStop(1, "#43718b");
+
+      ctx.fillStyle = sky;
+      ctx.fillRect(0, 0, W, H);
+
+      const cosY = Math.cos(yaw);
+      const sinY = Math.sin(yaw);
+      const cosP = Math.cos(pitch);
+      const sinP = Math.sin(pitch);
+
+      const focal = Math.min(W, H) * 1.7;
+      const centerX = W / 2;
+      const centerY = H / 2;
+
+      function rotNormal(nx, ny, nz) {
+        const x1 = nx * cosY - nz * sinY;
+        const z1 = nx * sinY + nz * cosY;
+
+        const y2 = ny * cosP - z1 * sinP;
+        const z2 = ny * sinP + z1 * cosP;
+
+        return [x1, y2, z2];
+      }
+
+      function transformPoint(x, y, z) {
+        const x1 = x * cosY - z * sinY;
+        const z1 = x * sinY + z * cosY;
+
+        const y2 = y * cosP - z1 * sinP;
+        const z2 = y * sinP + z1 * cosP + dist;
+
+        return { x: x1, y: y2, z: z2 };
+      }
+
+      const rNorms = FACES.map(f => rotNormal(f.n[0], f.n[1], f.n[2]));
+
+      faces.length = 0;
+
+      for (const obj of voxels.values()) {
+        for (const e of obj.exposed) {
+          const fi = e.fi;
+          const f = FACES[fi];
+
+          const pc = transformPoint(obj.x + f.center[0], obj.y + f.center[1], obj.z + f.center[2]);
+          if (pc.z <= 0) continue;
+
+          const rn = rNorms[fi];
+          const dot = rn[0] * pc.x + rn[1] * pc.y + rn[2] * pc.z;
+
+          // Painter/backface test: draw face only if its normal faces the camera.
+          if (dot > -0.0003) continue;
+
+          let ok = true;
+          let depthSum = 0;
+
+          let p0x = 0, p0y = 0;
+          let p1x = 0, p1y = 0;
+          let p2x = 0, p2y = 0;
+          let p3x = 0, p3y = 0;
+
+          for (let i = 0; i < f.vertices.length; i++) {
+            const v = f.vertices[i];
+            const t = transformPoint(obj.x + v[0], obj.y + v[1], obj.z + v[2]);
+
+            if (t.z <= 0) {
+              ok = false;
+              break;
+            }
+
+            const px = centerX + t.x * focal / t.z;
+            const py = centerY - t.y * focal / t.z;
+
+            if (i === 0) {
+              p0x = px;
+              p0y = py;
+            } else if (i === 1) {
+              p1x = px;
+              p1y = py;
+            } else if (i === 2) {
+              p2x = px;
+              p2y = py;
+            } else {
+              p3x = px;
+              p3y = py;
+            }
+
+            depthSum += t.z;
+          }
+
+          if (!ok) continue;
+
+          faces.push({
+            p0x, p0y,
+            p1x, p1y,
+            p2x, p2y,
+            p3x, p3y,
+            depth: depthSum / f.vertices.length,
+            fill: e.fill
+          });
+        }
+      }
+
+      // Painter order: far faces first, near faces last.
+      faces.sort((a, b) => b.depth - a.depth);
+
+      for (const face of faces) {
+        ctx.fillStyle = face.fill;
+
+        ctx.beginPath();
+        ctx.moveTo(face.p0x, face.p0y);
+        ctx.lineTo(face.p1x, face.p1y);
+        ctx.lineTo(face.p2x, face.p2y);
+        ctx.lineTo(face.p3x, face.p3y);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    window.addEventListener("resize", () => {
+      resize();
+      queueRender();
+    });
+
+    let dragging = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    canvas.addEventListener("pointerdown", e => {
+      dragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      canvas.setPointerCapture(e.pointerId);
+    });
+
+    canvas.addEventListener("pointermove", e => {
+      if (!dragging) return;
+
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+
+      lastX = e.clientX;
+      lastY = e.clientY;
+
+      yaw += dx * 0.008;
+      pitch += dy * 0.008;
+      pitch = clamp(pitch, -1.30, 0.30);
+
+      queueRender();
+    });
+
+    canvas.addEventListener("pointerup", () => {
+      dragging = false;
+    });
+
+    canvas.addEventListener("pointercancel", () => {
+      dragging = false;
+    });
+
+    canvas.addEventListener("wheel", e => {
+      e.preventDefault();
+
+      dist *= 1 + e.deltaY * 0.01;
+      dist = clamp(dist, 60, 220);
+
+      queueRender();
+    }, { passive: false });
+
+    render();
+  </script>
+</body>
+</html>

@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Voxel Scene: Sailing Ship Calling at a Harbor</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #8eb6c4;
+    }
+
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #ui {
+      position: fixed;
+      left: 12px;
+      bottom: 12px;
+      font-family: system-ui, Arial, sans-serif;
+      font-size: 13px;
+      color: #0f334a;
+      background: rgba(255, 255, 255, 0.75);
+      padding: 8px 10px;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+  <div id="ui">Drag to orbit. Scroll to zoom. Arrow keys rotate.</div>
+
+  <script>
+    const canvas = document.getElementById("scene");
+    const ctx = canvas.getContext("2d");
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+
+    let yaw = -0.85;
+    let pitch = 0.45;
+    let zoom = 1.0;
+    let dragging = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    function resize() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+      canvas.width = Math.floor(window.innerWidth * dpr);
+      canvas.height = Math.floor(window.innerHeight * dpr);
+      canvas.style.width = window.innerWidth + "px";
+      canvas.style.height = window.innerHeight + "px";
+    }
+
+    resize();
+    window.addEventListener("resize", resize);
+
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+    function dot(a, b) {
+      return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    }
+
+    function cross(a, b) {
+      return [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0]
+      ];
+    }
+
+    function normalize(v) {
+      const len = Math.hypot(v[0], v[1], v[2]);
+      if (len < 1e-8) return [0, 0, 0];
+      return [v[0] / len, v[1] / len, v[2] / len];
+    }
+
+    function hexToRgb(hex) {
+      const n = parseInt(hex.slice(1), 16);
+      return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    }
+
+    const LIGHT = normalize([0.45, 0.82, 0.15]);
+
+    function shade(rgb, nx, ny, nz) {
+      const d = Math.max(0, nx * LIGHT[0] + ny * LIGHT[1] + nz * LIGHT[2]);
+      const b = 0.68 + 0.32 * d;
+      return [
+        clamp(Math.round(rgb[0] * b), 0, 255),
+        clamp(Math.round(rgb[1] * b), 0, 255),
+        clamp(Math.round(rgb[2] * b), 0, 255)
+      ];
+    }
+
+    // -------------------------------------------------------
+    // Scene colors
+    // -------------------------------------------------------
+    const WATER       = hexToRgb("#1b465d");
+    const WATER_LIGHT = hexToRgb("#25637c");
+    const WATER_DARK  = hexToRgb("#123342");
+    const FOAM        = hexToRgb("#b9d8e8");
+
+    const SAND        = hexToRgb("#8b9d7a");
+    const ROCK        = hexToRgb("#586571");
+
+    const DOCK        = hexToRgb("#78573b");
+    const DOCK_DARK   = hexToRgb("#4b3522");
+
+    const WALL        = hexToRgb("#c37768");
+    const ROOF        = hexToRgb("#313e4f");
+    const WHITE       = hexToRgb("#eef3f5");
+    const LIGHT_COLOR = hexToRgb("#ffd464");
+    const GRAY        = hexToRgb("#7c868e");
+    const LAMP        = hexToRgb("#56626b");
+
+    const CRATE       = hexToRgb("#a77456");
+    const CRATE2      = hexToRgb("#8f7b59");
+    const BUOY        = hexToRgb("#c7473f");
+
+    const HULL        = hexToRgb("#4d3b2c");
+    const HULL_LIGHT  = hexToRgb("#624836");
+    const DECK        = hexToRgb("#8c7150");
+    const MAST        = hexToRgb("#453626");
+    const SAIL        = hexToRgb("#f1e9d4");
+    const SAIL2       = hexToRgb("#d9d1bf");
+    const FLAG        = hexToRgb("#d95b4f");
+
+    // -------------------------------------------------------
+    // Voxel store
+    // -------------------------------------------------------
+    const voxel = new Map();
+    const key = (x, y, z) => `${x},${y},${z}`;
+    const has = (x, y, z) => voxel.has(key(x, y, z));
+
+    function addVoxel(x, y, z, rgb, isWater = false) {
+      const k = key(x, y, z);
+      if (!voxel.has(k)) {
+        voxel.set(k, { x, y, z, rgb, water: isWater });
+      }
+    }
+
+    function addBox(x, y, z, w, h, d, rgb, isWater = false) {
+      for (let cx = x; cx < x + w; cx++) {
+        for (let cy = y; cy < y + h; cy++) {
+          for (let cz = z; cz < z + d; cz++) {
+            addVoxel(cx, cy, cz, rgb, isWater);
+          }
+        }
+      }
+    }
+
+    // -------------------------------------------------------
+    // Faces created only from exposed voxel surfaces.
+    // -------------------------------------------------------
+    const faces = [];
+
+    function addFace(p0, p1, p2, p3, nx, ny, nz, rgb, water = false) {
+      const n = [nx, ny, nz];
+      const cx = (p0[0] + p1[0] + p2[0] + p3[0]) / 4;
+      const cy = (p0[1] + p1[1] + p2[1] + p3[1]) / 4;
+      const cz = (p0[2] + p1[2] + p2[2] + p3[2]) / 4;
+
+      faces.push({
+        pts: [p0, p1, p2, p3],
+        n,
+        rgb,
+        color: shade(rgb, nx, ny, nz),
+        cx, cy, cz,
+        water
+      });
+    }
+
+    function generateFaces() {
+      for (const v of voxel.values()) {
+        const { x, y, z, rgb, water } = v;
+
+        // +X
+        if (!has(x + 1, y, z)) {
+          addFace(
+            [x + 1, y, z],
+            [x + 1, y + 1, z],
+            [x + 1, y + 1, z + 1],
+            [x + 1, y, z + 1],
+            1, 0, 0,
+            rgb,
+            water
+          );
+        }
+
+        // -X
+        if (!has(x - 1, y, z)) {
+          addFace(
+            [x, y, z],
+            [x, y + 1, z],
+            [x, y + 1, z + 1],
+            [x, y, z + 1],
+            -1, 0, 0,
+            rgb,
+            water
+          );
+        }
+
+        // +Y top
+        if (!has(x, y + 1, z)) {
+          addFace(
+            [x, y + 1, z],
+            [x + 1, y + 1, z],
+            [x + 1, y + 1, z + 1],
+            [x, y + 1, z + 1],
+            0, 1, 0,
+            rgb,
+            water
+          );
+        }
+
+        // -Y bottom
+        if (!has(x, y - 1, z)) {
+          addFace(
+            [x, y, z],
+            [x + 1, y, z],
+            [x + 1, y, z + 1],
+            [x, y, z + 1],
+            0, -1, 0,
+            rgb,
+            water
+          );
+        }
+
+        // +Z
+        if (!has(x, y, z + 1)) {
+          addFace(
+            [x, y, z + 1],
+            [x + 1, y, z + 1],
+            [x + 1, y + 1, z + 1],
+            [x, y + 1, z + 1],
+            0, 0, 1,
+            rgb,
+            water
+          );
+        }
+
+        // -Z
+        if (!has(x, y, z - 1)) {
+          addFace(
+            [x, y, z],
+            [x + 1, y, z],
+            [x + 1, y + 1, z],
+            [x, y + 1, z],
+            0, 0, -1,
+            rgb,
+            water
+          );
+        }
+      }
+    }
+
+    // -------------------------------------------------------
+    // Build the harbor and ship.
+    // -------------------------------------------------------
+    function build() {
+      // Dock pilings in the water.
+      for (let x = -11; x <= 4; x++) {
+        for (let z = -2; z <= 1; z++) {
+          addVoxel(x, 0, z, DOCK_DARK, false);
+        }
+      }
+
+      // Water surface with blocky wave/foam variation.
+      for (let x = -25; x < 25; x++) {
+        for (let z = -20; z < 20; z++) {
+          const m = Math.abs((x + z) % 11);
+          let col = WATER;
+          if (m === 0) col = WATER_DARK;
+          else if (m === 4) col = WATER_LIGHT;
+          else if (m === 7) col = FOAM;
+
+          addVoxel(x, 0, z, col, true);
+        }
+      }
+
+      // Dock top plank.
+      addBox(-11, 1, -2, 16, 1, 4, DOCK, false);
+
+      // Dock lamp.
+      addBox(-1, 2, -2, 1, 2, 1, LAMP, false);
+      addVoxel(-1, 4, -2, LIGHT_COLOR, false);
+
+      // Land / harbor quay.
+      addBox(-21, 1, -14, 10, 1, 28, SAND, false);
+
+      // Some rocks near the water.
+      addBox(-22, 1, -20, 4, 1, 4, ROCK, false);
+      addBox(-12, 1, -20, 4, 1, 3, ROCK, false);
+
+      // Warehouse.
+      addBox(-21, 2, -9, 5, 3, 10, WALL, false);
+      addBox(-21, 5, -9, 5, 1, 10, ROOF, false);
+
+      // Lighthouse.
+      addBox(-15, 2, 5, 4, 3, 4, WHITE, false);
+      addBox(-14, 5, 6, 2, 1, 2, LIGHT_COLOR, false);
+      addBox(-14, 6, 6, 2, 1, 2, GRAY, false);
+
+      // Cargo crates on dock.
+      addBox(-8, 2, -1, 2, 1, 2, CRATE, false);
+      addBox(-5, 2, 0, 2, 1, 2, CRATE2, false);
+      addBox(-2, 2, -2, 2, 1, 2, CRATE, false);
+
+      // Buoy.
+      addBox(1, 1, -12, 2, 1, 2, BUOY, false);
+
+      // Ship hull.
+      addBox(6, 1, -3, 12, 2, 6, HULL, false);
+      addBox(6, 3, -3, 12, 1, 6, DECK, false);
+
+      // Bow / stern blocky shaping.
+      addBox(18, 1, -2, 1, 3, 4, HULL_LIGHT, false);
+      addBox(5, 2, -2, 1, 2, 4, HULL, false);
+      addBox(19, 3, -1, 1, 1, 3, HULL_LIGHT, false);
+
+      // Masts.
+      function addMast(x) {
+        for (let y = 4; y < 9; y++) {
+          addVoxel(x, y, 0, MAST, false);
+        }
+      }
+
+      addMast(9);
+      addMast(13);
+
+      // Blocky triangular sails.
+      function addSail(mastX) {
+        for (let y = 4; y < 8; y++) {
+          const r = Math.max(1, Math.floor((7 - y) * 1.3));
+          const col = (y % 2 === 0) ? SAIL : SAIL2;
+
+          for (let z = -r; z <= r; z++) {
+            if (z === 0) continue; // Skip the mast voxel itself.
+            addVoxel(mastX, y, z, col, false);
+          }
+        }
+      }
+
+      addSail(9);
+      addSail(13);
+
+      // Small flags.
+      function addFlag(mastX) {
+        addVoxel(mastX + 1, 9, 0, FLAG, false);
+        addVoxel(mastX + 2, 9, 0, FLAG, false);
+        addVoxel(mastX + 3, 9, 0, FLAG, false);
+      }
+
+      addFlag(9);
+      addFlag(13);
+    }
+
+    build();
+    generateFaces();
+
+    // -------------------------------------------------------
+    // Renderer
+    // -------------------------------------------------------
+    function render() {
+      const w = canvas.width;
+      const h = canvas.height;
+
+      const sky = ctx.createLinearGradient(0, 0, 0, h);
+      sky.addColorStop(0, "#8eb1c3");
+      sky.addColorStop(0.55, "#d1e0e9");
+      sky.addColorStop(1, "#e9f2f5");
+      ctx.fillStyle = sky;
+      ctx.fillRect(0, 0, w, h);
+
+      const cp = clamp(pitch, 0.08, 1.25);
+      const dist = 140 / clamp(zoom, 0.5, 2);
+
+      const cam = [
+        Math.sin(yaw) * Math.cos(cp) * dist,
+        Math.sin(cp) * dist,
+        Math.cos(yaw) * Math.cos(cp) * dist
+      ];
+
+      const forward = normalize([-cam[0], -cam[1], -cam[2]]);
+
+      let right = cross(forward, [0, 1, 0]);
+      if (Math.hypot(right[0], right[1], right[2]) < 1e-8) {
+        right = [1, 0, 0];
+      } else {
+        right = normalize(right);
+      }
+
+      const up = normalize(cross(right, forward));
+
+      const scale = Math.min(w, h) * 1.18;
+      const time = performance.now() * 0.001;
+
+      const draw = [];
+
+      for (const f of faces) {
+        // Backface culling: keep only faces that point toward the camera.
+        const dx = cam[0] - f.cx;
+        const dy = cam[1] - f.cy;
+        const dz = cam[2] - f.cz;
+
+        if (dx * f.n[0] + dy * f.n[1] + dz * f.n[2] <= 0.02) continue;
+
+        const centerV = [f.cx - cam[0], f.cy - cam[1], f.cz - cam[2]];
+        const depth = dot(centerV, forward);
+        if (depth <= 1) continue;
+
+        const pts = [];
+
+        for (const p of f.pts) {
+          const vx = p[0] - cam[0];
+          const vy = p[1] - cam[1];
+          const vz = p[2] - cam[2];
+
+          const dp = vx * forward[0] + vy * forward[1] + vz * forward[2];
+          if (dp <= 1) {
+            pts = null;
+            break;
+          }
+
+          const xCam = vx * right[0] + vy * right[1] + vz * right[2];
+          const yCam = vx * up[0] + vy * up[1] + vz * up[2];
+
+          pts.push(
+            w * 0.5 + (xCam * scale) / dp,
+            h * 0.5 - (yCam * scale) / dp
+          );
+        }
+
+        if (!pts) continue;
+
+        let r, g, b;
+
+        // Animated water shimmer on top water faces.
+        if (f.water && f.n[1] === 1) {
+          const d = Math.max(0, dot(f.n, LIGHT));
+          const phase = f.cx + f.cz + time * 2.0;
+          const brightness = clamp(0.68 + 0.28 * d + 0.16 * Math.sin(phase), 0.45, 1.35);
+
+          r = clamp(Math.round(f.rgb[0] * brightness), 0, 255);
+          g = clamp(Math.round(f.rgb[1] * brightness), 0, 255);
+          b = clamp(Math.round(f.rgb[2] * brightness), 0, 255);
+        } else {
+          r = f.color[0];
+          g = f.color[1];
+          b = f.color[2];
+        }
+
+        draw.push({
+          depth,
+          pts,
+          color: `rgb(${r},${g},${b})`
+        });
+      }
+
+      // Painter algorithm: farther faces first.
+      draw.sort((a, b) => b.depth - a.depth);
+
+      ctx.lineWidth = 1.2;
+
+      for (const face of draw) {
+        ctx.fillStyle = face.color;
+        ctx.strokeStyle = face.color;
+
+        ctx.beginPath();
+        ctx.moveTo(face.pts[0], face.pts[1]);
+        ctx.lineTo(face.pts[2], face.pts[3]);
+        ctx.lineTo(face.pts[4], face.pts[5]);
+        ctx.lineTo(face.pts[6], face.pts[7]);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+
+    function loop() {
+      render();
+      requestAnimationFrame(loop);
+    }
+
+    loop();
+
+    // Mouse orbit controls.
+    canvas.addEventListener("pointerdown", e => {
+      dragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      e.preventDefault();
+    });
+
+    window.addEventListener("pointermove", e => {
+      if (!dragging) return;
+
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+
+      yaw += dx * 0.012;
+      pitch = clamp(pitch - dy * 0.012, 0.08, 1.25);
+
+      lastX = e.clientX;
+      lastY = e.clientY;
+    });
+
+    window.addEventListener("pointerup", () => {
+      dragging = false;
+    });
+
+    window.addEventListener("wheel", e => {
+      e.preventDefault();
+      zoom = clamp(zoom * Math.exp(-e.deltaY * 0.0012), 0.5, 2.0);
+    }, { passive: false });
+
+    window.addEventListener("keydown", e => {
+      if (e.key === "ArrowRight") yaw += 0.07;
+      if (e.key === "ArrowLeft")  yaw -= 0.07;
+      if (e.key === "ArrowUp")    pitch = clamp(pitch + 0.07, 0.08, 1.25);
+      if (e.key === "ArrowDown")  pitch = clamp(pitch - 0.07, 0.08, 1.25);
+      if (e.key === "+" || e.key === "=") zoom = clamp(zoom + 0.1, 0.5, 2.0);
+      if (e.key === "-") zoom = clamp(zoom - 0.1, 0.5, 2.0);
+    });
+  </script>
+</body>
+</html>

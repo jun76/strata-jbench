@@ -1,0 +1,1055 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voxel Harbor — A sailing ship calling at a harbor</title>
+<style>
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: linear-gradient(to bottom, #325c85 0%, #74a8cf 44%, #d7eaf9 100%);
+    overflow: hidden;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+  #scene {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    touch-action: none;
+    cursor: grab;
+  }
+  #info {
+    position: fixed;
+    left: 12px;
+    top: 12px;
+    padding: 8px 11px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.40);
+    color: #fff;
+    font-size: 14px;
+    line-height: 1.35;
+    pointer-events: none;
+    max-width: min(420px, calc(100vw - 24px));
+  }
+  #info b {
+    font-size: 16px;
+    font-weight: 700;
+  }
+</style>
+</head>
+<body>
+<div id="info">
+  <b>A sailing ship calling at a harbor</b><br>
+  Drag: rotate &nbsp; • &nbsp; Scroll: zoom &nbsp; • &nbsp; Right-drag or Shift-drag: pan
+</div>
+<canvas id="scene"></canvas>
+
+<script>
+(function () {
+  const canvas = document.getElementById("scene");
+  const info = document.getElementById("info");
+
+  const gl = canvas.getContext("webgl", {
+    alpha: true,
+    antialias: true,
+    depth: true,
+    preserveDrawingBuffer: false
+  });
+
+  if (!gl) {
+    info.textContent = "WebGL is not available in this browser.";
+    return;
+  }
+
+  /* =====================================================================
+     Voxel data helpers
+     ===================================================================== */
+
+  const OFF = 256;
+  const MASK = 1023;
+
+  function pack(x, y, z) {
+    return (((x + OFF) & MASK) << 20) |
+           (((y + OFF) & MASK) << 10) |
+            ((z + OFF) & MASK);
+  }
+
+  function unX(k) { return (k >>> 20) - OFF; }
+  function unY(k) { return ((k >>> 10) & MASK) - OFF; }
+  function unZ(k) { return (k & MASK) - OFF; }
+
+  const voxels = new Map(); // packed key -> encoded RGB color
+
+  function rgb(r, g, b) {
+    r = Math.max(0, Math.min(255, Math.round(r * 255)));
+    g = Math.max(0, Math.min(255, Math.round(g * 255)));
+    b = Math.max(0, Math.min(255, Math.round(b * 255)));
+    return (r << 16) | (g << 8) | b;
+  }
+
+  function addVoxel(x, y, z, color) {
+    voxels.set(pack(x, y, z), color);
+  }
+
+  function addBox(x1, y1, z1, x2, y2, z2, colorOrFn) {
+    if (x1 > x2) { const t = x1; x1 = x2; x2 = t; }
+    if (y1 > y2) { const t = y1; y1 = y2; y2 = t; }
+    if (z1 > z2) { const t = z1; z1 = z2; z2 = t; }
+
+    const fn = typeof colorOrFn === "function";
+
+    for (let x = x1; x <= x2; x++) {
+      for (let y = y1; y <= y2; y++) {
+        for (let z = z1; z <= z2; z++) {
+          voxels.set(pack(x, y, z), fn ? colorOrFn(x, y, z) : colorOrFn);
+        }
+      }
+    }
+  }
+
+  function isFree(x1, y1, z1, x2, y2, z2) {
+    if (x1 > x2) { const t = x1; x1 = x2; x2 = t; }
+    if (y1 > y2) { const t = y1; y1 = y2; y2 = t; }
+    if (z1 > z2) { const t = z1; z1 = z2; z2 = t; }
+
+    for (let x = x1; x <= x2; x++) {
+      for (let y = y1; y <= y2; y++) {
+        for (let z = z1; z <= z2; z++) {
+          if (voxels.has(pack(x, y, z))) return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  function rand3(a, b, c) {
+    let h = Math.imul(a + 10000, 374761393) ^
+            Math.imul(b + 10000, 668265263) ^
+            Math.imul(c + 10000, 1442695040);
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    h = h ^ (h >>> 16);
+    return (h >>> 0) / 4294967295;
+  }
+
+  const C = {
+    seaTopMid: rgb(0.24, 0.52, 0.76),
+    seaTopLight: rgb(0.42, 0.68, 0.90),
+    seaDeep: rgb(0.11, 0.28, 0.42),
+
+    landTop: rgb(0.36, 0.58, 0.31),
+    landTopLight: rgb(0.46, 0.67, 0.38),
+    landDirt: rgb(0.47, 0.36, 0.24),
+
+    stoneLight: rgb(0.74, 0.75, 0.78),
+    stoneMid: rgb(0.55, 0.57, 0.62),
+    stoneDark: rgb(0.35, 0.36, 0.40),
+    stoneDeck: rgb(0.67, 0.66, 0.62),
+
+    woodDeck: rgb(0.55, 0.40, 0.25),
+    woodDark: rgb(0.31, 0.21, 0.14),
+
+    hullDark: rgb(0.24, 0.16, 0.13),
+    hullBrown: rgb(0.48, 0.29, 0.17),
+    hullLight: rgb(0.62, 0.38, 0.22),
+    hullDark2: rgb(0.36, 0.22, 0.15),
+
+    mast: rgb(0.27, 0.20, 0.15),
+    sail: rgb(0.94, 0.91, 0.83),
+    sailDark: rgb(0.80, 0.77, 0.69),
+    sailBright: rgb(0.99, 0.97, 0.91),
+
+    cabinWall: rgb(0.86, 0.82, 0.74),
+    cabinWallDark: rgb(0.62, 0.58, 0.52),
+
+    roofDark: rgb(0.29, 0.29, 0.34),
+    roofRed: rgb(0.54, 0.24, 0.22),
+
+    crateRed: rgb(0.75, 0.24, 0.20),
+    crateBlue: rgb(0.22, 0.38, 0.63),
+    crateGreen: rgb(0.30, 0.58, 0.32),
+    crateYellow: rgb(0.86, 0.72, 0.25),
+    crateTan: rgb(0.78, 0.62, 0.36),
+    crateBrown: rgb(0.45, 0.28, 0.18),
+
+    white: rgb(0.95, 0.95, 0.93),
+    yellow: rgb(1.00, 0.92, 0.45),
+    red: rgb(0.78, 0.22, 0.20),
+
+    flagRed: rgb(0.76, 0.18, 0.16),
+    flagWhite: rgb(0.94, 0.94, 0.94),
+
+    treeTrunk: rgb(0.32, 0.20, 0.14),
+    treeLeaf: rgb(0.25, 0.52, 0.28)
+  };
+
+  function waterColor(x, y, z) {
+    const r = rand3(x, y * 7, z);
+    if (y === 0) {
+      if (r > 0.93) return rgb(0.78, 0.92, 1.00);
+      if (r > 0.76) return C.seaTopLight;
+      if (r > 0.30) return C.seaTopMid;
+      return rgb(0.18, 0.42, 0.65);
+    }
+    return C.seaDeep;
+  }
+
+  function stoneColor(x, y, z) {
+    const r = rand3(x, y, z);
+    if (r > 0.84) return C.stoneLight;
+    if (r > 0.16) return C.stoneMid;
+    return C.stoneDark;
+  }
+
+  function roughStoneColor(x, y, z) {
+    const r = rand3(x, y, z);
+    if (y === 3 && r > 0.82) return C.stoneLight;
+    if (r > 0.55) return C.stoneMid;
+    return C.stoneDark;
+  }
+
+  function groundColor(x, y, z) {
+    if (y === 3) {
+      const r = rand3(x, y, z);
+      if (r > 0.80) return C.landTopLight;
+      if (r > 0.16) return C.landTop;
+      return C.landDirt;
+    }
+    return C.landDirt;
+  }
+
+  /* =====================================================================
+     Scene construction
+     ===================================================================== */
+
+  function buildWater() {
+    addBox(-60, -1, -60, 60, 0, 13, waterColor);
+  }
+
+  function buildQuayAndLand() {
+    // Quay platform.
+    addBox(-28, 0, 14, 28, 3, 16, stoneColor);
+    addBox(-28, 4, 14, 28, 4, 16, C.stoneDeck);
+
+    // Harbor land behind the quay.
+    addBox(-55, 0, 17, 55, 3, 60, groundColor);
+  }
+
+  function buildBreakwatersAndLighthouses() {
+    // Left and right breakwaters extending into the water.
+    addBox(-48, 0, 5, -42, 3, 16, roughStoneColor);
+    addBox( 42, 0, 5,  48, 3, 16, roughStoneColor);
+
+    // Right lighthouse.
+    for (let y = 4; y <= 21; y++) {
+      const band = Math.floor((y - 4) / 3) % 2;
+      const col = band === 0 ? C.white : C.red;
+      addBox(44, y, 5, 46, y, 7, col);
+    }
+
+    addBox(43, 22, 4, 47, 22, 8, C.white);          // gallery
+    addBox(44, 23, 5, 46, 25, 7, C.yellow);         // lamp room
+    addBox(44, 26, 5, 46, 26, 7, C.red);            // roof
+
+    // Smaller left beacon.
+    for (let y = 4; y <= 12; y++) {
+      const band = Math.floor((y - 4) / 3) % 2;
+      const col = band === 0 ? C.white : C.red;
+      addBox(-46, y, 5, -44, y, 7, col);
+    }
+
+    addBox(-47, 13, 4, -43, 13, 8, C.white);        // gallery
+    addBox(-46, 14, 5, -44, 15, 7, C.yellow);       // beacon light
+  }
+
+  function warehouse(cx, cz, hw, hd, height, wallColor, roofColor) {
+    // Wall: inclusive box from y=4 to y=3+height.
+    addBox(cx - hw, 4, cz - hd, cx + hw, 3 + height, cz + hd, wallColor);
+
+    // Slanted voxel roof.
+    const base = 4 + height;
+    for (let x = -hw; x <= hw; x++) {
+      const rh = Math.max(1, hw - Math.abs(x));
+      addBox(cx + x, base, cz - hd, cx + x, base + rh - 1, cz + hd, roofColor);
+    }
+  }
+
+  function buildTown() {
+    const walls = [
+      rgb(0.73, 0.66, 0.58),
+      rgb(0.58, 0.60, 0.67),
+      rgb(0.56, 0.36, 0.31),
+      rgb(0.84, 0.79, 0.71),
+      rgb(0.43, 0.56, 0.70),
+      rgb(0.66, 0.42, 0.35),
+      rgb(0.40, 0.60, 0.46),
+      rgb(0.70, 0.52, 0.35)
+    ];
+
+    // Front warehouses along the harbor.
+    for (let i = 0; i < 7; i++) {
+      const cx = -49 + i * 14;
+      warehouse(cx, 20, 3, 3, 6, walls[i], i % 2 ? C.roofRed : C.roofDark);
+    }
+
+    // Back warehouses.
+    for (let i = 0; i < 6; i++) {
+      const cx = -45 + i * 14;
+      warehouse(cx, 29, 4, 3, 7, walls[(i + 3) % walls.length], i % 2 ? C.roofDark : C.roofRed);
+    }
+
+    // Distant town blocks toward the horizon.
+    for (let z = 38; z <= 56; z += 8) {
+      const start = ((z / 8) % 2 === 0) ? -49 : -42;
+      for (let cx = start; cx <= 49; cx += 14) {
+        if (rand3(cx, 1, z) < 0.55) continue;
+
+        const hw = 2 + Math.floor(rand3(cx, 2, z) * 3); // 2..4
+        const hd = 2 + Math.floor(rand3(cx, 3, z) * 2); // 2..3
+        const h = 3 + Math.floor(rand3(cx, 4, z) * 4);  // 3..6
+        const wall = walls[Math.floor(rand3(cx, 5, z) * walls.length)];
+        const roof = rand3(cx, 6, z) > 0.5 ? C.roofDark : C.roofRed;
+
+        warehouse(cx, z, hw, hd, h, wall, roof);
+      }
+    }
+  }
+
+  function leafColor(x, y, z) {
+    const r = rand3(x, y, z);
+    if (r < 0.15) return rgb(0.18, 0.38, 0.22);
+    if (r > 0.85) return rgb(0.31, 0.61, 0.36);
+    return C.treeLeaf;
+  }
+
+  function addTree(cx, cz) {
+    if (!isFree(cx - 1, 4, cz - 1, cx + 1, 9, cz + 1)) return;
+
+    // Trunk
+    addBox(cx, 4, cz, cx, 6, cz, C.treeTrunk);
+
+    // Canopy
+    for (let y = 7; y <= 9; y++) {
+      for (let x = -1; x <= 1; x++) {
+        for (let z = -1; z <= 1; z++) {
+          if (Math.abs(x) === 1 && Math.abs(z) === 1 && y === 9 && rand3(cx + x, y, cz + z) < 0.35) continue;
+          addVoxel(cx + x, y, cz + z, leafColor(cx + x, y, cz + z));
+        }
+      }
+    }
+  }
+
+  function buildTrees() {
+    for (let i = 0; i < 55; i++) {
+      const cx = Math.floor(rand3(i, 301, 0) * 104) - 52;
+      const cz = 30 + Math.floor(rand3(i, 302, 1) * 29);
+      addTree(cx, cz);
+    }
+  }
+
+  // Ship hull profile: z -> half-width. Bow is at z=+9, stern at z=-7.
+  const hullHalfMap = new Map([
+    [-7, 0],
+    [-6, 1],
+    [-5, 2],
+    [-4, 3],
+    [-3, 4],
+    [-2, 5],
+    [-1, 5],
+    [ 0, 5],
+    [ 1, 5],
+    [ 2, 5],
+    [ 3, 5],
+    [ 4, 4],
+    [ 5, 3],
+    [ 6, 2],
+    [ 7, 1],
+    [ 8, 1],
+    [ 9, 0]
+  ]);
+
+  function getHullHalf(z) {
+    return hullHalfMap.has(z) ? hullHalfMap.get(z) : -1;
+  }
+
+  function hullColor(x, y, z) {
+    if (y === 1) return C.hullDark;
+
+    if (y === 4) {
+      const r = rand3(x, y, z);
+      if (r > 0.88) return C.woodDark;
+      return C.woodDeck;
+    }
+
+    const r = rand3(x, y, z);
+    if (r < 0.12) return C.hullDark2;
+    if (r > 0.90) return C.hullLight;
+    return C.hullBrown;
+  }
+
+  function addSail(z, y1, y2, halfX) {
+    for (let x = -halfX; x <= halfX; x++) {
+      for (let y = y1; y <= y2; y++) {
+        const r = rand3(x, y, z);
+        let col = C.sail;
+        if (r < 0.15) col = C.sailDark;
+        else if (r > 0.88) col = C.sailBright;
+        addVoxel(x, y, z, col);
+      }
+    }
+  }
+
+  function yard(z, y, halfX) {
+    addBox(-halfX, y, z, halfX, y, z, C.mast);
+  }
+
+  function buildShip() {
+    // Hull.
+    for (let z = -7; z <= 9; z++) {
+      const h = getHullHalf(z);
+      if (h < 0) continue;
+
+      for (let x = -h; x <= h; x++) {
+        for (let y = 1; y <= 4; y++) {
+          addVoxel(x, y, z, hullColor(x, y, z));
+        }
+      }
+    }
+
+    // Deck rail / bulwark.
+    for (let z = -7; z <= 9; z++) {
+      const h = getHullHalf(z);
+      if (h < 0) continue;
+
+      if (h > 0) {
+        addVoxel(-h, 5, z, C.mast);
+        addVoxel( h, 5, z, C.mast);
+      }
+
+      if (z === -7 || z === 8 || z === 9) {
+        addVoxel(0, 5, z, C.mast);
+      }
+    }
+
+    // Stern cabin.
+    addBox(-2, 5, -6, 2, 7, -4, C.cabinWall);
+    addBox(-3, 8, -6, 3, 8, -4, C.roofDark);
+
+    // Small forecastle near bow.
+    addBox(-1, 5, 7, 1, 5, 8, C.woodDeck);
+
+    // Sails first, then masts/yards are drawn over them.
+    addSail( 0,  8, 12, 4);  // main lower
+    addSail( 0, 13, 17, 2);  // main upper
+
+    addSail( 4,  7, 11, 3);  // fore lower
+    addSail( 4, 12, 15, 2);  // fore upper
+
+    addSail(-3,  7, 11, 3);  // mizzen lower
+    addSail(-3, 12, 14, 2);  // mizzen upper
+
+    // Small forward sails near bowsprit.
+    addSail(10,  7, 10, 1);
+    addSail(12,  8, 11, 1);
+
+    // Masts.
+    addBox(0, 5, -3, 0, 15, -3, C.mast); // mizzen
+    addBox(0, 5,  0, 0, 18,  0, C.mast); // main
+    addBox(0, 5,  4, 0, 16,  4, C.mast); // fore
+
+    // Yards.
+    yard( 0, 12, 4);
+    yard( 0, 17, 2);
+
+    yard( 4, 11, 3);
+    yard( 4, 15, 2);
+
+    yard(-3, 11, 3);
+    yard(-3, 14, 2);
+
+    // Bowsprit.
+    addBox(0, 6, 10, 0, 8, 13, C.mast);
+
+    // Flags.
+    addBox(1, 19, 0, 2, 20, 0, C.flagRed);
+    addBox(1, 17, 4, 2, 18, 4, C.flagWhite);
+  }
+
+  function buildGangwayToHarbor() {
+    // Plank from ship bow to quay.
+    addBox(-1, 4, 10, 1, 4, 13, C.woodDark);
+
+    // Simple rails.
+    addBox(-1, 5, 10, -1, 6, 13, C.mast);
+    addBox( 1, 5, 10,  1, 6, 13, C.mast);
+  }
+
+  function buildDockDetails() {
+    // Bollards along quay edge.
+    for (let x = -24; x <= 24; x += 6) {
+      if (x === 0) continue;
+      addVoxel(x, 5, 14, C.stoneDark);
+    }
+
+    const crateColors = [
+      C.crateRed,
+      C.crateBlue,
+      C.crateGreen,
+      C.crateYellow,
+      C.crateTan,
+      C.crateBrown
+    ];
+
+    // Crates/containers.
+    for (let x = -26; x <= 24; x += 5) {
+      const r = rand3(x, 777, 778);
+      if (r < 0.45) continue;
+
+      const w = 1 + Math.floor(rand3(x, 1, 15) * 2); // 1..2 wide
+      const h = 1 + Math.floor(rand3(x, 2, 15) * 3); // 1..3 high
+      const z = 15 + Math.floor(rand3(x, 3, 15) * 2); // 15..16
+      const col = crateColors[Math.floor(rand3(x, 4, 15) * crateColors.length)];
+
+      if (x + w - 1 > 30) continue;
+      if (z + w - 1 > 16) continue;
+
+      addBox(x, 4, z, x + w - 1, 3 + h, z + w - 1, col);
+    }
+
+    // Barrels near the edge.
+    for (let x = -25; x <= 27; x += 8) {
+      if (rand3(x, 99, 14) > 0.62) {
+        addBox(x, 4, 14, x + 1, 5, 14, C.crateBrown);
+      }
+    }
+  }
+
+  function tryFoam(x, z) {
+    const key = pack(x, 0, z);
+    if (!voxels.has(key)) return;
+
+    const c = voxels.get(key);
+    const r = (c >>> 16) & 255;
+    const g = (c >>> 8) & 255;
+    const b = c & 255;
+
+    // Override only water-like blue voxels.
+    if (!(b > r + 20 && b > 40)) return;
+
+    const t = rand3(x, 0, z);
+    if (t < 0.30) return;
+
+    voxels.set(key, rgb(0.78 + 0.12 * t, 0.90 + 0.08 * t, 0.97 + 0.03 * t));
+  }
+
+  function foamLine(x1, x2, z) {
+    for (let x = x1; x <= x2; x++) tryFoam(x, z);
+  }
+
+  function buildFoam() {
+    // Foam at harbor edge near quay.
+    for (let x = -28; x <= 28; x++) tryFoam(x, 13);
+
+    // Foam along breakwaters.
+    for (let z = 8; z <= 13; z++) {
+      tryFoam(39, z);
+      tryFoam(-39, z);
+    }
+
+    // Ship wake / waterline foam.
+    for (let z = -8; z <= 10; z++) {
+      let h = getHullHalf(z);
+
+      if (z === -8 || z === 10) h = 0;
+      if (h < 0) continue;
+
+      if (rand3(0, 0, z) > 0.50) {
+        foamLine(-h - 1, h + 1, z);
+      } else {
+        tryFoam(-h - 1, z);
+        tryFoam(h + 1, z);
+      }
+    }
+  }
+
+  function buildScene() {
+    buildWater();
+    buildQuayAndLand();
+    buildBreakwatersAndLighthouses();
+    buildTown();
+    buildTrees();
+    buildShip();
+    buildGangwayToHarbor();
+    buildDockDetails();
+    buildFoam();
+  }
+
+  /* =====================================================================
+     Mesh generation: only exposed voxel faces
+     ===================================================================== */
+
+  const faceTemplates = [
+    {
+      n: [1, 0, 0],
+      v: [
+        [0.5, -0.5, -0.5],
+        [0.5, -0.5,  0.5],
+        [0.5,  0.5,  0.5],
+        [0.5,  0.5, -0.5]
+      ]
+    },
+    {
+      n: [-1, 0, 0],
+      v: [
+        [-0.5, -0.5, -0.5],
+        [-0.5,  0.5, -0.5],
+        [-0.5,  0.5,  0.5],
+        [-0.5, -0.5,  0.5]
+      ]
+    },
+    {
+      n: [0, 1, 0],
+      v: [
+        [-0.5, 0.5, -0.5],
+        [-0.5, 0.5,  0.5],
+        [ 0.5, 0.5,  0.5],
+        [ 0.5, 0.5, -0.5]
+      ]
+    },
+    {
+      n: [0, -1, 0],
+      v: [
+        [-0.5, -0.5, -0.5],
+        [ 0.5, -0.5, -0.5],
+        [ 0.5, -0.5,  0.5],
+        [-0.5, -0.5,  0.5]
+      ]
+    },
+    {
+      n: [0, 0, 1],
+      v: [
+        [-0.5, -0.5, 0.5],
+        [ 0.5, -0.5, 0.5],
+        [ 0.5,  0.5, 0.5],
+        [-0.5,  0.5, 0.5]
+      ]
+    },
+    {
+      n: [0, 0, -1],
+      v: [
+        [-0.5, -0.5, -0.5],
+        [-0.5,  0.5, -0.5],
+        [ 0.5,  0.5, -0.5],
+        [ 0.5, -0.5, -0.5]
+      ]
+    }
+  ];
+
+  const faceIndexOrder = [0, 1, 2, 0, 2, 3];
+
+  function buildMesh() {
+    const positions = [];
+    const normals = [];
+    const colors = [];
+
+    for (const [key, encodedColor] of voxels) {
+      const x = unX(key);
+      const y = unY(key);
+      const z = unZ(key);
+
+      const cr = ((encodedColor >>> 16) & 255) / 255;
+      const cg = ((encodedColor >>> 8) & 255) / 255;
+      const cb = (encodedColor & 255) / 255;
+
+      for (let f = 0; f < 6; f++) {
+        // Skip hidden bottoms of large ground/water slabs.
+        if (f === 3 && y < 1) continue;
+
+        const face = faceTemplates[f];
+        const n = face.n;
+
+        if (voxels.has(pack(x + n[0], y + n[1], z + n[2]))) continue;
+
+        for (let k = 0; k < 6; k++) {
+          const v = face.v[faceIndexOrder[k]];
+          positions.push(x + v[0], y + v[1], z + v[2]);
+          normals.push(n[0], n[1], n[2]);
+          colors.push(cr, cg, cb);
+        }
+      }
+    }
+
+    return {
+      positions: new Float32Array(positions),
+      normals: new Float32Array(normals),
+      colors: new Float32Array(colors),
+      count: positions.length / 3
+    };
+  }
+
+  buildScene();
+  const mesh = buildMesh();
+
+  /* =====================================================================
+     WebGL setup
+     ===================================================================== */
+
+  const vsSource = `
+    attribute vec3 aPos;
+    attribute vec3 aColor;
+    attribute vec3 aNormal;
+
+    uniform mat4 uMVP;
+
+    varying vec3 vColor;
+    varying vec3 vNormal;
+    varying vec3 vWorld;
+
+    void main() {
+      vColor = aColor;
+      vNormal = aNormal;
+      vWorld = aPos;
+      gl_Position = uMVP * vec4(aPos, 1.0);
+    }
+  `;
+
+  const fsSource = `
+    precision mediump float;
+
+    varying vec3 vColor;
+    varying vec3 vNormal;
+    varying vec3 vWorld;
+
+    uniform vec3 lightDir;
+    uniform vec3 camPos;
+    uniform vec3 fogColor;
+    uniform float fogNear;
+    uniform float fogFar;
+
+    void main() {
+      vec3 n = normalize(vNormal);
+      float diff = max(dot(n, lightDir), 0.0);
+      float light = 0.45 + 0.55 * diff;
+
+      vec3 c = vColor * light;
+
+      float dist = length(vWorld - camPos);
+      float fog = clamp((dist - fogNear) / (fogFar - fogNear), 0.0, 0.55);
+      c = mix(c, fogColor, fog);
+
+      gl_FragColor = vec4(c, 1.0);
+    }
+  `;
+
+  function compileShader(type, src) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, src);
+    gl.compileShader(shader);
+
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      const log = gl.getShaderInfoLog(shader);
+      gl.deleteShader(shader);
+      throw new Error("Shader compile error: " + log);
+    }
+
+    return shader;
+  }
+
+  function createProgram(vs, fs) {
+    const v = compileShader(gl.VERTEX_SHADER, vs);
+    const f = compileShader(gl.FRAGMENT_SHADER, fs);
+
+    const program = gl.createProgram();
+    gl.attachShader(program, v);
+    gl.attachShader(program, f);
+    gl.linkProgram(program);
+
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      const log = gl.getProgramInfoLog(program);
+      gl.deleteProgram(program);
+      throw new Error("Program link error: " + log);
+    }
+
+    return program;
+  }
+
+  const program = createProgram(vsSource, fsSource);
+  gl.useProgram(program);
+
+  const aPos = gl.getAttribLocation(program, "aPos");
+  const aColor = gl.getAttribLocation(program, "aColor");
+  const aNormal = gl.getAttribLocation(program, "aNormal");
+
+  const uMVP = gl.getUniformLocation(program, "uMVP");
+  const uLightDir = gl.getUniformLocation(program, "lightDir");
+  const uCamPos = gl.getUniformLocation(program, "camPos");
+  const uFogColor = gl.getUniformLocation(program, "fogColor");
+  const uFogNear = gl.getUniformLocation(program, "fogNear");
+  const uFogFar = gl.getUniformLocation(program, "fogFar");
+
+  function makeBuffer(data) {
+    const buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+    return buffer;
+  }
+
+  const posBuf = makeBuffer(mesh.positions);
+  const colorBuf = makeBuffer(mesh.colors);
+  const normalBuf = makeBuffer(mesh.normals);
+
+  gl.enableVertexAttribArray(aPos);
+  gl.enableVertexAttribArray(aColor);
+  gl.enableVertexAttribArray(aNormal);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+  gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, colorBuf);
+  gl.vertexAttribPointer(aColor, 3, gl.FLOAT, false, 0, 0);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, normalBuf);
+  gl.vertexAttribPointer(aNormal, 3, gl.FLOAT, false, 0, 0);
+
+  gl.enable(gl.DEPTH_TEST);
+  gl.depthFunc(gl.LESS);
+
+  /* =====================================================================
+     Matrices / camera
+     ===================================================================== */
+
+  function normalize3(v) {
+    const l = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]) || 1;
+    return [v[0] / l, v[1] / l, v[2] / l];
+  }
+
+  function cross3(a, b) {
+    return [
+      a[1] * b[2] - a[2] * b[1],
+      a[2] * b[0] - a[0] * b[2],
+      a[0] * b[1] - a[1] * b[0]
+    ];
+  }
+
+  function dot3(a, b) {
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  }
+
+  function perspective(fovY, aspect, near, far) {
+    const f = 1.0 / Math.tan(fovY / 2);
+    const nf = 1.0 / (near - far);
+
+    return new Float32Array([
+      f / aspect, 0.0, 0.0, 0.0,
+      0.0, f, 0.0, 0.0,
+      0.0, 0.0, (far + near) * nf, -1.0,
+      0.0, 0.0, 2.0 * far * near * nf, 0.0
+    ]);
+  }
+
+  function lookAt(eye, target) {
+    const f = normalize3([
+      target[0] - eye[0],
+      target[1] - eye[1],
+      target[2] - eye[2]
+    ]);
+
+    let r = cross3(f, [0, 1, 0]);
+    r = normalize3(r);
+    const u = cross3(r, f);
+
+    return new Float32Array([
+      r[0], u[0], -f[0], 0.0,
+      r[1], u[1], -f[1], 0.0,
+      r[2], u[2], -f[2], 0.0,
+      -dot3(r, eye), -dot3(u, eye), dot3(f, eye), 1.0
+    ]);
+  }
+
+  function multiply4(a, b) {
+    const out = new Float32Array(16);
+
+    for (let c = 0; c < 4; c++) {
+      for (let r = 0; r < 4; r++) {
+        out[c * 4 + r] =
+          a[0 * 4 + r] * b[c * 4 + 0] +
+          a[1 * 4 + r] * b[c * 4 + 1] +
+          a[2 * 4 + r] * b[c * 4 + 2] +
+          a[3 * 4 + r] * b[c * 4 + 3];
+      }
+    }
+
+    return out;
+  }
+
+  let proj = new Float32Array(16);
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.max(1, Math.floor(canvas.clientWidth * dpr));
+    const h = Math.max(1, Math.floor(canvas.clientHeight * dpr));
+
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    proj = perspective(60 * Math.PI / 180, canvas.width / canvas.height, 0.5, 900);
+  }
+
+  window.addEventListener("resize", resize);
+  resize();
+
+  let target = [0, 8, 10];
+  let theta = -Math.PI / 2 - 0.35;
+  let phi = 0.45;
+  let radius = 95;
+
+  let lastEye = [0, 0, 0];
+  let lastRight = [0, 0, 0];
+  let lastUp = [0, 0, 0];
+
+  function updateCameraBasis() {
+    const sx = Math.sin(theta) * Math.cos(phi);
+    const sy = Math.sin(phi);
+    const sz = Math.cos(theta) * Math.cos(phi);
+
+    const eye = [
+      target[0] + radius * sx,
+      target[1] + radius * sy,
+      target[2] + radius * sz
+    ];
+
+    const f = normalize3([
+      target[0] - eye[0],
+      target[1] - eye[1],
+      target[2] - eye[2]
+    ]);
+
+    let r = cross3(f, [0, 1, 0]);
+    r = normalize3(r);
+    const u = cross3(r, f);
+
+    lastEye = eye;
+    lastRight = r;
+    lastUp = u;
+
+    return eye;
+  }
+
+  /* =====================================================================
+     Mouse / pointer controls
+     ===================================================================== */
+
+  let dragging = false;
+  let dragMode = 0; // 0 = rotate, 1 = pan
+  let lastX = 0;
+  let lastY = 0;
+
+  canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+
+  canvas.addEventListener("pointerdown", (e) => {
+    dragging = true;
+    dragMode = (e.button === 2 || e.shiftKey || e.ctrlKey) ? 1 : 0;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    canvas.style.cursor = "grabbing";
+
+    try {
+      canvas.setPointerCapture(e.pointerId);
+    } catch (_) {}
+
+    e.preventDefault();
+  });
+
+  canvas.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+
+    const dx = e.clientX - lastX;
+    const dy = e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+
+    if (dragMode === 0) {
+      theta -= dx * 0.0055;
+      phi += dy * 0.0055;
+      phi = Math.max(0.05, Math.min(1.40, phi));
+    } else {
+      const s = radius * 0.0038;
+
+      target[0] -= lastRight[0] * dx * s + lastUp[0] * (-dy) * s;
+      target[1] += lastUp[1] * dy * s;
+      target[2] -= lastRight[2] * dx * s + lastUp[2] * (-dy) * s;
+
+      target[0] = Math.max(-160, Math.min(160, target[0]));
+      target[1] = Math.max(1, Math.min(38, target[1]));
+      target[2] = Math.max(-120, Math.min(120, target[2]));
+    }
+
+    e.preventDefault();
+  });
+
+  function endDrag(e) {
+    dragging = false;
+    canvas.style.cursor = "grab";
+
+    try {
+      canvas.releasePointerCapture(e.pointerId);
+    } catch (_) {}
+
+    if (e) e.preventDefault();
+  }
+
+  canvas.addEventListener("pointerup", endDrag);
+  canvas.addEventListener("pointercancel", endDrag);
+
+  canvas.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const factor = Math.exp(e.deltaY * 0.0012);
+    radius = Math.max(18, Math.min(320, radius * factor));
+  }, { passive: false });
+
+  /* =====================================================================
+     Render loop
+     ===================================================================== */
+
+  const fogColor = normalize3([0.62, 0.80, 0.95]);
+
+  function render() {
+    const eye = updateCameraBasis();
+
+    const view = lookAt(eye, target);
+    const mvp = multiply4(proj, view);
+
+    // Dynamic light from the camera gives a consistently readable voxel look.
+    const lightDir = normalize3([
+      eye[0] - target[0],
+      eye[1] - target[1] + 26,
+      eye[2] - target[2]
+    ]);
+
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    gl.useProgram(program);
+
+    gl.uniformMatrix4fv(uMVP, false, mvp);
+    gl.uniform3f(uLightDir, lightDir[0], lightDir[1], lightDir[2]);
+    gl.uniform3f(uCamPos, eye[0], eye[1], eye[2]);
+    gl.uniform3f(uFogColor, fogColor[0], fogColor[1], fogColor[2]);
+    gl.uniform1f(uFogNear, 170);
+    gl.uniform1f(uFogFar, 430);
+
+    gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
+
+    requestAnimationFrame(render);
+  }
+
+  requestAnimationFrame(render);
+})();
+</script>
+</body>
+</html>

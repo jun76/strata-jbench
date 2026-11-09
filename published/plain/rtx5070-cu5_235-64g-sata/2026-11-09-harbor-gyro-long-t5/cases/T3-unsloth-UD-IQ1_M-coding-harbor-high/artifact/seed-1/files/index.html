@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voxel Sailing Ship in Harbor</title>
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #111; }
+  canvas { display: block; touch-action: none; }
+  #hud {
+    position: fixed; left: 10px; top: 10px; z-index: 10;
+    color: #fff; font: 13px/1.4 system-ui, sans-serif;
+    text-shadow: 0 1px 2px #000; pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="hud">
+  Drag: rotate • Scroll: zoom • Right/Shift-drag: pan • Double-click: reset
+</div>
+
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+
+// Renderer / scene / camera
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
+scene.fog = new THREE.Fog(0x87ceeb, 180, 560);
+
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
+
+// Lights
+scene.add(new THREE.HemisphereLight(0xbdefff, 0x3f4f30, 0.85));
+const sunLight = new THREE.DirectionalLight(0xfff1c7, 1.15);
+sunLight.position.set(140, 180, -90);
+scene.add(sunLight);
+
+const sunMesh = new THREE.Mesh(
+  new THREE.SphereGeometry(18, 16, 16),
+  new THREE.MeshBasicMaterial({ color: 0xffd599, fog: false })
+);
+sunMesh.position.set(250, 180, -200);
+scene.add(sunMesh);
+
+// Instanced voxel system
+const MAX_VOXELS = 300000;
+const voxelGeo = new THREE.BoxGeometry(1, 1, 1);
+const voxelMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+const voxMesh = new THREE.InstancedMesh(voxelGeo, voxelMat, MAX_VOXELS);
+voxMesh.frustumCulled = false;
+
+const voxelColors = new Float32Array(MAX_VOXELS * 3);
+voxMesh.instanceColor = new THREE.InstancedBufferAttribute(voxelColors, 3);
+scene.add(voxMesh);
+
+const tempMatrix = new THREE.Matrix4();
+const tempColor = new THREE.Color();
+let voxelCount = 0;
+
+function hash3(x, y, z) {
+  const s = Math.sin(x * 12.9898 + y * 78.233 + z * 37.1132) * 43758.5453;
+  return s - Math.floor(s);
+}
+
+function addVoxel(x, y, z, color, vary = 0) {
+  if (voxelCount >= MAX_VOXELS) return;
+
+  tempMatrix.makeTranslation(x + 0.5, y + 0.5, z + 0.5);
+  voxMesh.setMatrixAt(voxelCount, tempMatrix);
+
+  tempColor.set(color);
+  if (vary > 0) {
+    const r = hash3(x, y, z);
+    tempColor.multiplyScalar(1 + (r - 0.5) * vary);
+  }
+
+  const i = voxelCount * 3;
+  voxelColors[i] = tempColor.r;
+  voxelColors[i + 1] = tempColor.g;
+  voxelColors[i + 2] = tempColor.b;
+  voxelCount++;
+}
+
+function addBox(x0, x1, y0, y1, z0, z1, color, vary = 0) {
+  for (let x = x0; x <= x1; x++) {
+    for (let y = y0; y <= y1; y++) {
+      for (let z = z0; z <= z1; z++) {
+        addVoxel(x, y, z, color, vary);
+      }
+    }
+  }
+}
+
+function addPlaneXZ(x0, x1, z0, z1, y, color, vary = 0) {
+  for (let x = x0; x <= x1; x++) {
+    for (let z = z0; z <= z1; z++) {
+      addVoxel(x, y, z, color, vary);
+    }
+  }
+}
+
+function addBuilding(x0, x1, z0, z1, y0, y1, wallColor, roofColor) {
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      for (let z = z0; z <= z1; z++) {
+        const outer = (x === x0 || x === x1 || z === z0 || z === z1);
+        if (!outer) continue;
+
+        let c = wallColor;
+        if (y > y0 && y < y1 && ((x + z + y) % 7 === 0)) c = 0xffe9a8;
+        if (y === y0 && ((x + z + y) % 11 === 3)) c = 0x4f3420;
+        addVoxel(x, y, z, c, 0.1);
+      }
+    }
+  }
+  addBox(x0 - 1, x1 + 1, y1 + 1, y1 + 2, z0 - 1, z1 + 1, roofColor, 0.06);
+}
+
+function addRock(x, z) {
+  const h = Math.floor(hash3(x, z, 0) * 3);
+  for (let y = -1; y <= h; y++) {
+    addVoxel(x, y, z, 0x7d8178, 0.14);
+  }
+}
+
+function addTree(x, z) {
+  for (let y = 3; y <= 6; y++) addVoxel(x, y, z, 0x5b3f25, 0.08);
+  for (let dx = -2; dx <= 2; dx++) {
+    for (let dz = -2; dz <= 2; dz++) {
+      for (let dy = 0; dy < 3; dy++) {
+        if (Math.abs(dx) + Math.abs(dz) <= 2 + dy) {
+          addVoxel(x + dx, 7 + dy, z + dz, 0x3f7d3f, 0.18);
+        }
+      }
+    }
+  }
+}
+
+function addCloud(cx, cz, cy) {
+  addBox(cx - 4, cx + 4, cy - 1, cy, cz - 2, cz + 2, 0xffffff, 0.02);
+  addBox(cx - 2, cx + 2, cy + 1, cy + 1, cz - 1, cz + 1, 0xffffff, 0.02);
+}
+
+// ------------------------------------------------------------------
+// Land
+// ------------------------------------------------------------------
+for (let x = 20; x <= 70; x++) {
+  for (let z = -70; z <= 70; z++) {
+    for (let y = -1; y <= 2; y++) {
+      let c;
+      if (y < 0) {
+        c = 0x4a3a28;
+      } else if (y < 2) {
+        c = 0x6e5337;
+      } else if (x <= 23) {
+        c = 0x8d8b86; // quay road
+      } else {
+        const r = hash3(x, y, z);
+        if (r > 0.65) c = 0x5f8e3e;
+        else if (r > 0.35) c = 0xcdbd90;
+        else c = 0x968b6e;
+      }
+      addVoxel(x, y, z, c, 0.12);
+    }
+  }
+}
+
+// Quay wall
+for (let z = -50; z <= 50; z++) {
+  for (let y = -1; y <= 2; y++) {
+    const c = y < 0 ? 0x5a5a55 : y === 0 ? 0x888884 : 0x9c9c96;
+    addVoxel(18, y, z, c, 0.1);
+    addVoxel(19, y, z, 0x868680, 0.1);
+  }
+}
+
+// Main dock
+addPlaneXZ(14, 17, -12, 12, 2, 0x8b5e34, 0.08);
+for (let z = -12; z <= 12; z += 3) {
+  for (let x = 14; x <= 17; x += 3) {
+    addVoxel(x, -1, z, 0x4b341f, 0.08);
+    addVoxel(x, 0, z, 0x4b341f, 0.08);
+    addVoxel(x, 1, z, 0x4b341f, 0.08);
+  }
+}
+for (let z = -12; z <= 12; z += 4) {
+  addVoxel(17, 3, z, 0x343434, 0.05);
+}
+
+// Cargo
+addBox(16, 17, 3, 4, 8, 9, 0xa9773f, 0.08);
+addBox(15, 16, 3, 3, 4, 5, 0x8a6234, 0.1);
+addBox(15, 16, 3, 4, -6, -5, 0x8b5734, 0.08);
+addBox(16, 16, 3, 4, -8, -8, 0x5b3f25, 0.08);
+
+// Gangplank
+addPlaneXZ(12, 17, -1, 1, 2, 0x956534, 0.08);
+for (let x = 12; x <= 17; x++) {
+  addVoxel(x, 3, -1, 0x4d3321, 0.05);
+  addVoxel(x, 3, 1, 0x4d3321, 0.05);
+}
+
+// Side piers
+function addPier(z0, z1) {
+  addPlaneXZ(4, 17, z0, z1, 2, 0x8b5e34, 0.08);
+  for (let x = 4; x <= 17; x += 4) {
+    for (const z of [z0, z1]) {
+      addVoxel(x, -1, z, 0x4b341f, 0.08);
+      addVoxel(x, 0, z, 0x4b341f, 0.08);
+      addVoxel(x, 1, z, 0x4b341f, 0.08);
+    }
+    addVoxel(x, 3, z0, 0x2e2e2e, 0.05);
+  }
+}
+addPier(20, 21);
+addPier(-21, -20);
+
+// Stone jetties
+function addJetty(zCenter) {
+  for (let x = 4; x <= 16; x += 2) {
+    for (let dz = -2; dz <= 2; dz += 2) {
+      addRock(x, zCenter + dz);
+    }
+  }
+}
+addJetty(52);
+addJetty(-52);
+
+// Street lamps along quay road
+for (let z = -40; z <= 40; z += 20) {
+  for (let y = 3; y <= 6; y++) {
+    addVoxel(22, y, z, y === 6 ? 0xffd966 : 0x222222, 0.05);
+  }
+}
+
+// ------------------------------------------------------------------
+// Sailing ship
+// ------------------------------------------------------------------
+const SHIP_CX = 8;
+
+function shipHalfWidth(z) {
+  const a = Math.abs(z);
+  if (a <= 10) return 5;
+  if (a <= 13) return 4;
+  if (a <= 15) return 2;
+  return 1;
+}
+
+for (let z = -16; z <= 16; z++) {
+  const hw = shipHalfWidth(z);
+  const left = SHIP_CX - hw;
+  const right = SHIP_CX + hw;
+
+  if (right > left) {
+    for (let x = left + 1; x <= right - 1; x++) {
+      addVoxel(x, -2, z, 0x2f261e, 0.08);
+    }
+  }
+
+  for (let x = left; x <= right; x++) {
+    addVoxel(x, -1, z, 0x513a27, 0.08);
+    for (let y = 0; y <= 2; y++) {
+      const outer = (x === left || x === right);
+      let c;
+      if (y === 0) c = outer ? 0x5b3f25 : 0x7a4f2b;
+      else if (y === 1) c = outer ? 0xd1b057 : 0x8a5a30;
+      else c = 0xa78459;
+      addVoxel(x, y, z, c, 0.08);
+    }
+  }
+
+  if (hw > 0) {
+    addVoxel(left, 3, z, 0x654321, 0.06);
+    if (right !== left) addVoxel(right, 3, z, 0x654321, 0.06);
+  }
+}
+
+// Cannons
+for (let z = -10; z <= 10; z += 4) {
+  addVoxel(2, 1, z, 0x222222, 0.02);
+}
+
+// Stern cabin / sterncastle
+addBox(5, 11, 3, 5, -14, -10, 0x714f31, 0.1);
+addBox(4, 12, 6, 6, -15, -9, 0x433224, 0.05);
+addVoxel(8, 4, -15, 0xff5040, 0.03);
+addVoxel(8, 5, -15, 0x40ff50, 0.03);
+
+// Forecastle
+addBox(6, 10, 3, 4, 12, 13, 0x8a5a30, 0.08);
+addBox(5, 11, 5, 5, 11, 14, 0x443224, 0.05);
+
+// Bowsprit
+for (let z = 17; z <= 23; z++) {
+  addVoxel(SHIP_CX, 2, z, 0x654321, 0.05);
+}
+
+// Jib sail hint
+for (let i = 0; i <= 4; i++) {
+  addVoxel(SHIP_CX, 3 + i, 16 - i, 0xf5f4e6, 0.04);
+}
+
+// Masts
+function addMast(z, height) {
+  for (let y = 3; y <= height; y++) {
+    addVoxel(SHIP_CX, y, z, 0x654321, 0.05);
+  }
+}
+addMast(0, 23);
+addMast(7, 18);
+addMast(-7, 14);
+
+// Yards
+function addYard(y, z, len) {
+  for (let x = SHIP_CX - len; x <= SHIP_CX + len; x++) {
+    if (x !== SHIP_CX) addVoxel(x, y, z, 0x543921, 0.05);
+  }
+}
+addYard(9, 0, 6);
+addYard(13, 0, 6);
+addYard(17, 0, 5);
+addYard(20, 0, 5);
+
+addYard(7, 7, 5);
+addYard(10, 7, 4);
+addYard(16, 7, 4);
+
+addYard(10, -7, 4);
+addYard(15, -7, 4);
+
+// Sails
+function addSailPair(zc, x0, x1, y0, y1, color = 0xf5f4e6) {
+  for (const dz of [-1, 1]) {
+    const z = zc + dz;
+    for (let x = x0; x <= x1; x++) {
+      for (let y = y0; y <= y1; y++) {
+        addVoxel(x, y, z, color, 0.04);
+      }
+    }
+  }
+}
+addSailPair(7, 4, 12, 7, 13);
+addSailPair(7, 5, 11, 14, 16);
+addSailPair(0, 3, 13, 9, 17);
+addSailPair(0, 4, 12, 18, 20);
+addSailPair(-7, 4, 12, 8, 13);
+addSailPair(-7, 5, 11, 14, 15);
+
+// Flags
+function addFlag(z, y, color) {
+  for (let x = 9; x <= 13; x++) {
+    addVoxel(x, y, z, color, 0.02);
+    addVoxel(x, y + 1, z, color, 0.02);
+  }
+}
+addFlag(0, 24, 0xd22f2f);
+addFlag(7, 18, 0x2f6bd2);
+addFlag(-7, 14, 0xf2c73f);
+
+// ------------------------------------------------------------------
+// Shore buildings
+// ------------------------------------------------------------------
+addBuilding(25, 32, -28, -18, 3, 7, 0xb36b4f, 0x4f3c3b);
+addBuilding(35, 41, -30, -22, 3, 6, 0x8e9ca7, 0x6b3f35);
+addBuilding(44, 49, -20, -14, 3, 5, 0x7e8c86, 0x5a4030);
+addBuilding(52, 58, -12, -6, 3, 5, 0xa87653, 0x493329);
+addBuilding(30, 36, 10, 20, 3, 7, 0x99726a, 0x3f3f42);
+addBuilding(40, 45, 25, 33, 3, 6, 0x8fa1a4, 0x5c3931);
+
+// Lighthouse
+addBox(52, 56, 3, 4, 28, 34, 0x8d8d88, 0.1);
+for (let y = 5; y <= 25; y++) {
+  const c = (y % 5 === 0) ? 0xc0392b : 0xf3f3f0;
+  for (let x = 53; x <= 55; x++) {
+    for (let z = 30; z <= 32; z++) {
+      addVoxel(x, y, z, c, 0.05);
+    }
+  }
+}
+addBox(51, 57, 26, 26, 29, 33, 0x333333, 0.05);
+for (let x = 52; x <= 56; x++) {
+  for (let z = 30; z <= 32; z++) {
+    addVoxel(x, 27, z, 0xffe066, 0.02);
+  }
+}
+addBox(52, 56, 28, 29, 30, 32, 0x222222, 0.05);
+
+// Trees
+const trees = [
+  [50, -55], [55, -48], [58, -40], [48, -30], [43, -20],
+  [52, 45], [58, 50], [48, 35], [45, 20], [55, 15], [42, 10]
+];
+for (const [x, z] of trees) addTree(x, z);
+
+// Clouds
+addCloud(60, -40, 70);
+addCloud(80, 20, 85);
+addCloud(110, 80, 75);
+addCloud(-50, 90, 80);
+addCloud(-80, -60, 75);
+addCloud(-30, 140, 90);
+addCloud(140, -30, 80);
+addCloud(20, -100, 70);
+
+// Finish voxels
+voxMesh.count = voxelCount;
+voxMesh.instanceMatrix.needsUpdate = true;
+voxMesh.instanceColor.needsUpdate = true;
+
+// Animated low-poly water plane
+const waterGeo = new THREE.PlaneGeometry(900, 900, 60, 60);
+waterGeo.rotateX(-Math.PI / 2);
+const waterAttr = waterGeo.attributes.position;
+const waterOriginal = new Float32Array(waterAttr.array);
+const waterMat = new THREE.MeshLambertMaterial({
+  color: 0x2b7bb6,
+  transparent: true,
+  opacity: 0.72,
+  depthWrite: false,
+  side: THREE.DoubleSide
+});
+const water = new THREE.Mesh(waterGeo, waterMat);
+water.position.y = 0;
+water.renderOrder = 2;
+scene.add(water);
+
+function updateWater(t) {
+  const arr = waterAttr.array;
+  for (let i = 0; i < arr.length; i += 3) {
+    const x = waterOriginal[i];
+    const z = waterOriginal[i + 2];
+    arr[i + 1] =
+      Math.sin(x * 0.04 + t * 0.7) *
+      Math.cos(z * 0.035 + t * 0.9) * 0.25 +
+      Math.sin((x + z * 0.7) * 0.05 + t * 1.2) * 0.06;
+  }
+  waterAttr.needsUpdate = true;
+  waterGeo.computeVertexNormals();
+}
+
+// Mouse / touch controls
+let theta = 0.7;
+let phi = 1.0;
+let radius = 145;
+const target = new THREE.Vector3(8, 5, 0);
+
+const dir = new THREE.Vector3();
+const right = new THREE.Vector3();
+const up = new THREE.Vector3();
+
+function clamp(v, a, b) {
+  return Math.max(a, Math.min(b, v));
+}
+
+function updateCamera() {
+  const sp = Math.sin(phi);
+  camera.position.set(
+    target.x + radius * sp * Math.sin(theta),
+    target.y + radius * Math.cos(phi),
+    target.z + radius * sp * Math.cos(theta)
+  );
+  camera.lookAt(target);
+}
+
+function panBy(dx, dy) {
+  camera.getWorldDirection(dir);
+  right.crossVectors(dir, camera.up).normalize();
+  up.crossVectors(right, dir).normalize();
+  const s = radius * 0.0025;
+  target.addScaledVector(right, -dx * s);
+  target.addScaledVector(up, dy * s);
+  updateCamera();
+}
+
+const dom = renderer.domElement;
+dom.addEventListener("contextmenu", e => e.preventDefault());
+
+const activePointers = new Map();
+let dragState = 0; // 1 rotate, 2 pan
+let pinchPrev = 0;
+
+function pinchDistance() {
+  if (activePointers.size < 2) return 0;
+  const it = activePointers.values();
+  const a = it.next().value;
+  const b = it.next().value;
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+dom.addEventListener("pointerdown", e => {
+  activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  dom.setPointerCapture(e.pointerId);
+
+  if (activePointers.size === 1) {
+    dragState = (e.button === 2 || e.shiftKey) ? 2 : 1;
+  } else if (activePointers.size === 2) {
+    dragState = 0;
+    pinchPrev = pinchDistance();
+  }
+
+  e.preventDefault();
+});
+
+dom.addEventListener("pointermove", e => {
+  if (!activePointers.has(e.pointerId)) return;
+
+  const prev = activePointers.get(e.pointerId);
+  const dx = e.clientX - prev.x;
+  const dy = e.clientY - prev.y;
+  activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if (activePointers.size === 1 && dragState !== 0) {
+    if (dragState === 2) {
+      panBy(dx, dy);
+    } else {
+      theta -= dx * 0.006;
+      phi = clamp(phi - dy * 0.006, 0.15, 1.45);
+      updateCamera();
+    }
+  } else if (activePointers.size === 2) {
+    const d = pinchDistance();
+    if (pinchPrev > 0) {
+      radius *= pinchPrev / d;
+      radius = clamp(radius, 20, 500);
+      updateCamera();
+    }
+    pinchPrev = d;
+  }
+});
+
+function clearPointer(e) {
+  activePointers.delete(e.pointerId);
+  if (activePointers.size === 0) {
+    dragState = 0;
+    pinchPrev = 0;
+  }
+}
+window.addEventListener("pointerup", clearPointer);
+window.addEventListener("pointercancel", clearPointer);
+
+dom.addEventListener("wheel", e => {
+  e.preventDefault();
+  const mode = e.deltaMode === 1 ? 20 : e.deltaMode === 2 ? 400 : 1;
+  radius *= Math.exp(e.deltaY * mode * 0.0008);
+  radius = clamp(radius, 20, 500);
+  updateCamera();
+}, { passive: false });
+
+dom.addEventListener("dblclick", () => {
+  theta = 0.7;
+  phi = 1.0;
+  radius = 145;
+  target.set(8, 5, 0);
+  updateCamera();
+});
+
+function resize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+window.addEventListener("resize", resize);
+
+// Render loop
+updateCamera();
+renderer.render(scene, camera);
+
+requestAnimationFrame(function loop(now) {
+  updateWater(now * 0.001);
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+});
+</script>
+</body>
+</html>

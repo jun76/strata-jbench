@@ -22,7 +22,7 @@ One table of cases per Tier (a row per case). Every parameter and result: the CS
 
 The Strata desktop app is not used. The CLI (<code>strata launch --no-tui</code>) starts the engine on a dedicated port (18600), and <code>scripts/bench_runner.py</code> calls its OpenAI-compatible HTTP API (<code>POST /v1/chat/completions</code>, streaming) directly. Only Tier 2 runs Strata's bundled benchmark, <code>strata bench run --suite standard-v1</code>, against the same engine.
 
-environment <code>rtx5070-cu5_235-64g-sata</code> · as recorded for RUN_ID 2026-11-08-gyro-coder (machine.json)
+environment <code>rtx5070-cu5_235-64g-sata</code> · as recorded for RUN_ID 2026-11-09-harbor-gyro-long-t5 (machine.json)
 
 ## Overview
 
@@ -31,40 +31,40 @@ environment <code>rtx5070-cu5_235-64g-sata</code> · as recorded for RUN_ID 2026
 - engine launches: 118
 - estimate: 39 h
 - reference model: qwen IQ3_S (env.json "ref", else the model Strata recommends for this RAM + VRAM)
-- done: 794
-- failed: 4
+- done: 1,018
+- failed: 16
 
 
 ## By Tier
 
 | Tier | what | models | cases | requests | est. h | done |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| [0](tier-0.en.md) | validating the harness (the reference model × 3 launches, Gyro-S against the author's figures, unpacking the coding result) | 2 | 25 | 183 | 1.2 | 24 |
+| [0](tier-0.en.md) | validating the harness (the reference model × 3 launches, Gyro-S against the author's figures, unpacking the coding result) | 2 | 25 | 183 | 1.2 | 25 |
 | [1](tier-1.en.md) | base speed of every model (5 decode kinds × 3 temperatures, prefill 4K / 32K / 128K); decode also with DFlash2 on the models that have it | 11 | 348 | 1,044 | 2.7 | 348 |
 | [2](tier-2.en.md) | the official standard-v1 (thinking xhigh, temperature 1.0), the whole suite 3 times | 11 | 165 | 495 | 2.3 | 165 |
-| [3](tier-3.en.md) | reasoning effort none / high × 4 tasks, the coding task (sailing ship) at high only (every model) | 11 | 99 | 297 | 8.3 | 88 |
+| [3](tier-3.en.md) | reasoning effort none / high × 4 tasks, the coding task (sailing ship) at high only (every model) | 11 | 99 | 297 | 8.3 | 99 |
 | [4a](tier-4a.en.md) | the cost of reserving context (the same 4K input at 128K / 256K / 1M) | 11 | 33 | 99 | 1.1 | 33 |
-| [4b](tier-4b.en.md) | long inputs within the trained length (32K / 128K / 256K; the reference model, the largest of each family, the smallest) | 4 | 48 | 144 | 2.2 | 24 |
-| [4c](tier-4c.en.md) | long inputs in the extended range (512K / 1M; the reference model, the smallest and the largest) | 3 | 24 | 72 | 14.0 | 8 |
+| [4b](tier-4b.en.md) | long inputs within the trained length (32K / 128K / 256K; the reference model, the largest of each family, the smallest) | 4 | 48 | 144 | 2.2 | 48 |
+| [4c](tier-4c.en.md) | long inputs in the extended range (512K / 1M; the reference model, the smallest and the largest) | 3 | 24 | 72 | 14.0 | 24 |
 | [4d](tier-4d.en.md) | the effect of YaRN (the reference model, same input, only the setting changes) | 1 | 16 | 48 | 3.0 | 16 |
-| [5](tier-5.en.md) | changing one launch option at a time (the reference model, the largest and the smallest; auto tune included) | 3 | 276 | 828 | 4.5 | 88 |
+| [5](tier-5.en.md) | changing one launch option at a time (the reference model, the largest and the smallest; auto tune included) | 3 | 276 | 828 | 4.5 | 260 |
 
 
 ## Models
 
 | family | model | GB | kind | version measured (repository @ commit, the RUN_ID's models.json) |
 | --- | --- | ---: | --- | --- |
-| qwen | Q2_0 | 67.3 | quantized from the original weights (ISTA) | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json)) |
-| qwen | IQ2_XS | 68.0 | quantized from the original weights (ISTA) | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json)) |
-| qwen | IQ3_XXS | 75.8 | quantized from the original weights (ISTA) | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json)) |
-| qwen | IQ3_S | 83.6 | quantized from the original weights (ISTA) | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json)) |
-| coder | IQ1_M | 58.4 | pruned to half the experts | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF @ `5348543`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF/tree/5348543e0147355ac9cbcb031184a3546350988e) ([2026-11-08-gyro-coder](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-08-gyro-coder/models.json)) |
-| gyro | Gyro-S | 58.5 | quantized from the original weights (trellis) | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-08-gyro-coder](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-08-gyro-coder/models.json)) |
-| gyro | Gyro-M | 92.0 | quantized from the original weights (trellis) | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json)) |
-| unsloth | UD-IQ1_M (v3.1) | 68.0 | quantized from the original weights (Unsloth v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `d962011`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json)) |
-| unsloth | UD-Q2_0 (v3.1) | 70.5 | quantized from the original weights (Unsloth v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `d962011`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json)) |
-| unsloth | UD-IQ2_XS (v3.1) | 75.8 | quantized from the original weights (Unsloth v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `d962011`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json)) |
-| unsloth | UD-Q2_K_XL (v3.1) | 79.6 | quantized from the original weights (Unsloth v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `d962011`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json)) |
+| qwen | Q2_0 | 67.3 | quantized from the original weights (ISTA) | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json), [2026-11-09-harbor-gyro-long-t5](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-09-harbor-gyro-long-t5/models.json)) |
+| qwen | IQ2_XS | 68.0 | quantized from the original weights (ISTA) | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json), [2026-11-09-harbor-gyro-long-t5](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-09-harbor-gyro-long-t5/models.json)) |
+| qwen | IQ3_XXS | 75.8 | quantized from the original weights (ISTA) | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json), [2026-11-09-harbor-gyro-long-t5](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-09-harbor-gyro-long-t5/models.json)) |
+| qwen | IQ3_S | 83.6 | quantized from the original weights (ISTA) | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `ed59f92`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json), [2026-11-09-harbor-gyro-long-t5](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-09-harbor-gyro-long-t5/models.json)) |
+| coder | IQ1_M | 58.4 | pruned to half the experts | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF @ `5348543`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF/tree/5348543e0147355ac9cbcb031184a3546350988e) ([2026-11-08-gyro-coder](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-08-gyro-coder/models.json), [2026-11-09-harbor-gyro-long-t5](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-09-harbor-gyro-long-t5/models.json)) |
+| gyro | Gyro-S | 58.5 | quantized from the original weights (trellis) | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-08-gyro-coder](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-08-gyro-coder/models.json), [2026-11-09-harbor-gyro-long-t5](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-09-harbor-gyro-long-t5/models.json)) |
+| gyro | Gyro-M | 92.0 | quantized from the original weights (trellis) | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json), [2026-11-09-harbor-gyro-long-t5](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-09-harbor-gyro-long-t5/models.json)) |
+| unsloth | UD-IQ1_M (v3.1) | 68.0 | quantized from the original weights (Unsloth v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `d962011`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json), [2026-11-09-harbor-gyro-long-t5](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-09-harbor-gyro-long-t5/models.json)) |
+| unsloth | UD-Q2_0 (v3.1) | 70.5 | quantized from the original weights (Unsloth v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `d962011`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json), [2026-11-09-harbor-gyro-long-t5](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-09-harbor-gyro-long-t5/models.json)) |
+| unsloth | UD-IQ2_XS (v3.1) | 75.8 | quantized from the original weights (Unsloth v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `d962011`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json), [2026-11-09-harbor-gyro-long-t5](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-09-harbor-gyro-long-t5/models.json)) |
+| unsloth | UD-Q2_K_XL (v3.1) | 79.6 | quantized from the original weights (Unsloth v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `d962011`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json), [2026-11-09-harbor-gyro-long-t5](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-09-harbor-gyro-long-t5/models.json)) |
 
 
 ## Conditions shared by every case

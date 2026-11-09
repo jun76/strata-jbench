@@ -1,0 +1,1 @@
+测量了尚未测量的用例：全部 11 个模型的编程任务“帆船停靠港口”（Tier 0、3），gyro Gyro-S、Gyro-M 与 unsloth UD-Q2_K_XL 的长文（Tier 4b、4c），以及 Gyro-S、Gyro-M 的启动选项（Tier 5）。Tier 3 的 33 次帆船中 16 次画出了场景，1 次被截断。vram-reserve 40%・50% 的 12 个用例因 12 GB VRAM 放不下而无法启动
