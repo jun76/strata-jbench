@@ -489,6 +489,30 @@ def env_models():
     return [m for m in MODELS if not keep or f'{m[0]} {m[1]}' in keep]
 
 
+def result_ids(env_id, published_only=False):
+    """The case ids that have a result in this environment (published/, and results/ unless published_only)."""
+    return {s.parent.name for run in envs.run_dirs(env_id, published_only) for s in run.glob('cases/*/summary.json')}
+
+
+def measured_rows(cfg, plan, have):
+    """The cases the pages keep beside the plan: a model this environment no longer measures (left out of env.json
+    "models", say when its files were replaced or the disk was short) keeps its results on the pages and in the lists,
+    as long as the plan builder still makes the same case for it. A case whose definition changed or left the builder
+    (another prompt, another cap) leaves them, as AGENTS.md 2.1 says. plan: build(cfg); have: result_ids()."""
+    if not cfg.get('models'):
+        return []
+    ids = {r['id'] for r in plan}
+    rows = [r for r in build({**cfg, 'models': None}) if r['id'] in have and r['id'] not in ids]
+    use_env(cfg)   # build() set the environment to every model
+    return rows
+
+
+def page_models(rows):
+    """The models the pages list: this environment's, then the ones only its earlier results have, in MODELS order."""
+    keep = {(f, m) for f, m, *_ in env_models()} | {(r['family'], r['model']) for r in rows}
+    return [m for m in MODELS if (m[0], m[1]) in keep]
+
+
 def speeds(r):
     decode = ASSUME_ENV['decode_tps']['nvfp4' if r['family'] == 'nvfp4' else r['size_class']]
     return r['size_class'], decode
@@ -915,7 +939,7 @@ def write_md(rows, out, cfg, published_only=False):
                     f'{L("測った版（リポジトリ @ コミット、RUN_ID の models.json）", "version measured (repository @ commit, the RUN_ID's models.json)", "测量的版本（仓库 @ 提交，RUN_ID 的 models.json）")} |\n'
                     '| --- | --- | ---: | --- | --- |\n')
         text[-1] += ''.join(f'| {f} | {display_model(f, m)} | {gb} | {md(tr(role, lang))} | {versions.get((f, m), "–")} |\n'
-                            for f, m, gb, role in env_models())
+                            for f, m, gb, role in page_models(rows))
         harness = division.get('harness')
         text.append(f'\n## {L("全ケース共通の条件", "Conditions shared by every case", "所有用例的共同条件")}\n\n{(HARNESS_COMMON if harness else COMMON)[lang]}')
         title, intro, tree, after = (HARNESS_LAYOUT if harness else GAME_LAYOUT)[lang]
@@ -1012,10 +1036,10 @@ def main():
     summaries = []
     for env_id in envs.page_ids(a.published):
         cfg = envs.load(env_id, a.published)
-        rows = build(cfg)
+        plan = build(cfg)
+        rows = plan + measured_rows(cfg, plan, result_ids(env_id, a.published))
         attach_results(rows, env_id, a.published)
-        rows = [r for r in rows if not r.get('retired') or r['status'] != 'planned']
-        est = estimate(rows)
+        est = estimate(plan)
         hours = sum(s['total_h'] for s in est.values())
         summaries.append({'id': env_id, 'label': envs.label(cfg), 'cases': len(rows), 'hours': hours,
                           'done': sum(r['status'] == 'done' for r in rows),
@@ -1023,7 +1047,7 @@ def main():
         if a.env and env_id != a.env:
             continue
         if not a.published and env_id in envs.ids():   # the plan this PC measures (plan/ is outside Git)
-            write_plan(rows, env_id)
+            write_plan(plan, env_id)
         write_md(rows, out_root / 'cases' / envs.division() / env_id, cfg, a.published)
         missing = untranslated([r[k] for r in rows for k, _ in COLUMNS if k not in UNTRANSLATED_COLS]
                                + [x for m in MODELS for x in m[3:]])
@@ -1031,7 +1055,8 @@ def main():
             print(f'cases/{envs.division()}/{env_id}/: {len(missing)} string(s) without a translation in scripts/i18n.py TR (shown in Japanese):')
             for s in missing:
                 print('  ' + s)
-        print(f'{env_id}: {len(rows)} cases, {sum(r["requests"] for r in rows)} measured requests, ~{hours:.0f} h estimated')
+        print(f'{env_id}: {len(plan)} cases, {sum(r["requests"] for r in plan)} measured requests, ~{hours:.0f} h estimated'
+              + (f' (and {len(rows) - len(plan)} measured cases of models no longer in the plan)' if len(rows) > len(plan) else ''))
         for step, s in est.items():
             print(f'  Tier {step}: {s["total_h"]} h (requests {s["request_s"] / 3600:.1f} h, launches {s["launch_s"] / 3600:.1f} h)')
     write_index(summaries, out_root, a.published)

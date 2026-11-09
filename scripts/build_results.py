@@ -271,8 +271,9 @@ def artifacts(case, rel, per_request=None):
 
 def collect_env(cfg, run_id, published_only, rel=''):
     env_id = cfg['id']
-    rows = build_cases.build(cfg)
+    plan = build_cases.build(cfg)
     found = summaries(env_id, run_id, published_only)
+    rows = plan + build_cases.measured_rows(cfg, plan, set(found))   # models no longer measured keep their results
     runs = sorted({run for run, _ in found.values()}, key=lambda d: d.name)
     per_run = {}
     for d in runs:
@@ -310,14 +311,14 @@ def collect_env(cfg, run_id, published_only, rel=''):
         cases.append(c)
     models = [{'key': f'{f} {dm(f, m)}', 'family': f, 'model': dm(f, m), 'gb': gb, 'role': role,
                'derivative': (f, m) in build_cases.DERIVATIVE, 'ref': (f, m) == build_cases.REF}
-              for f, m, gb, role in build_cases.env_models()]
+              for f, m, gb, role in build_cases.page_models(rows)]
     planned = {}
-    for r in rows:
+    for r in plan:
         planned.setdefault(r['step'], set()).add(f'{r["family"]} {dm(r["family"], r["model"])}')
     env = {'id': env_id, 'label': envs.label(cfg), 'runs': [machine(d) for d in runs], 'models': models,
            'planned_models': {k: sorted(v) for k, v in planned.items()},
-           'planned_cases': {k: sum(1 for r in rows if r['step'] == k) for k in planned},
-           'planned_per_model': {k: {m: sum(1 for r in rows if r['step'] == k and f'{r["family"]} {dm(r["family"], r["model"])}' == m) for m in v}
+           'planned_cases': {k: sum(1 for r in plan if r['step'] == k) for k in planned},
+           'planned_per_model': {k: {m: sum(1 for r in plan if r['step'] == k and f'{r["family"]} {dm(r["family"], r["model"])}' == m) for m in v}
                                  for k, v in planned.items()},
            'dflash2_models': sorted({f'{r["family"]} {dm(r["family"], r["model"])}' for r in rows if r['config'] == 'drafter=DFlash2'}),
            'noise_pct': {k: restart_noise(found, k) for k in ('decode', 'prefill')}}
