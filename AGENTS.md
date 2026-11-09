@@ -69,8 +69,8 @@ as simply a result (no "final" or "published" wording in their results section),
    its own end: a reboot, a logout without linger, a kill. For that, an agent that runs the benchmark registers a
    scheduled task with its own scheduler in the conversation that started the run (hourly: check, find the cause,
    recover safely, report the end; 2.3), which reports in that conversation, the end of the run included. The task exists only
-   while a run does: registered when it starts and deleted when it ends, each time with the user's agreement (2.3,
-   2.6). Without an agent the supervisor alone runs it, and after a reboot `bench.py start` resumes it.
+   while a run does: registered when it starts, with the user's agreement (2.3), and deleted by the task itself as
+   soon as it finds the run over, whether it succeeded or not (2.6). Without an agent the supervisor alone runs it, and after a reboot `bench.py start` resumes it.
 7. **Keep progress in files,** not in the conversation's memory: the state in `run-status/STATUS.md`, problems in
    `run-status/ALERTS.log`, each stage's logs as in section 4.
 8. **Nothing else heavy during a measurement.** No downloads, conversions or another inference engine at the same time.
@@ -154,7 +154,9 @@ the user's call); the pinned version goes into `tools/harness/` beside it. Nothi
    script runs, and shown in Japanese).
 3. If a new fixture is needed, change `scripts/build_fixtures.py` and run it with the Python that ships with Strata (see
    the docstring at the top of the file; `--only <fixture>` rewrites one chat fixture without counting the long ones again).
-   The coding cases: plain's Tiers 0 and 3 ask for Shuri Castle in 3D voxel art as one HTML file (`coding-shuri`); the
+   The coding cases: plain's Tiers 0 and 3 ask for a scene titled "A sailing ship calling at a harbor" in 3D voxel art
+   as one HTML file (`coding-harbor`; the scene is given by its title alone, thinking is fixed at 64K and the cap is the
+   whole 128K window, since every model thinks all of its budget on it); the
    Minecraft prompt (`game-minecraft`) is the harness divisions' case.
    The long document of Tiers 4b–4d comes from ten works of Aozora Bunko and Project Gutenberg (five Japanese, five
    English), cleaned by `scripts/long_corpus.py` into `prompts/long-corpus.txt`, Japanese and English chunks in turns.
@@ -164,7 +166,7 @@ the user's call); the pinned version goes into `tools/harness/` beside it. Nothi
    the document.
 4. Update the matching part of [docs/SCOUTING.md](docs/SCOUTING.md) too.
 5. No backward compatibility: the case lists and the charts show the plan as it is now. A case taken out of the plan,
-   or replaced by another (Minecraft by Shuri Castle in plain), leaves them, with the results earlier runs have for it;
+   or replaced by another (say, one coding prompt by another), leaves them, with the results earlier runs have for it;
    those results stay readable in each run's own snapshot (`snapshots/<division>/<env>/<RUN_ID>/`, never rewritten)
    and in `published/`. Do not keep old cases on the pages as "retired" ones, and do not write how a case used to be
    in the lists or the pages (the history goes in docs/SCOUTING.md and the commit message).
@@ -195,7 +197,7 @@ the user's call); the pinned version goes into `tools/harness/` beside it. Nothi
    - For a harness division: that the model will run shell commands and write files inside the sandboxed work folder
      (the network is not cut off: a harness reaches the proxy over it).
    - That the hourly watch task will be registered at the start (step 3 of 2.3: which scheduler, where it reports,
-     what it does not survive) and deleted at the end (2.6).
+     what it does not survive) and deletes itself once the run is over, whether it succeeded or not (2.6).
 3. After changing the runner or a fixture, run the affected cases under a RUN_ID starting with `test-` (`test-` results
    appear neither in the case lists nor in the charts): either with `bench.py start` and `"cases": [...]`, or directly
    `python3 scripts/bench_runner.py --run-id test-xxx --steps 1 --ids <case id>,...` (a harness division: with
@@ -243,11 +245,13 @@ the user's call); the pinned version goes into `tools/harness/` beside it. Nothi
      job is the same case as Claude Code's "Scheduled" tasks.
    Its prompt must be self-contained, for example:
    > In <repository path>, run `python3 -I scripts/bench.py status --json`. RUNNING or WAITING: report nothing
-   > unless `warn` is set. DONE: report the end (the run, the cases done and failed, `run-status/STATUS.md`) and ask
-   > the user to delete this task. STOPPED: say so and ask whether to resume or delete this task. FAILED or STUCK, or
-   > `supervisor_pid` null while not DONE or STOPPED: follow AGENTS.md 2.4 (read the logs, find the cause; after a
-   > reboot or a passing problem, `python3 -I scripts/bench.py start` resumes it), never act on section 3 without the
-   > user's policy, and report what was found and done. This task never deletes itself.
+   > unless `warn` is set. DONE: report the end (the run, the cases done and failed, `run-status/STATUS.md`) and
+   > delete this task. STOPPED: say so and delete this task (the user resumes with `bench.py start`, which registers
+   > it again). FAILED or STUCK, or `supervisor_pid` null while not DONE or STOPPED: follow AGENTS.md 2.4 (read the
+   > logs, find the cause; after a reboot or a passing problem, `python3 -I scripts/bench.py start` resumes it, and
+   > the task stays); when it cannot be resumed without the user (the cause is unknown, or the fix is in section 3),
+   > report what was found and delete this task. Never act on section 3 without the user's policy; report what was
+   > found and done.
    If one is left over from an earlier run, check that it is enabled and that its prompt is still right. If it cannot
    be registered, do not report the run as started: tell the user why and have them decide on another way (the
    supervisor alone, without recovery after a reboot).
@@ -284,14 +288,21 @@ After fixing a code or environment problem, run one affected case under a `test-
    When the same case is in several RUN_IDs of one environment, both use the RUN_ID whose name sorts last. To
    measure again under changed conditions, delete the old RUN_ID's results or use a RUN_ID that sorts later (`test-`
    RUN_IDs are never shown). Another environment is another case.
+3. The coding cases' pages are judged by their capture (`scripts/page_shot.mjs`, called by the runner: the page runs
+   10 s in headless Chrome over the DevTools protocol, then its errors, whether it froze and whether anything was
+   drawn go into the manifest's `screenshot`). After changing that step, `python3 -I scripts/recheck_artifacts.py
+   results/<division>/<env>/<RUN_ID>` captures a run's pages again without asking the models again (while nothing
+   is measured), then rebuild the pages as in step 2.
 
 ### 2.6 When the run ends
-The watch task keeps firing every hour after the queue ends, so remove it as soon as the run is over.
-1. The run is over when STATUS is DONE, or when it is FAILED or STOPPED and the user has decided not to resume it.
-   A FAILED run that will be resumed after a fix is not over: keep the task.
-2. Ask the user whether the watch task (`strata-jbench-watch`) may be deleted, and delete it only after they agree
-   (with the scheduler it was registered with, in the conversation that registered it; Claude Code: CronDelete). If
-   the agent cannot delete it, ask the user to.
+The watch task keeps firing every hour after the queue ends, so it deletes itself as soon as it finds the run over,
+whether the run succeeded or not; no one is asked first (the user agreed to this when it was registered, 2.2).
+1. The run is over when STATUS is DONE or STOPPED, or FAILED in a way the task cannot resume by itself (2.4: the
+   cause is unknown, or its fix is in section 3). A FAILED run the task resumes after a reboot or a passing problem is
+   not over: the task stays.
+2. The task reports the end (or what it found) and then deletes itself with the scheduler it was registered with, in
+   the conversation that registered it (Claude Code: CronList for its id, then CronDelete). If it cannot, it asks the
+   user to. A run started again later registers a new task (2.3).
 3. Check with the scheduler's list that no watch task is left.
 
 ### 2.7 Making results final and committing them

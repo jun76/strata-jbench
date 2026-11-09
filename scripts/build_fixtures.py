@@ -3,7 +3,7 @@
 Run with Strata's own Python (the active Control's, named in ~/.local/share/strata/components/control/active.json)
 so the token counts use the tokenizer and chat template the server uses, for example:
   ~/.local/share/strata/components/control/0.1.56/python/bin/python3 scripts/build_fixtures.py
-  ~/.local/share/strata/components/control/0.1.58/python/bin/python3 scripts/build_fixtures.py --only coding-shuri
+  ~/.local/share/strata/components/control/0.1.58/python/bin/python3 scripts/build_fixtures.py --only coding-harbor
 (--only rewrites the named fixtures and their MANIFEST lines, and leaves the others as they are)
 
 The prefill records follow standard-v1 (tools/build_standard_corpus.py), sized here for thinking-off requests.
@@ -54,12 +54,12 @@ DECODE = {
 }
 
 GAME_PROMPT = 'マイクラ風3D箱庭ゲーム作って'
-# Plain Tier 3's game since 2026-11-07 (the Minecraft prompt moved to the harness divisions); the answer is asked for as one HTML file,
-# in 3D voxel art (added the same day, before any run was kept).
-SHURI_PROMPT = ('Design and create a very creative, elaborate, and detailed 3D voxel art scene of Shuri Castle and its surrounding landscape in '
-                'Okinawa, Japan. Include the castle architecture, nearby gates, stone walls, trees, and a rich surrounding '
-                'environment. Make the scene impressive and varied and use beautiful colors. Use whatever libraries you want, '
-                'but make sure I can paste it all into a single HTML file and open it in Chrome.')
+# Plain's coding task (the Minecraft prompt is the harness divisions'): the scene is given by its title alone, so what the
+# ship, the harbor and the waterline look like is the model's own design and knowledge; asked for in 3D voxel art, as one
+# HTML file that renders at once and can be looked around with the mouse.
+HARBOR_PROMPT = ('Create a 3D voxel art scene: "A sailing ship calling at a harbor". The scene should render immediately '
+                 'and be viewable with the mouse. Use whatever libraries you want, but make sure I can paste it all into a '
+                 'single HTML file and open it in Chrome.')
 CTXCOST_QUESTION = 'これらのレコードの構造を説明し、ID からレコードを探す手順と、件数が増えたときに速く探す工夫を、できるだけ詳しく書いてください。'
 
 
@@ -236,7 +236,7 @@ def main():
     def tokens_of(text):
         return len(counter.ids([{'role': 'user', 'content': MARKER_SAMPLE + '\n' + text}], None))
 
-    chats = {'game-minecraft': GAME_PROMPT, 'coding-shuri': SHURI_PROMPT}
+    chats = {'game-minecraft': GAME_PROMPT, 'coding-harbor': HARBOR_PROMPT}
     if only:
         unknown = only - set(chats)
         if unknown:

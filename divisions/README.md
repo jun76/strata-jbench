@@ -25,7 +25,7 @@ conditions (sampling, thinking, seed, output cap) the same for every harness.*
 ## ハーネス部門の測り方
 
 - **ケース**: コーディング（マイクラ、「マイクラ風3D箱庭ゲーム作って」）だけ。形式の指示を足さずに、ハーネスに one shot で渡す（非対話）。各3回。
-  プレーンの Tier 3 のコーディングは、2026-11-07 から首里城（単一の HTML ファイルで答えるよう指定する英文）です。マイクラはハーネス部門へ移しました（それより前のプレーンの結果はそのまま）。
+  プレーンの Tier 0・3 のコーディングは別の課題（「港に寄港する帆船」の情景を、単一の HTML ファイルで答えるよう指定する英文）です。
 - **エンジン**: プレーンの基準と同じ起動（コンテキスト 128K、`--vision off --parallel 1 --tune skip --drafting mtp`）。
 - **記録プロキシ**（[scripts/agent_proxy.py](../scripts/agent_proxy.py)）: ハーネスはエンジンに直接つながず、ランナーのプロキシを通す。
   プロキシは各リクエストの sampling・thinking・seed・出力 cap をケースの値（プレーンの Tier 3 のコーディングと同じ）にそろえ、ハーネスが送った元の値を記録する。

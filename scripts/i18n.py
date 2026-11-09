@@ -142,19 +142,20 @@ TR = {
         '检查成果的展开和截图机制。thinking off：reasoning_effort "none" + chat_template_kwargs.enable_thinking false。'
         '成果展开到 artifact/（response.md、files/、manifest.json，静态 HTML 另有 screenshot.png）。'
         '形式（单个 HTML / 需要服务器 / 有无 README）记录在 manifest 中'),
-    # the coding task since 2026-11-07: Shuri Castle in plain, Minecraft in the harness divisions
-    '首里城の情景を 3D ボクセルアートの単一の HTML ファイルで（実用的なコーディング）': (
-        'a scene of Shuri Castle in 3D voxel art as one HTML file (practical coding)',
-        '用单个 HTML 文件以 3D 体素艺术呈现首里城的场景（实用编码）'),
-    'thinking on: reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true、reasoning_budget_tokens 32,768'
-    '（明示。コーディングは cap の半分: 3/4 だと回答のコードが途中で切れたため）。成果物は artifact/ に展開'
+    # the coding task: a sailing ship at a harbor in plain, Minecraft in the harness divisions
+    '港に寄港する帆船の情景を 3D ボクセルアートの単一の HTML ファイルで（実用的なコーディング）': (
+        'a scene of a sailing ship calling at a harbor in 3D voxel art as one HTML file (practical coding)',
+        '用单个 HTML 文件以 3D 体素艺术呈现帆船停靠港口的场景（实用编码）'),
+    'thinking on: reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true、reasoning_budget_tokens 65,536'
+    '（明示。コーディングは思考を 64K に固定し、cap はコンテキスト 128K の枠いっぱい: どのモデルも思考の予算を使い切るので、残りの約 63K をページに充てる）。成果物は artifact/ に展開'
     '（response.md、files/、manifest.json、静的 HTML なら screenshot.png）。単一の HTML ファイルか、形式（単体 HTML / 要サーバー / README の有無）は manifest に記録': (
-        'thinking on: reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true, reasoning_budget_tokens 32,768 '
-        '(explicit; half the cap for the coding task, since at 3/4 the answer\'s code was cut off). The result is unpacked into '
-        'artifact/ (response.md, files/, manifest.json, and screenshot.png for static HTML). Whether it is one HTML file, and its '
-        'form (single HTML / needs a server / has a README), are recorded in the manifest',
-        'thinking on：reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true，reasoning_budget_tokens 32,768'
-        '（显式指定；编程任务取 cap 的一半，因为 3/4 时回答中的代码会被截断）。成果展开到 artifact/（response.md、files/、'
+        'thinking on: reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true, reasoning_budget_tokens 65,536 '
+        '(explicit; for this coding task thinking is fixed at 64K and the cap is the whole 128K window: every model thinks '
+        'all of its budget, so the remaining 63K or so is left for the page). The result is unpacked into artifact/ (response.md, files/, manifest.json, and '
+        'screenshot.png for static HTML). Whether it is one HTML file, and its form (single HTML / needs a server / has a '
+        'README), are recorded in the manifest',
+        'thinking on：reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true，reasoning_budget_tokens 65,536'
+        '（显式指定；此编程任务的思考固定为 64K，cap 为 128K 上下文的全部：所有模型都会用完思考预算，其余约 63K 留给页面）。成果展开到 artifact/（response.md、files/、'
         'manifest.json，静态 HTML 另有 screenshot.png）。是否为单个 HTML 文件及其形式（单个 HTML / 需要服务器 / 有无 README）记录在 manifest 中'),
     '成果物の展開・スクリーンショットの仕組みを確かめる。thinking off: reasoning_effort "none" + '
     'chat_template_kwargs.enable_thinking false。成果物は artifact/ に展開（response.md、files/、manifest.json、'

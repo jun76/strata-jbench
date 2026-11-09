@@ -17,7 +17,8 @@ Per case: results/<division>/<env>/<run-id>/cases/<case id>/
   summary.json      medians and the counts build_cases.py shows
   requests.jsonl    one line per request (timings, usage, client times, check result)
   responses/        the final answer text per request
-  artifact/seed-N/  coding cases: the files taken from the answer (or the harness's work folder), manifest.json, screenshot.png
+  artifact/seed-N/  coding cases: the files taken from the answer (or the harness's work folder), manifest.json, screenshot.png,
+                    console.txt (the page's errors)
   harness/seed-N/   harness divisions: the harness's output (events.jsonl, stderr.txt) and proxy.jsonl (one line per request)
   raw/              the SSE stream and thinking text; in a harness division also each seed's work folder, the harness's
                     folder and the requests as the harness sent them (kept out of Git)
@@ -74,11 +75,17 @@ def log(run_dir, msg):
         f.write(line + '\n')
 
 
+CODING_THINKING = 65536
+
+
 def thinking_budget(cap, fixture_name=''):
-    """Strata's answer_room value for this cap, sent explicitly. The coding cases (coding-shuri; game-minecraft, named
-    before 2026-11-07) get half the cap: a whole page is 10K+ tokens of code, and with three quarters spent thinking two
-    of three test answers were cut off."""
-    if fixture_name.startswith(('coding-', 'game-')):
+    """Strata's answer_room value for this cap, sent explicitly. The coding cases leave the page more room: the harness
+    divisions' Minecraft (game-) half the cap, since with three quarters spent thinking two of three test answers were
+    cut off; plain's coding task (coding-) 64K, with the cap at the whole 128K window: every model thinks all of its
+    budget on it (at 16K and 32K the pages had more errors the less they thought), and the page has the other 63K."""
+    if fixture_name.startswith('coding-'):
+        return min(CODING_THINKING, cap)
+    if fixture_name.startswith('game-'):
         return cap // 2
     return cap - min(max(512, cap // 4), cap // 2)
 
@@ -411,29 +418,73 @@ def free_port():
     return port
 
 
+PAGE_WAIT_MS = 10000   # how long a page runs, in real time, before it is captured
+
+
 def screenshot(files_dir, entry, dest):
-    """Serve the files over a local static server and capture the page with headless Chrome (network on, for CDNs)."""
+    """Serve the files over a local static server and capture the page with headless Chrome (network on, for CDNs;
+    software GL, since the engine holds the GPU's memory): scripts/page_shot.mjs lets it run PAGE_WAIT_MS in real time
+    and records its errors and whether it froze; page_look says whether anything was drawn. A page found empty or
+    frozen is opened once more in a fresh browser and the second capture is kept: a slow CDN or a GL context that
+    failed to start once left a page empty that drew every time after."""
+    shot = capture(files_dir, entry, dest)
+    if shot.get('drawn') is False or shot.get('hung'):
+        shot = capture(files_dir, entry, dest) | {'attempts': 2}
+    return shot
+
+
+def capture(files_dir, entry, dest):
+    """One capture: screenshot.png, console.txt and what page_shot.mjs and page_look found."""
     chrome = shutil.which('google-chrome') or shutil.which('chromium')
-    if not chrome:
-        return {'ok': False, 'error': 'no chrome'}
+    node = shutil.which('node')
+    if not chrome or not node:
+        return {'ok': False, 'error': 'no chrome' if not chrome else 'no node'}
     port = free_port()
     srv = subprocess.Popen([sys.executable, '-m', 'http.server', str(port), '--bind', HOST, '--directory', str(files_dir)],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    profile = Path(tempfile.mkdtemp(prefix='bench-chrome-'))
+    png = dest / 'screenshot.png'
+    png.unlink(missing_ok=True)
     try:
         time.sleep(1)
-        r = subprocess.run([chrome, '--headless=new', '--disable-gpu', '--use-gl=swiftshader', '--enable-unsafe-swiftshader',
-                            f'--user-data-dir={profile}', '--window-size=1280,800', '--virtual-time-budget=8000',
-                            '--enable-logging=stderr', '--v=0', f'--screenshot={dest / "screenshot.png"}',
-                            f'http://{HOST}:{port}/{entry}'], capture_output=True, text=True, timeout=90)
-        errors = [l for l in r.stderr.splitlines() if 'CONSOLE' in l and ('Uncaught' in l or 'Error' in l)][:20]
-        (dest / 'console.txt').write_text('\n'.join(l for l in r.stderr.splitlines() if 'CONSOLE' in l) + '\n')
-        return {'ok': (dest / 'screenshot.png').exists(), 'console_errors': errors}
-    except subprocess.TimeoutExpired:
-        return {'ok': False, 'error': 'timeout'}
+        r = subprocess.run([node, str(ROOT / 'scripts' / 'page_shot.mjs'), f'http://{HOST}:{port}/{entry}', str(png),
+                            '--wait', str(PAGE_WAIT_MS), '--size', '1280x800'],
+                           capture_output=True, text=True, timeout=PAGE_WAIT_MS / 1000 + 90,
+                           env={**os.environ, 'CHROME': chrome})
+        shot = json.loads(r.stdout.strip().splitlines()[-1])
+    except (subprocess.TimeoutExpired, ValueError, IndexError) as e:
+        shot = {'ok': False, 'error': 'timeout' if isinstance(e, subprocess.TimeoutExpired) else 'no result',
+                'console_errors': []}
     finally:
         srv.terminate()
-        shutil.rmtree(profile, ignore_errors=True)
+    (dest / 'console.txt').write_text('\n'.join(shot.get('console_errors') or []) + '\n')
+    shot['ok'] = png.exists()
+    if shot['ok']:
+        shot.update(page_look(png))
+    return shot
+
+
+def page_look(png):
+    """Whether the capture shows a drawn scene or an empty page: an empty one is nearly one colour, or has almost no
+    edges (a plain or gradient background, a title or a loading text on it). Two numbers on the image scaled to
+    320x200, grey: the share of its commonest shade, and the share of pixels that differ by more than 16 from the next
+    one to the right or below. Pillow is optional: without it nothing is judged."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return {}
+    im = Image.open(png).convert('L').resize((320, 200))
+    w, h = im.size
+    px = im.load()
+    edges = sum(1 for y in range(h - 1) for x in range(w - 1)
+                if abs(px[x, y] - px[x + 1, y]) > 16 or abs(px[x, y] - px[x, y + 1]) > 16)
+    top = max(im.histogram()) / (w * h)
+    edge_share = edges / ((w - 1) * (h - 1))
+    return {'drawn': top < BLANK_TOP_SHARE and edge_share >= BLANK_EDGE_SHARE,
+            'top_share': round(top, 3), 'edge_share': round(edge_share, 4)}
+
+
+BLANK_TOP_SHARE = 0.9    # one shade over 90% of the image: empty
+BLANK_EDGE_SHARE = 0.03  # edges on under 3% of it: empty
 
 
 # ------------------------------------------------------------------ summary
@@ -482,6 +533,9 @@ def summarize(row, records):
     arts = [r['artifact'] for r in ok if r.get('artifact')]
     if arts:
         s['single_file'] = f'{sum(1 for a in arts if a.get("single_file"))}/{len(arts)}'
+        shots = [a.get('screenshot') or {} for a in arts]
+        s['drawn'] = f'{sum(1 for x in shots if x.get("drawn"))}/{len(arts)}'
+        s['hung'] = sum(1 for x in shots if x.get('hung'))
         s['from_workspace'] = sum(1 for a in arts if a.get('source') == 'workspace')
     return s
 

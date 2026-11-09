@@ -115,11 +115,16 @@ TIER5_CASES = ['decode-prose-ja', 'decode-code', 'prefill-4k', 'prefill-32k']
 DFLASH2_FAMILIES = {'qwen', 'gyro', 'unsloth'}
 DFLASH2_NOTE = '0.2.10 から Auto はこのモデルで DFlash2 を選ぶ（ほかのケースは MTP に固定）。drafter（1.2 GB。0.2.12 から一部のモデルは Strata が調整した 0.34 GB も）は計測前に取得しておく'
 
-# Practical coding cases. Plain Tiers 0 and 3 ask for Shuri Castle in 3D voxel art as one HTML file (since 2026-11-07); the Minecraft prompt,
-# sent verbatim with no format instructions, is the harness divisions' case (docs: divisions/README.md).
-GAME_FIXTURE = 'coding-shuri'
-GAME_PROMPT = ('Design and create a very creative, elaborate, and detailed 3D voxel art scene of Shuri Castle and its surrounding '
-               'landscape in Okinawa, Japan. … make sure I can paste it all into a single HTML file and open it in Chrome.')
+# Practical coding cases. Plain Tiers 0 and 3 ask for a scene titled "A sailing ship calling at a harbor" in 3D voxel art as
+# one HTML file; the Minecraft prompt, sent verbatim with no format instructions, is the harness divisions' case
+# (docs: divisions/README.md).
+GAME_FIXTURE = 'coding-harbor'
+GAME_PROMPT = ('Create a 3D voxel art scene: "A sailing ship calling at a harbor". The scene should render immediately and be '
+               'viewable with the mouse. … make sure I can paste it all into a single HTML file and open it in Chrome.')
+# The coding cap: the whole 128K window but the prompt (about 100 tokens) and a margin; thinking is 64K
+# (bench_runner.CODING_THINKING): every model thinks all of its budget on this task, and the page has the other 63K.
+CODING_CAP = 128 * K - 1024
+CODING_THINKING = 65536
 GAME_NOTE = ('成果物は artifact/ に展開（response.md、files/、manifest.json、静的 HTML なら screenshot.png）。'
              '単一の HTML ファイルか、形式（単体 HTML / 要サーバー / README の有無）は manifest に記録')
 HARNESS_FIXTURE = 'game-minecraft'
@@ -141,9 +146,9 @@ ASSUME = {
     'warmup_s': 8,
     'request_overhead_s': 0.2,
     'reasoning_tokens': {'none': 0, 'low': 50, 'medium': 100, 'high': 150, 'xhigh': 200},
-    # Shuri Castle in a run of 2026-11-07 at a 32K cap (high, 16K thinking budget): about 18K of thinking, and pages of 12K-16K+
-    'game_reasoning_tokens': {'none': 0, 'low': 3000, 'medium': 6000, 'high': 18000},
-    'game_answer_tokens': 16000,
+    # the coding task: every model thinks all of its budget (64K at high); pages ran to 5K-40K
+    'game_reasoning_tokens': {'none': 0, 'low': 3000, 'medium': 6000, 'high': 66000},
+    'game_answer_tokens': 20000,
     'task_answer_tokens': 550,
     'long_answer_tokens': 150,
     'sanity_output_tokens': 150,
@@ -175,20 +180,24 @@ def thinking_budget(cap):
     return cap - min(max(512, cap // 4), cap // 2)
 
 
-def effort_note(effort, cap, game=False):
+def effort_note(effort, cap, coding=None):
+    """coding: 'page' (plain's coding task: 64K) or 'game' (the harness divisions': half the cap), as
+    bench_runner.thinking_budget sends."""
     if effort == 'none':
         return 'thinking off: reasoning_effort "none" + chat_template_kwargs.enable_thinking false'
+    budget = {'page': min(CODING_THINKING, cap), 'game': cap // 2}.get(coding, thinking_budget(cap))
+    why = {'page': '。コーディングは思考を 64K に固定し、cap はコンテキスト 128K の枠いっぱい: どのモデルも思考の予算を使い切るので、残りの約 63K をページに充てる）',
+           'game': '。コーディングは cap の半分: 3/4 だと回答のコードが途中で切れたため）'}.get(coding, '）')
     return (f'thinking on: reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true、'
-            f'reasoning_budget_tokens {(cap // 2 if game else thinking_budget(cap)):,}（明示'
-            + ('。コーディングは cap の半分: 3/4 だと回答のコードが途中で切れたため）' if game else '）'))
+            f'reasoning_budget_tokens {budget:,}（明示' + why)
 
 
 def game_case(tier, step, fam, model, effort, temperature, cap, timeout):
     return base(tier, step, fam, model, _key=f'{GAME_FIXTURE}-{effort}', fixture=GAME_FIXTURE,
-                content='首里城の情景を 3D ボクセルアートの単一の HTML ファイルで（実用的なコーディング）', input_tokens='短文', output_cap=cap,
+                content='港に寄港する帆船の情景を 3D ボクセルアートの単一の HTML ファイルで（実用的なコーディング）', input_tokens='短文', output_cap=cap,
                 effort=effort, temperature=temperature, timeout_s=timeout, artifact=True,
                 measures='完了時間, 出力 token, cap 到達, 成果物が動くか',
-                note=effort_note(effort, cap, game=True) + '。' + GAME_NOTE)
+                note=effort_note(effort, cap, coding='page') + '。' + GAME_NOTE)
 
 
 def tier1_cases(tier, step, fam, model, **kw):
@@ -227,9 +236,7 @@ def build(cfg):
                          measures='prefill tok/s を GYRO.md の 5090 の値と比較',
                          note='sampling は作者の値: top-k 20 / top-p 0.95 / min-p 0.05'))
     if REF:
-        # The coding caps: 32K / 64K since 2026-11-07 (16K / 32K before; the Shuri Castle pages, thinking included,
-        # outgrew 32K and nearly every answer was cut off).
-        rows.append(game_case('0', '0', *REF, 'none', 0.7, 32768, 1800))
+        rows.append(game_case('0', '0', *REF, 'none', 0.7, CODING_CAP, 1800))
         rows[-1]['note'] = '成果物の展開・スクリーンショットの仕組みを確かめる。' + rows[-1]['note']
 
     for fam, model, *_ in env_models():
@@ -264,7 +271,7 @@ def build(cfg):
                                  measures='思考 token 数, 回答までの時間, 完了時間, 正答, cap 到達',
                                  note=effort_note(eff, 16384)))
         for eff in GAME_EFFORTS:
-            rows.append(game_case('3', '3', fam, model, eff, 1.0, 65536, 3600))
+            rows.append(game_case('3', '3', fam, model, eff, 1.0, CODING_CAP, 3600))
 
     for fam, model, *_ in env_models():
         for ctx in [128 * K, 256 * K, 1024 * K]:
@@ -366,7 +373,7 @@ def harness_build(division):
                          output_cap=32768, effort='high', temperature=1.0, timeout_s=3600, artifact=True,
                          harness=division['harness'],
                          measures='完了時間, ターン数, tool call, ハーネスの前置き token, cached の割合, 成果物が動くか',
-                         note=effort_note('high', 32768, game=True) + '。' + HARNESS_NOTE))
+                         note=effort_note('high', 32768, coding='game') + '。' + HARNESS_NOTE))
     return rows
 
 
@@ -573,9 +580,9 @@ TIER_INFO = {
     '2': ('公式 standard-v1（thinking xhigh、temperature 1.0）をスイートごと3回',
           'the official standard-v1 (thinking xhigh, temperature 1.0), the whole suite 3 times',
           '官方 standard-v1（thinking xhigh，temperature 1.0），整个套件 3 次'),
-    '3': ('推論エフォート none / high × 4問、コーディング（首里城）は high のみ（全モデル）',
-          'reasoning effort none / high × 4 tasks, the coding task (Shuri Castle) at high only (every model)',
-          '推理 effort none / high × 4 题，编程（首里城）仅 high（所有模型）'),
+    '3': ('推論エフォート none / high × 4問、コーディング（帆船）は high のみ（全モデル）',
+          'reasoning effort none / high × 4 tasks, the coding task (sailing ship) at high only (every model)',
+          '推理 effort none / high × 4 题，编程（帆船）仅 high（所有模型）'),
     'G': ('コーディング（マイクラ）をハーネスに one shot で渡す',
           'the coding task (Minecraft) handed to the harness in one shot',
           '把编程任务（Minecraft）一次性交给 harness'),
@@ -706,28 +713,31 @@ COMMON = {
 }
 GAME_LAYOUT = {
     'ja': ('コーディングのケースの成果物の置き場所',
-           'Tier 0・3 のコーディングは首里城の情景（英文のプロンプトで、3D ボクセルアートで、単一の HTML ファイルで答えるよう指定する。全文は prompts/coding-shuri.json）。出力の形がケースごとに違っても、必ず次の形に展開する。',
+           'Tier 0・3 のコーディングは「港に寄港する帆船」の情景（英文のプロンプトで、情景は題だけを示し、3D ボクセルアートで、単一の HTML ファイルで答えるよう指定する。全文は prompts/coding-harbor.json）。出力の形がケースごとに違っても、必ず次の形に展開する。',
            '''<run-id>/cases/<case id>/artifact/
   response.md     最終回答の全文（thinking は requests.jsonl 側）
   files/          コードブロックから取り出したファイル（ファイル名が書かれていればその名前、なければ言語ごとの既定名）
   manifest.json   取り出したファイル、名前の決め方、形式（単体 HTML / 要サーバー / その他）、README の有無、起動方法
-  screenshot.png  単体 HTML か静的サーバーで開けた場合のみ。headless ブラウザで撮る''',
+  screenshot.png  単体 HTML か静的サーバーで開けた場合のみ。headless Chrome でページを 10 秒動かしてから撮る
+  console.txt     そのときのエラー（捕まえられなかった例外、console.error、読み込みの失敗）。manifest の screenshot に、描画されたか（ほぼ一色・輪郭なしなら空白）と、固まったかも残る''',
            '3回分は `artifact/` の下に seed ごとのフォルダ（`seed-1/` など）で分ける。'),
     'en': ('Where the coding cases\' results go',
-           'The coding task of Tiers 0 and 3 is a scene of Shuri Castle (an English prompt that asks for it in 3D voxel art, as one HTML file; the whole text is in prompts/coding-shuri.json). Whatever shape each answer takes, it is always unpacked like this:',
+           'The coding task of Tiers 0 and 3 is a scene titled "A sailing ship calling at a harbor" (an English prompt that gives the scene by its title alone and asks for it in 3D voxel art, as one HTML file; the whole text is in prompts/coding-harbor.json). Whatever shape each answer takes, it is always unpacked like this:',
            '''<run-id>/cases/<case id>/artifact/
   response.md     the whole final answer (the thinking is in requests.jsonl)
   files/          files taken from the code blocks (named as the answer names them, else a default per language)
   manifest.json   the files, how they were named, the form (single HTML / needs a server / other), README or not, how to run it
-  screenshot.png  only if it opens as a single HTML file or from a static server; taken with a headless browser''',
+  screenshot.png  only if it opens as a single HTML file or from a static server; taken after the page has run 10 s in headless Chrome
+  console.txt     its errors then (uncaught exceptions, console.error, failed loads); the manifest's screenshot also says whether anything was drawn (nearly one colour or no edges: empty) and whether the page froze''',
            'The 3 runs go in one folder per seed under `artifact/` (`seed-1/` and so on).'),
     'zh': ('编程用例的成果存放位置',
-           'Tier 0、3 的编程任务是首里城的场景（英文提示，要求以 3D 体素艺术、用单个 HTML 文件回答；全文见 prompts/coding-shuri.json）。无论每个用例的输出形式如何，都按以下结构展开：',
+           'Tier 0、3 的编程任务是“帆船停靠港口”的场景（英文提示，场景只给出标题，要求以 3D 体素艺术、用单个 HTML 文件回答；全文见 prompts/coding-harbor.json）。无论每个用例的输出形式如何，都按以下结构展开：',
            '''<run-id>/cases/<case id>/artifact/
   response.md     最终回答全文（thinking 在 requests.jsonl 中）
   files/          从代码块中取出的文件（写了文件名就用该名称，否则用各语言的默认名）
   manifest.json   取出的文件、命名方式、形式（单个 HTML / 需要服务器 / 其他）、有无 README、运行方法
-  screenshot.png  仅当能以单个 HTML 或静态服务器打开时。用 headless 浏览器截图''',
+  screenshot.png  仅当能以单个 HTML 或静态服务器打开时。在 headless Chrome 中让页面运行 10 秒后截图
+  console.txt     当时的错误（未捕获的异常、console.error、加载失败）；manifest 的 screenshot 还记录是否画出了内容（几乎一种颜色或没有轮廓则为空白）以及页面是否卡死''',
            '3 次的结果在 `artifact/` 下按 seed 分文件夹（`seed-1/` 等）。'),
 }
 # A harness division's shared conditions and where its game's results go (divisions/<division>/division.json "harness").
@@ -758,7 +768,8 @@ HARNESS_LAYOUT = {
   response.md     ハーネスの最後の回答
   files/          作業ディレクトリに書かれたファイル（またはコードブロックから取り出したファイル）
   manifest.json   取ったファイル、取り方（作業ディレクトリ / 回答）、形式、起動方法
-  screenshot.png  単体 HTML か静的サーバーで開けた場合のみ。headless ブラウザで撮る''',
+  screenshot.png  単体 HTML か静的サーバーで開けた場合のみ。headless Chrome でページを 10 秒動かしてから撮る
+  console.txt     そのときのエラー（捕まえられなかった例外、console.error、読み込みの失敗）。manifest の screenshot に、描画されたか（ほぼ一色・輪郭なしなら空白）と、固まったかも残る''',
            'ハーネスの出力（イベント）とプロキシの記録（各リクエスト）は `harness/seed-N/` に残る。'),
     'en': ('Where the coding cases\' results go',
            'The HTML the harness wrote into its work folder is taken (the one there is, else index.html, else the last one written). With no HTML file, the files come from the code blocks of the last answer. The manifest says which.',
@@ -766,7 +777,8 @@ HARNESS_LAYOUT = {
   response.md     the harness's last answer
   files/          the files written into the work folder (or taken from the code blocks)
   manifest.json   the files, where they came from (work folder / answer), the form, how to run it
-  screenshot.png  only if it opens as a single HTML file or from a static server; taken with a headless browser''',
+  screenshot.png  only if it opens as a single HTML file or from a static server; taken after the page has run 10 s in headless Chrome
+  console.txt     its errors then (uncaught exceptions, console.error, failed loads); the manifest's screenshot also says whether anything was drawn (nearly one colour or no edges: empty) and whether the page froze''',
            'The harness\'s output (its events) and the proxy\'s record (every request) are kept in `harness/seed-N/`.'),
     'zh': ('编程用例的成果存放位置',
            '取 harness 写入工作目录的 HTML（只有一个就取它，多个则取 index.html，否则取最后写入的）。没有 HTML 文件时，从最后回答的代码块中取出。取法记录在 manifest 中。',
@@ -774,7 +786,8 @@ HARNESS_LAYOUT = {
   response.md     harness 的最后回答
   files/          写入工作目录的文件（或从代码块中取出的文件）
   manifest.json   取出的文件、来源（工作目录 / 回答）、形式、运行方法
-  screenshot.png  仅当能以单个 HTML 或静态服务器打开时。用 headless 浏览器截图''',
+  screenshot.png  仅当能以单个 HTML 或静态服务器打开时。在 headless Chrome 中让页面运行 10 秒后截图
+  console.txt     当时的错误（未捕获的异常、console.error、加载失败）；manifest 的 screenshot 还记录是否画出了内容（几乎一种颜色或没有轮廓则为空白）以及页面是否卡死''',
            'harness 的输出（事件）和代理的记录（每个请求）保存在 `harness/seed-N/`。'),
 }
 PREVIEW_NOTE = {

@@ -41,14 +41,14 @@ CASE_LINE = re.compile(r'^(\S+) {3}(\S+): \w+ prefill=')
 SESSION_LINE = re.compile(r'^(\S+) session (\S+): ')
 KEEP = ['status', 'n', 'planned', 'prefill_tps', 'decode_tps', 'ttft_ms', 'first_answer_ms', 'total_ms',
         'completion_tokens', 'reasoning_chars', 'accept_rate', 'capped', 'correct', 'gpu_mem_peak_mib', 'rss_peak_mib',
-        'disk_read_mib', 'power_peak_w', 'flags', 'single_file', 'from_workspace',
+        'disk_read_mib', 'power_peak_w', 'flags', 'single_file', 'from_workspace', 'drawn', 'hung',
         # harness divisions (scripts/bench_runner.py run_harness_case)
         'harness', 'harness_version', 'requests', 'requests_without_tools', 'tool_calls_n', 'steps', 'preamble_tokens',
         'tools_offered', 'cached_share', 'engine_share', 'harness_start_ms']
 CSV_COLS = ['division', 'env', 'id', 'run_id', 'step', 'family', 'model', 'context_label', 'fixture', 'input_tokens', 'temperature',
             'effort', 'config', 'concurrency', 'status', 'n', 'prefill_tps', 'decode_tps', 'ttft_ms', 'first_answer_ms',
             'total_ms', 'completion_tokens', 'accept_rate', 'capped', 'correct', 'launch_s', 'power_peak_w',
-            'rss_peak_mib', 'gpu_mem_peak_mib', 'cpu_core_throttle_pct', 'cpu_pkg_c_max', 'gpu_power_w', 'single_file',
+            'rss_peak_mib', 'gpu_mem_peak_mib', 'cpu_core_throttle_pct', 'cpu_pkg_c_max', 'gpu_power_w', 'single_file', 'drawn',
             'harness', 'harness_version', 'requests', 'tool_calls_n', 'preamble_tokens', 'cached_share', 'engine_share',
             'harness_start_ms']
 
@@ -176,6 +176,8 @@ SAMPLE = {
     'doc': ('4b', ['T4b-{ref}-long-32K-q-d10']),
     'yarn': ('4d', ['T4d-{ref}-yarn-300K-ctx384K-yarn1.5-q-d10']),
     'opts': ('5', ['T5-{ref}-kv-q4_0-decode-prose-ja']),
+    # the coding results: the reference model's coding case in whatever Tier has one (plain 3, a harness division G)
+    'games': (None, ['T3-{ref}-coding-harbor-high', 'TG-{ref}-game-minecraft-high'], ('coding-', 'game-')),
 }
 SAMPLE_CHARS = 700          # how much of a prompt or an answer the page shows (head and tail of a longer one)
 REQUEST_KEYS = ['max_tokens', 'temperature', 'seed', 'top_p', 'top_k', 'min_p', 'presence_penalty', 'repetition_penalty',
@@ -231,8 +233,9 @@ def samples(rows, found, base, ref_model):
     ref = '-'.join(ref_model or ('', ''))
     by_id = {r['id']: r for r in rows}
     out = {}
-    for sec, (step, want) in SAMPLE.items():
-        ids = [w.format(ref=ref) for w in want] + [r['id'] for r in rows if r['step'] == step]
+    for sec, (step, want, *fixtures) in SAMPLE.items():
+        ids = [w.format(ref=ref) for w in want] + [r['id'] for r in rows if step in (None, r['step'])
+                                                    and (not fixtures or r['fixture'].startswith(fixtures[0]))]
         cid = next((i for i in ids if i in found and i in by_id and load(found[i][1]).get('status') == 'done'), None)
         if cid:
             out[sec] = sample(by_id[cid], *found[cid], base)
@@ -248,13 +251,16 @@ def artifacts(case, rel, per_request=None):
         entry = m.get('entry')
         page = d / 'files' / entry if entry else None
         shot = d / 'screenshot.png'
+        look = m.get('screenshot') or {}
         seed = d.name.split('-', 1)[1]
         run = next((x for x in per_request or [] if str(x.get('seed')) == seed), {})
         out.append({'seed': seed, 'source': m.get('source', 'answer'), 'kind': m.get('kind'),
                     'total_ms': run.get('total_ms'), 'error': run.get('error'), 'requests': run.get('requests'),
                     'tool_calls_n': run.get('tool_calls_n'),
                     'single_file': m.get('single_file'), 'truncated': m.get('truncated'),
-                    'console_errors': len((m.get('screenshot') or {}).get('console_errors') or []),
+                    'console_errors': len(look.get('console_errors') or []),
+                    # what the capture shows (bench_runner.screenshot): drawn / empty / hung; None where it was not judged
+                    'look': 'hung' if look.get('hung') else None if 'drawn' not in look else 'drawn' if look['drawn'] else 'empty',
                     'files': len(m.get('files') or []),
                     'screenshot': rel + str(shot.relative_to(ROOT)) if shot.exists() else None,
                     'page': rel + str(page.relative_to(ROOT)) if page and page.exists() else None,
