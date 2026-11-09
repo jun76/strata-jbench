@@ -236,11 +236,40 @@ def label(cfg):
     return cfg.get('label') or cfg['id']
 
 
+def cpu_slug(name):
+    """'Intel(R) Core(TM) Ultra 5 235' -> 'cu5_235', 'Intel(R) Core(TM) i7-14700' -> 'i7_14700',
+    'AMD Ryzen 9 7950X 16-Core Processor' -> 'r9_7950x'. Joined with '_' so that '-' only separates the id's parts."""
+    n = re.sub(r'\((R|TM)\)|\b(Intel|AMD|Processor|CPU)\b|\d+-Core', '', name or '').strip()
+    m = re.match(r'Core Ultra (\d+) (\w+)', n)
+    if m:
+        return f'cu{m.group(1)}_{m.group(2)}'.lower()
+    m = re.match(r'Core (i\d)-(\w+)', n)
+    if m:
+        return f'{m.group(1)}_{m.group(2)}'.lower()
+    m = re.match(r'Ryzen (\d+)(?: PRO)? (\w+)', n)
+    if m:
+        return f'r{m.group(1)}_{m.group(2)}'.lower()
+    return re.sub(r'[^a-z0-9]+', '_', n.lower()).strip('_') or 'cpu'
+
+
+DISK_SLUG = {'NVMe': 'nvme', 'SATA SSD': 'sata', 'SATA HDD': 'hdd', 'SAS SSD': 'sas', 'SAS HDD': 'hdd', 'USB': 'usb'}
+
+
 def slug(hw):
-    """A suggested id: rtx5090-128g."""
+    """A suggested id, <GPU>-<CPU>-<RAM>-<model disk>: rtx5070-cu5_235-64g-sata. The id is the folder name in every path
+    and URL (published/, snapshots/, the run tags), so it names what moves the results: the card, the CPU, the RAM and
+    the bus of the disk the models are read from."""
     gpu = re.sub(r'^(NVIDIA )?(GeForce )?', '', hw.get('gpu') or 'gpu').lower().replace(' ', '')
     ram = -(-hw['ram_gib'] // 16) * 16 if hw.get('ram_gib') else 0
-    return f'{gpu}-{ram:.0f}g'
+    disk = DISK_SLUG.get(hw.get('models_drive_bus') or '', 'disk')
+    return f'{gpu}-{cpu_slug(hw.get("cpu"))}-{ram:.0f}g-{disk}'
+
+
+def label_of(hw, ram):
+    """'GeForce RTX 5070 · Core Ultra 5 235 · 64 GB RAM · SATA SSD'"""
+    cpu = re.sub(r'\((R|TM)\)|\b(Intel|AMD|Processor)\b|\d+-Core', '', hw.get('cpu') or '?').split()
+    return ' · '.join([re.sub(r'^NVIDIA ', '', hw.get('gpu') or '?'), ' '.join(cpu), f'{ram:.0f} GB RAM',
+                       hw.get('models_drive_bus') or '?'])
 
 
 # The reference model of an environment (Tier 0, Tier 4d, the representatives of Tiers 4b, 4c and 5, the harness
@@ -306,7 +335,7 @@ def new(env_id, card=0):
     vram = round((hw.get('gpu_vram_mib') or 0) / 1024, 1)
     pick = ref_for(hw.get('ram_gib'), vram)
     cfg = {
-        'label': f'{re.sub(r"^NVIDIA ", "", hw.get("gpu") or "?")} · {ram:.0f} GB RAM',
+        'label': label_of(hw, ram),
         'match': {'gpu': hw.get('gpu'), 'ram_gib': hw.get('ram_gib')},
         'gpu_index': card,
         'hardware': {'gpu_vram_gib': vram, 'ram_gib': hw.get('ram_gib')},

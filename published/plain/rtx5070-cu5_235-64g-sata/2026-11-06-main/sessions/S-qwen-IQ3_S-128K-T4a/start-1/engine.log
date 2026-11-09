@@ -1,0 +1,87 @@
+[strata] 2026-11-07 15:33:32 engine started: ~/.local/share/strata/components/engine/0.1.57-linux-x86_64-cuda-cuda13/strata --serve --pack ~/.local/share/strata/Strata-data/packs/iq3_s --native ~/.local/share/strata/Strata-data/models/IQ3_S/Qwen3.8-Flash-Next-GSQ-RCO-IQ3_S-00001-of-00002.gguf --ple-gguf ~/.local/share/strata/Strata-data/models/IQ3_S/Qwen3.8-Flash-Next-GSQ-RCO-IQ3_S-00002-of-00002.gguf --expert-profile ~/.local/share/strata/components/control/0.1.57/data/expert-profile.bin --expert-cache auto --prefill auto --spec 4 --spec-min-p 0.5 --mtp ~/.local/share/strata/Strata-data/mtp/rt --max-context 131072 --kv int8 --pool-workers 9
+strata: a model with K-quant experts (Unsloth UD-Q4/Q5/Q6_K_XL) reads its prompt on llama.cpp's MMQ kernels (STRATA_MMQ_KQ=0 or STRATA_NV_KQ_DEFAULT=0 turns it off)
+strata generate: NVIDIA: --prefill auto may take chunks up to 32768 (STRATA_NV_CHUNK=0 keeps 8192, =16 keeps 16384)
+strata generate: memory guard: limit 60.9 GiB (source: meminfo), current 4.0 GiB, reclaimable cache credited 0.0 GiB; available 56.9 GiB (MemAvailable 56.9 GiB), floor 2560 MiB
+strata generate: PCIe probe: 51.2 GB/s host->device (best of 50.1 51.2 51.2 51.2) -> pcie_frac 0.55 (default 0.55)
+strata generate: this CPU has no AVX-512: the expert kernels run on AVX-2 (multi-token for the i-quant gate/up rows)
+strata generate: native pack: ~/.local/share/strata/Strata-data/packs/iq3_s experts (largest blob 2.66 MB), token embedding IQ4_XS in mapped host memory (322 MiB, 0.6 s)
+strata generate: 1466 MiB of weights loaded from ~/.local/share/strata/Strata-data/packs/iq3_s in 2.8 s (302 canonical tensors skipped: served natively)
+strata generate: 300 native projection matrices, 2018.88 MiB of weights, in 3.9 s
+strata generate: PLE direct read probe: 56714 rows/s (fine)
+strata generate: the SSD is kept awake while rows are read: one page of the table after 100 ms without a read, until 60 s after the last request (STRATA_SSD_KEEPALIVE=0 turns it off)
+strata generate: profile ~/.local/share/strata/components/control/0.1.57/data/expert-profile.bin: 24576 ranked pairs, built for 24576 slots
+strata generate: PLE on, table 320001536 rows of ~/.local/share/strata/Strata-data/models/IQ3_S/Qwen3.8-Flash-Next-GSQ-RCO-IQ3_S-00002-of-00002.gguf
+strata mtp: draft layer loaded, 952 MiB of VRAM (experts 675, dense 111), files read in 1.53 s (513 MiB/s)
+strata generate: experimental native Q5_K head, 521472000 bytes, in 1.0 s
+strata generate: GPU 0: NVIDIA GeForce RTX 5070, compute capability 12.0
+strata generate: expert arena read through the file cache (buffered (not Windows))
+strata generate: expert arena: cudaHostRegister PORTABLE ok; MAP_HUGETLB unavailable (needed 23983 2 MiB pages, vm.nr_hugepages=0); transparent huge pages requested (MADV_HUGEPAGE)
+strata generate: loaded 46.84 GiB at 0.48 GiB/s
+strata generate: GPU host-callback thread started before host-core pinning
+strata generate: CPU pool tasks/phase: 30 (automatic), participating threads: 10
+strata generate: 9 pool workers on logical processors 1,2,3,4,5,6,7,8,9, the host thread on 0 (draining too) (--host-core first)
+strata generate: CPU workers on logical processors 1-9 (9 workers, one per physical core; host on 0)
+strata aux cpus: threads that are neither pool workers nor the host go to CPUs 10,11,12,13 (off at start; a request's aux_cpus=1 turns it on)
+strata generate: expert cache auto: 4.19 GiB free, 700 MiB reserved (+220 MiB for the draft head, +256 MiB for what is allocated after the cache) -> 1225 slots
+strata generate: expert cache 1576 slots, 3.04 GiB of VRAM; policy is
+strata generate: the GPU computes the experts in the cache; it rounds differently from the CPU,
+                 so a reply can differ slightly from a run without the cache (same quality:
+                 bench/results/2026-09-27-cache-parity).
+                 PROFILE, ranked by routing frequency, no eviction.
+strata generate: pre-filled 1576 of 1576 slots from the profile in 0.1 s (39798 MB/s); slot 0 verified
+strata generate: R4 hit path ON - resident experts are computed on the GPU
+strata generate: 9 expert-pool workers + the host thread
+strata generate: session is up (engine 0.1.57)
+strata generate: token graph hit path: 1576 resident experts, decided on the device
+prefill: the CPU share is ON by default for prompt chunks up to 3072 tokens (the idle CPU takes some of the experts the GPU would stream; answers can differ slightly from 0.1.40.3, mean KL ~0.004 below 1024 tokens, ~0.011 at 1-3K). STRATA_PREFILL_CPU_SHARE=0 turns it off, STRATA_PREFILL_CPU_SHARE_MAX=1024 keeps the old limit.
+strata serve: small expert cache: the default prompt path would read in chunks of 5632 tokens (under 8192), so prompts read with the unfused experts and, from two chunks, the layer-major walk (chunk 5632 tokens); STRATA_PF_SMALL=0 keeps the default path, STRATA_PF_FUSED / STRATA_PREFILL_LAYER_MAJOR set by hand win
+strata serve: prompt chunk auto: 5632 tokens, a 199-slot ring
+strata serve: the prompt path borrows 1413 CUDA0 cache slots (2.72 GiB)
+strata hc: CUDA0: the hyper-connection read runs as staged (the norm per token and stream, the down projection's activations staged ahead by cp.async); checked bit for bit against the plain read on this card (STRATA_HC_SPLIT=1 or 0 for the earlier ones)
+strata verify: window up to 12 tokens, 109.5 MiB of device buffers
+strata mtp: draft head over 106299 tokens (212.9 MiB)
+strata serve: conversation cache sized from the free RAM: 2304 MiB for up to 4 parked conversations, so an agent's next turn reuses its prompt (--conversation-cache-mib N sets it, 0 turns it off)
+strata serve: PCIe share: start 0.45 from 9 pool workers (assumed 36 GB/s of expert bytes) and the 51.2 GB/s link (was 0.55)
+strata serve: STRATA_ROUTE_TAIL_SKIP=7 is ON (default): a missed expert that every token of a verify window routes at rank 7 or lower is skipped (+10..20% decode on 12-16 GB cards that miss experts, answers differ slightly from 0.1.41); STRATA_ROUTE_TAIL_SKIP=0 turns it off
+strata serve: adaptive overlap: off (STRATA_ADAPT_OVERLAP=1 turns it on)
+strata serve: adaptive tier: blocking, and the asynchronous tier is tried once the session shows the swaps hold the windows up (--adapt-async 0 or STRATA_ADAPT_ASYNC=0: never)
+strata serve: 612 MiB of VRAM free with everything loaded
+strata serve: --lookup-max-t 12: MTP windows up to 4 tokens, window sizes 1,2,3,4,5,6,12
+strata verify: capturing the 12-token window (612 MiB of VRAM free)
+strata verify: captured the 12-token window (upload no error, sync no error) in 76.7 ms
+strata verify: capturing the 4-token window (602 MiB of VRAM free)
+strata verify: captured the 4-token window (upload no error, sync no error) in 15.7 ms
+strata verify: capturing the 1-token window (596 MiB of VRAM free)
+strata verify: captured the 1-token window (upload no error, sync no error) in 14.5 ms
+strata serve: prompt 53 tokens = 0 reused + 53 read in 598 ms (88.6 tok/s), 1 generated in 34 ms (29.7 tok/s), drafts accepted 0 of 0, 1 checkpoints
+strata serve: decode expert cache hit rate: 29.1% (72 hits / 247 lookups); 109 more read by the GPU over PCIe or from another GPU (30.6% of all 356 routed)
+strata serve: route tail skip: 3648 missed experts skipped (4085 entries) since the start
+strata serve: conversation cache: parked 53 tokens in 93.9 ms; parked=1 bytes=236986412 evictions=0 snapshot_bytes=236986412 reused_kv_bytes=0
+strata verify: capturing the 3-token window (590 MiB of VRAM free)
+strata verify: captured the 3-token window (upload no error, sync no error) in 20.3 ms
+strata verify: capturing the 6-token window (582 MiB of VRAM free)
+strata verify: captured the 6-token window (upload no error, sync no error) in 8.5 ms
+strata verify: capturing the 2-token window (574 MiB of VRAM free)
+strata verify: captured the 2-token window (upload no error, sync no error) in 15.7 ms
+strata serve: prompt 46 tokens = 0 reused + 46 read in 536 ms (85.8 tok/s), 71 generated in 995 ms (71.4 tok/s), drafts accepted 42 of 72, 1 checkpoints
+strata serve: decode expert cache hit rate: 50.4% (16289 hits / 32349 lookups); 8277 more read by the GPU over PCIe or from another GPU (20.4% of all 40626 routed)
+strata serve: route tail skip: 13651 missed experts skipped (15183 entries) since the start
+strata serve: conversation cache: parked 116 tokens in 94.0 ms; parked=2 bytes=474895024 evictions=0 snapshot_bytes=237908612 reused_kv_bytes=0
+strata prefill: layer-major off for this prompt: a short prompt
+strata prefill: QSA layers: norm + rope in one pass on, attention gate in the attention epilogue off
+strata serve: PCIe share: the CPU pool takes 50 us per missed expert (41.1 GB/s of expert bytes), the link 51.2 GB/s -> pcie_frac 0.40 (was 0.45; --pcie-frac N fixes it, STRATA_PCIE_FRAC_DEFAULT=old keeps the start-up rule)
+strata serve: prompt 4110 tokens = 0 reused + 4110 read in 2089 ms (1967.9 tok/s), 512 generated in 5925 ms (86.4 tok/s), drafts accepted 271 of 413, 1 checkpoints
+strata serve: decode expert cache hit rate: 68.1% (164077 hits / 241110 lookups); 29415 more read by the GPU over PCIe or from another GPU (10.9% of all 270525 routed)
+strata serve: route tail skip: 54623 missed experts skipped (58971 entries) since the start
+strata serve: suffix drafts: 6 windows, 7 of 15 drafts accepted
+strata serve: WARNING: only 474 MiB of VRAM free at the start of this request (below 512 MiB): when the card is this full the driver can page GPU memory to system RAM, decode falls to a few tok/s and a window may never finish (#2065). Add --vram-reserve-mib 768 to the config's args, or lower --max-context / --batch
+strata serve: conversation cache: parked 4621 tokens in 124.1 ms; parked=3 bytes=781641880 evictions=0 snapshot_bytes=306746856 reused_kv_bytes=0
+strata serve: prompt 4110 tokens = 0 reused + 4110 read in 1987 ms (2068.7 tok/s), 512 generated in 5931 ms (86.3 tok/s), drafts accepted 281 of 429, 1 checkpoints
+strata serve: decode expert cache hit rate: 67.9% (165803 hits / 244162 lookups); 30026 more read by the GPU over PCIe or from another GPU (11.0% of all 274188 routed)
+strata serve: route tail skip: 96201 missed experts skipped (103439 entries) since the start
+strata serve: suffix drafts: 2 windows, 2 of 4 drafts accepted
+strata serve: conversation cache: parked 4624 tokens in 123.2 ms; parked=4 bytes=1088394892 evictions=0 snapshot_bytes=306753012 reused_kv_bytes=0
+strata serve: prompt 4110 tokens = 0 reused + 4110 read in 1975 ms (2080.5 tok/s), 512 generated in 5757 ms (88.9 tok/s), drafts accepted 290 of 408, 1 checkpoints
+strata serve: decode expert cache hit rate: 66.9% (154752 hits / 231424 lookups); 29506 more read by the GPU over PCIe or from another GPU (11.3% of all 260930 routed)
+strata serve: route tail skip: 136714 missed experts skipped (146735 entries) since the start
+strata serve: suffix drafts: 5 windows, 8 of 10 drafts accepted

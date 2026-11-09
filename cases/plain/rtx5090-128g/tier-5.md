@@ -4,7 +4,7 @@
 
 # Tier 5: 起動オプションを1つずつ変える（基準モデル、最大と最小のモデル。自動 tune を含む）
 
-GeForce RTX 5090 · 128 GB RAM · 240 ケース / 720 リクエスト。ほかのパラメータ（入力の内容、見るもの、備考、seed、timeout、起動セッション）は [tier-5.csv](tier-5.csv)。
+GeForce RTX 5090 · 128 GB RAM · 276 ケース / 828 リクエスト。ほかのパラメータ（入力の内容、見るもの、備考、seed、timeout、起動セッション）は [tier-5.csv](tier-5.csv)。
 
 | 状態 | case id | model | context | 設定 | 起動オプションの差分 | fixture | effort | temp | 並列 | 入力 token | 出力 cap | 回数 | 結果 | エビデンス |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -48,14 +48,26 @@ GeForce RTX 5090 · 128 GB RAM · 240 ケース / 720 リクエスト。ほか�
 | done | `T5-qwen-IQ3_S-prefill-chunk-4096-decode-code` | qwen IQ3_S | 128K | prefill-chunk=4096 | --set prefill=4096 | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 | prefill 337.2 / decode 289.1 / TTFT ms 321.5 / 採用率 0.806 | [2026-11-04-iq3s-mtp](../../../published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/T5-qwen-IQ3_S-prefill-chunk-4096-decode-code/) |
 | done | `T5-qwen-IQ3_S-prefill-chunk-4096-prefill-4k` | qwen IQ3_S | 128K | prefill-chunk=4096 | --set prefill=4096 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 | prefill 2827.2 / decode 262.5 / TTFT ms 1463.2 / 採用率 0.745 | [2026-11-04-iq3s-mtp](../../../published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/T5-qwen-IQ3_S-prefill-chunk-4096-prefill-4k/) |
 | done | `T5-qwen-IQ3_S-prefill-chunk-4096-prefill-32k` | qwen IQ3_S | 128K | prefill-chunk=4096 | --set prefill=4096 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 | prefill 3180.8 / decode 188.8 / TTFT ms 10332.3 / 採用率 0.705 | [2026-11-04-iq3s-mtp](../../../published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/T5-qwen-IQ3_S-prefill-chunk-4096-prefill-32k/) |
-| done | `T5-qwen-IQ3_S-vram-reserve-512-decode-prose-ja` | qwen IQ3_S | 128K | vram-reserve=512 | --set vram-reserve-mib=512 | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 | prefill 360.9 / decode 177.6 / TTFT ms 274.2 / 採用率 0.532 | [2026-11-04-iq3s-mtp](../../../published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/T5-qwen-IQ3_S-vram-reserve-512-decode-prose-ja/) |
-| done | `T5-qwen-IQ3_S-vram-reserve-512-decode-code` | qwen IQ3_S | 128K | vram-reserve=512 | --set vram-reserve-mib=512 | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 | prefill 423.9 / decode 260.5 / TTFT ms 254.7 / 採用率 0.768 | [2026-11-04-iq3s-mtp](../../../published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/T5-qwen-IQ3_S-vram-reserve-512-decode-code/) |
-| done | `T5-qwen-IQ3_S-vram-reserve-512-prefill-4k` | qwen IQ3_S | 128K | vram-reserve=512 | --set vram-reserve-mib=512 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 | prefill 2960.7 / decode 253.7 / TTFT ms 1397.1 / 採用率 0.745 | [2026-11-04-iq3s-mtp](../../../published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/T5-qwen-IQ3_S-vram-reserve-512-prefill-4k/) |
-| done | `T5-qwen-IQ3_S-vram-reserve-512-prefill-32k` | qwen IQ3_S | 128K | vram-reserve=512 | --set vram-reserve-mib=512 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 | prefill 5566.6 / decode 231.5 / TTFT ms 5913.1 / 採用率 0.697 | [2026-11-04-iq3s-mtp](../../../published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/T5-qwen-IQ3_S-vram-reserve-512-prefill-32k/) |
-| done | `T5-qwen-IQ3_S-vram-reserve-6512-decode-prose-ja` | qwen IQ3_S | 128K | vram-reserve=6512 | --set vram-reserve-mib=6512 | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 | prefill 237.8 / decode 177.4 / TTFT ms 414.6 / 採用率 0.524 | [2026-11-04-iq3s-mtp](../../../published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/T5-qwen-IQ3_S-vram-reserve-6512-decode-prose-ja/) |
-| done | `T5-qwen-IQ3_S-vram-reserve-6512-decode-code` | qwen IQ3_S | 128K | vram-reserve=6512 | --set vram-reserve-mib=6512 | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 | prefill 278.4 / decode 219.3 / TTFT ms 387.5 / 採用率 0.773 | [2026-11-04-iq3s-mtp](../../../published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/T5-qwen-IQ3_S-vram-reserve-6512-decode-code/) |
-| done | `T5-qwen-IQ3_S-vram-reserve-6512-prefill-4k` | qwen IQ3_S | 128K | vram-reserve=6512 | --set vram-reserve-mib=6512 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 | prefill 2531.5 / decode 216.5 / TTFT ms 1636.3 / 採用率 0.766 | [2026-11-04-iq3s-mtp](../../../published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/T5-qwen-IQ3_S-vram-reserve-6512-prefill-4k/) |
-| done | `T5-qwen-IQ3_S-vram-reserve-6512-prefill-32k` | qwen IQ3_S | 128K | vram-reserve=6512 | --set vram-reserve-mib=6512 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 | prefill 4801.6 / decode 198.4 / TTFT ms 6853.9 / 採用率 0.775 | [2026-11-04-iq3s-mtp](../../../published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/T5-qwen-IQ3_S-vram-reserve-6512-prefill-32k/) |
+| planned | `T5-qwen-IQ3_S-vram-reserve-10pct-decode-prose-ja` | qwen IQ3_S | 128K | vram-reserve=10% | --set vram-reserve-mib=3256 | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-qwen-IQ3_S-vram-reserve-10pct-decode-code` | qwen IQ3_S | 128K | vram-reserve=10% | --set vram-reserve-mib=3256 | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-qwen-IQ3_S-vram-reserve-10pct-prefill-4k` | qwen IQ3_S | 128K | vram-reserve=10% | --set vram-reserve-mib=3256 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-qwen-IQ3_S-vram-reserve-10pct-prefill-32k` | qwen IQ3_S | 128K | vram-reserve=10% | --set vram-reserve-mib=3256 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-qwen-IQ3_S-vram-reserve-20pct-decode-prose-ja` | qwen IQ3_S | 128K | vram-reserve=20% | --set vram-reserve-mib=6512 | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-qwen-IQ3_S-vram-reserve-20pct-decode-code` | qwen IQ3_S | 128K | vram-reserve=20% | --set vram-reserve-mib=6512 | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-qwen-IQ3_S-vram-reserve-20pct-prefill-4k` | qwen IQ3_S | 128K | vram-reserve=20% | --set vram-reserve-mib=6512 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-qwen-IQ3_S-vram-reserve-20pct-prefill-32k` | qwen IQ3_S | 128K | vram-reserve=20% | --set vram-reserve-mib=6512 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-qwen-IQ3_S-vram-reserve-30pct-decode-prose-ja` | qwen IQ3_S | 128K | vram-reserve=30% | --set vram-reserve-mib=9768 | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-qwen-IQ3_S-vram-reserve-30pct-decode-code` | qwen IQ3_S | 128K | vram-reserve=30% | --set vram-reserve-mib=9768 | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-qwen-IQ3_S-vram-reserve-30pct-prefill-4k` | qwen IQ3_S | 128K | vram-reserve=30% | --set vram-reserve-mib=9768 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-qwen-IQ3_S-vram-reserve-30pct-prefill-32k` | qwen IQ3_S | 128K | vram-reserve=30% | --set vram-reserve-mib=9768 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-qwen-IQ3_S-vram-reserve-40pct-decode-prose-ja` | qwen IQ3_S | 128K | vram-reserve=40% | --set vram-reserve-mib=13025 | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-qwen-IQ3_S-vram-reserve-40pct-decode-code` | qwen IQ3_S | 128K | vram-reserve=40% | --set vram-reserve-mib=13025 | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-qwen-IQ3_S-vram-reserve-40pct-prefill-4k` | qwen IQ3_S | 128K | vram-reserve=40% | --set vram-reserve-mib=13025 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-qwen-IQ3_S-vram-reserve-40pct-prefill-32k` | qwen IQ3_S | 128K | vram-reserve=40% | --set vram-reserve-mib=13025 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-qwen-IQ3_S-vram-reserve-50pct-decode-prose-ja` | qwen IQ3_S | 128K | vram-reserve=50% | --set vram-reserve-mib=16281 | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-qwen-IQ3_S-vram-reserve-50pct-decode-code` | qwen IQ3_S | 128K | vram-reserve=50% | --set vram-reserve-mib=16281 | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-qwen-IQ3_S-vram-reserve-50pct-prefill-4k` | qwen IQ3_S | 128K | vram-reserve=50% | --set vram-reserve-mib=16281 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-qwen-IQ3_S-vram-reserve-50pct-prefill-32k` | qwen IQ3_S | 128K | vram-reserve=50% | --set vram-reserve-mib=16281 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
 | done | `T5-qwen-IQ3_S-vision-gpu-decode-prose-ja` | qwen IQ3_S | 128K | vision=gpu | --vision gpu | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 | prefill 312.1 / decode 185.9 / TTFT ms 301.5 / 採用率 0.559 | [2026-11-04-iq3s-mtp](../../../published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/T5-qwen-IQ3_S-vision-gpu-decode-prose-ja/) |
 | done | `T5-qwen-IQ3_S-vision-gpu-decode-code` | qwen IQ3_S | 128K | vision=gpu | --vision gpu | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 | prefill 299.7 / decode 252.0 / TTFT ms 340.6 / 採用率 0.723 | [2026-11-04-iq3s-mtp](../../../published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/T5-qwen-IQ3_S-vision-gpu-decode-code/) |
 | done | `T5-qwen-IQ3_S-vision-gpu-prefill-4k` | qwen IQ3_S | 128K | vision=gpu | --vision gpu | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 | prefill 2846.6 / decode 256.6 / TTFT ms 1451.3 / 採用率 0.74 | [2026-11-04-iq3s-mtp](../../../published/plain/rtx5090-128g/2026-11-04-iq3s-mtp/cases/T5-qwen-IQ3_S-vision-gpu-prefill-4k/) |
@@ -128,14 +140,26 @@ GeForce RTX 5090 · 128 GB RAM · 240 ケース / 720 リクエスト。ほか�
 | planned | `T5-unsloth-Q8_0-prefill-chunk-4096-decode-code` | unsloth Q8_0 | 128K | prefill-chunk=4096 | --set prefill=4096 | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
 | planned | `T5-unsloth-Q8_0-prefill-chunk-4096-prefill-4k` | unsloth Q8_0 | 128K | prefill-chunk=4096 | --set prefill=4096 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
 | planned | `T5-unsloth-Q8_0-prefill-chunk-4096-prefill-32k` | unsloth Q8_0 | 128K | prefill-chunk=4096 | --set prefill=4096 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
-| planned | `T5-unsloth-Q8_0-vram-reserve-512-decode-prose-ja` | unsloth Q8_0 | 128K | vram-reserve=512 | --set vram-reserve-mib=512 | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T5-unsloth-Q8_0-vram-reserve-512-decode-code` | unsloth Q8_0 | 128K | vram-reserve=512 | --set vram-reserve-mib=512 | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T5-unsloth-Q8_0-vram-reserve-512-prefill-4k` | unsloth Q8_0 | 128K | vram-reserve=512 | --set vram-reserve-mib=512 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
-| planned | `T5-unsloth-Q8_0-vram-reserve-512-prefill-32k` | unsloth Q8_0 | 128K | vram-reserve=512 | --set vram-reserve-mib=512 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
-| planned | `T5-unsloth-Q8_0-vram-reserve-6512-decode-prose-ja` | unsloth Q8_0 | 128K | vram-reserve=6512 | --set vram-reserve-mib=6512 | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T5-unsloth-Q8_0-vram-reserve-6512-decode-code` | unsloth Q8_0 | 128K | vram-reserve=6512 | --set vram-reserve-mib=6512 | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T5-unsloth-Q8_0-vram-reserve-6512-prefill-4k` | unsloth Q8_0 | 128K | vram-reserve=6512 | --set vram-reserve-mib=6512 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
-| planned | `T5-unsloth-Q8_0-vram-reserve-6512-prefill-32k` | unsloth Q8_0 | 128K | vram-reserve=6512 | --set vram-reserve-mib=6512 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-10pct-decode-prose-ja` | unsloth Q8_0 | 128K | vram-reserve=10% | --set vram-reserve-mib=3256 | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-10pct-decode-code` | unsloth Q8_0 | 128K | vram-reserve=10% | --set vram-reserve-mib=3256 | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-10pct-prefill-4k` | unsloth Q8_0 | 128K | vram-reserve=10% | --set vram-reserve-mib=3256 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-10pct-prefill-32k` | unsloth Q8_0 | 128K | vram-reserve=10% | --set vram-reserve-mib=3256 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-20pct-decode-prose-ja` | unsloth Q8_0 | 128K | vram-reserve=20% | --set vram-reserve-mib=6512 | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-20pct-decode-code` | unsloth Q8_0 | 128K | vram-reserve=20% | --set vram-reserve-mib=6512 | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-20pct-prefill-4k` | unsloth Q8_0 | 128K | vram-reserve=20% | --set vram-reserve-mib=6512 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-20pct-prefill-32k` | unsloth Q8_0 | 128K | vram-reserve=20% | --set vram-reserve-mib=6512 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-30pct-decode-prose-ja` | unsloth Q8_0 | 128K | vram-reserve=30% | --set vram-reserve-mib=9768 | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-30pct-decode-code` | unsloth Q8_0 | 128K | vram-reserve=30% | --set vram-reserve-mib=9768 | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-30pct-prefill-4k` | unsloth Q8_0 | 128K | vram-reserve=30% | --set vram-reserve-mib=9768 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-30pct-prefill-32k` | unsloth Q8_0 | 128K | vram-reserve=30% | --set vram-reserve-mib=9768 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-40pct-decode-prose-ja` | unsloth Q8_0 | 128K | vram-reserve=40% | --set vram-reserve-mib=13025 | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-40pct-decode-code` | unsloth Q8_0 | 128K | vram-reserve=40% | --set vram-reserve-mib=13025 | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-40pct-prefill-4k` | unsloth Q8_0 | 128K | vram-reserve=40% | --set vram-reserve-mib=13025 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-40pct-prefill-32k` | unsloth Q8_0 | 128K | vram-reserve=40% | --set vram-reserve-mib=13025 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-50pct-decode-prose-ja` | unsloth Q8_0 | 128K | vram-reserve=50% | --set vram-reserve-mib=16281 | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-50pct-decode-code` | unsloth Q8_0 | 128K | vram-reserve=50% | --set vram-reserve-mib=16281 | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-50pct-prefill-4k` | unsloth Q8_0 | 128K | vram-reserve=50% | --set vram-reserve-mib=16281 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-unsloth-Q8_0-vram-reserve-50pct-prefill-32k` | unsloth Q8_0 | 128K | vram-reserve=50% | --set vram-reserve-mib=16281 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
 | planned | `T5-unsloth-Q8_0-vision-gpu-decode-prose-ja` | unsloth Q8_0 | 128K | vision=gpu | --vision gpu | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
 | planned | `T5-unsloth-Q8_0-vision-gpu-decode-code` | unsloth Q8_0 | 128K | vision=gpu | --vision gpu | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
 | planned | `T5-unsloth-Q8_0-vision-gpu-prefill-4k` | unsloth Q8_0 | 128K | vision=gpu | --vision gpu | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
@@ -208,14 +232,26 @@ GeForce RTX 5090 · 128 GB RAM · 240 ケース / 720 リクエスト。ほか�
 | planned | `T5-gyro-Gyro-S-prefill-chunk-4096-decode-code` | gyro Gyro-S | 128K | prefill-chunk=4096 | --set prefill=4096 | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
 | planned | `T5-gyro-Gyro-S-prefill-chunk-4096-prefill-4k` | gyro Gyro-S | 128K | prefill-chunk=4096 | --set prefill=4096 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
 | planned | `T5-gyro-Gyro-S-prefill-chunk-4096-prefill-32k` | gyro Gyro-S | 128K | prefill-chunk=4096 | --set prefill=4096 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
-| planned | `T5-gyro-Gyro-S-vram-reserve-512-decode-prose-ja` | gyro Gyro-S | 128K | vram-reserve=512 | --set vram-reserve-mib=512 | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T5-gyro-Gyro-S-vram-reserve-512-decode-code` | gyro Gyro-S | 128K | vram-reserve=512 | --set vram-reserve-mib=512 | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T5-gyro-Gyro-S-vram-reserve-512-prefill-4k` | gyro Gyro-S | 128K | vram-reserve=512 | --set vram-reserve-mib=512 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
-| planned | `T5-gyro-Gyro-S-vram-reserve-512-prefill-32k` | gyro Gyro-S | 128K | vram-reserve=512 | --set vram-reserve-mib=512 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
-| planned | `T5-gyro-Gyro-S-vram-reserve-6512-decode-prose-ja` | gyro Gyro-S | 128K | vram-reserve=6512 | --set vram-reserve-mib=6512 | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T5-gyro-Gyro-S-vram-reserve-6512-decode-code` | gyro Gyro-S | 128K | vram-reserve=6512 | --set vram-reserve-mib=6512 | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T5-gyro-Gyro-S-vram-reserve-6512-prefill-4k` | gyro Gyro-S | 128K | vram-reserve=6512 | --set vram-reserve-mib=6512 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
-| planned | `T5-gyro-Gyro-S-vram-reserve-6512-prefill-32k` | gyro Gyro-S | 128K | vram-reserve=6512 | --set vram-reserve-mib=6512 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-10pct-decode-prose-ja` | gyro Gyro-S | 128K | vram-reserve=10% | --set vram-reserve-mib=3256 | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-10pct-decode-code` | gyro Gyro-S | 128K | vram-reserve=10% | --set vram-reserve-mib=3256 | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-10pct-prefill-4k` | gyro Gyro-S | 128K | vram-reserve=10% | --set vram-reserve-mib=3256 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-10pct-prefill-32k` | gyro Gyro-S | 128K | vram-reserve=10% | --set vram-reserve-mib=3256 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-20pct-decode-prose-ja` | gyro Gyro-S | 128K | vram-reserve=20% | --set vram-reserve-mib=6512 | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-20pct-decode-code` | gyro Gyro-S | 128K | vram-reserve=20% | --set vram-reserve-mib=6512 | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-20pct-prefill-4k` | gyro Gyro-S | 128K | vram-reserve=20% | --set vram-reserve-mib=6512 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-20pct-prefill-32k` | gyro Gyro-S | 128K | vram-reserve=20% | --set vram-reserve-mib=6512 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-30pct-decode-prose-ja` | gyro Gyro-S | 128K | vram-reserve=30% | --set vram-reserve-mib=9768 | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-30pct-decode-code` | gyro Gyro-S | 128K | vram-reserve=30% | --set vram-reserve-mib=9768 | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-30pct-prefill-4k` | gyro Gyro-S | 128K | vram-reserve=30% | --set vram-reserve-mib=9768 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-30pct-prefill-32k` | gyro Gyro-S | 128K | vram-reserve=30% | --set vram-reserve-mib=9768 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-40pct-decode-prose-ja` | gyro Gyro-S | 128K | vram-reserve=40% | --set vram-reserve-mib=13025 | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-40pct-decode-code` | gyro Gyro-S | 128K | vram-reserve=40% | --set vram-reserve-mib=13025 | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-40pct-prefill-4k` | gyro Gyro-S | 128K | vram-reserve=40% | --set vram-reserve-mib=13025 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-40pct-prefill-32k` | gyro Gyro-S | 128K | vram-reserve=40% | --set vram-reserve-mib=13025 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-50pct-decode-prose-ja` | gyro Gyro-S | 128K | vram-reserve=50% | --set vram-reserve-mib=16281 | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-50pct-decode-code` | gyro Gyro-S | 128K | vram-reserve=50% | --set vram-reserve-mib=16281 | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-50pct-prefill-4k` | gyro Gyro-S | 128K | vram-reserve=50% | --set vram-reserve-mib=16281 | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T5-gyro-Gyro-S-vram-reserve-50pct-prefill-32k` | gyro Gyro-S | 128K | vram-reserve=50% | --set vram-reserve-mib=16281 | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
 | planned | `T5-gyro-Gyro-S-vision-gpu-decode-prose-ja` | gyro Gyro-S | 128K | vision=gpu | --vision gpu | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
 | planned | `T5-gyro-Gyro-S-vision-gpu-decode-code` | gyro Gyro-S | 128K | vision=gpu | --vision gpu | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
 | planned | `T5-gyro-Gyro-S-vision-gpu-prefill-4k` | gyro Gyro-S | 128K | vision=gpu | --vision gpu | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |

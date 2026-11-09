@@ -26,12 +26,12 @@
 
 ## 概要
 
-- 用例: 1,340
-- 正式测量请求: 4,458
-- 引擎启动: 131
-- 预估: 29 小时
+- 用例: 1,376
+- 正式测量请求: 4,566
+- 引擎启动: 140
+- 预估: 34 小时
 - 基准模型: qwen IQ3_S （env.json 的 ref，否则为 Strata 针对此 RAM + VRAM 推荐的模型）
-- 完成: 1,133
+- 完成: 1,125
 - 失败: 0
 
 
@@ -39,15 +39,15 @@
 
 | Tier | 内容 | 模型 | 用例 | 请求 | 预估 h | 完成 |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| [0](tier-0.zh.md) | 验证测量工具（基准模型 × 启动 3 次、用 Gyro-S 对照作者的数值、确认编程成果的展开） | 2 | 25 | 183 | 0.4 | 24 |
+| [0](tier-0.zh.md) | 验证测量工具（基准模型 × 启动 3 次、用 Gyro-S 对照作者的数值、确认编程成果的展开） | 2 | 25 | 183 | 0.5 | 24 |
 | [1](tier-1.zh.md) | 所有模型的基础速度（decode 5 种 × temperature 3 档，prefill 4K / 32K / 128K）；支持 DFlash2 的模型的 decode 也用 DFlash2 测量 | 18 | 489 | 1,467 | 2.5 | 489 |
 | [2](tier-2.zh.md) | 官方 standard-v1（thinking xhigh，temperature 1.0），整个套件 3 次 | 18 | 270 | 810 | 3.0 | 270 |
-| [3](tier-3.zh.md) | 推理 effort none / high × 4 题，编程（首里城）仅 high（所有模型） | 18 | 162 | 486 | 3.8 | 144 |
+| [3](tier-3.zh.md) | 推理 effort none / high × 4 题，编程（帆船）仅 high（所有模型） | 18 | 162 | 486 | 8.3 | 144 |
 | [4a](tier-4a.zh.md) | 预留上下文的代价（128K / 256K / 1M 下相同的 4K 输入） | 18 | 54 | 162 | 1.4 | 54 |
 | [4b](tier-4b.zh.md) | 训练长度内的长文本（32K / 128K / 256K；基准模型、各系列最大的模型、最小的模型） | 5 | 60 | 180 | 1.8 | 48 |
 | [4c](tier-4c.zh.md) | 扩展范围的长文本（512K / 1M；基准模型、最小与最大的模型） | 3 | 24 | 72 | 10.2 | 8 |
 | [4d](tier-4d.zh.md) | YaRN 的影响（基准模型，相同输入只改设置） | 1 | 16 | 48 | 1.1 | 16 |
-| [5](tier-5.zh.md) | 每次只改一个启动选项（基准模型、最大与最小的模型；含自动 tune） | 3 | 240 | 720 | 4.6 | 80 |
+| [5](tier-5.zh.md) | 每次只改一个启动选项（基准模型、最大与最小的模型；含自动 tune） | 3 | 276 | 828 | 5.0 | 72 |
 
 
 ## 模型
@@ -61,8 +61,8 @@
 | coder | IQ1_M | 58.4 | expert 减半的剪枝版 | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF @ `5348543`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF/tree/5348543e0147355ac9cbcb031184a3546350988e) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | gyro | Gyro-S | 58.5 | 原始权重量化（trellis） | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | gyro | Gyro-M | 92.0 | 原始权重量化（trellis） | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json)) |
-| unsloth | UD-IQ4_XS | 93.7 | 原始权重量化（Unsloth，v3.1 之前的版本） | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
-| unsloth | UD-Q4_K_XL | 111.3 | 原始权重量化（Unsloth，v3.1 中未变） | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
+| unsloth | UD-IQ4_XS (pre-v3.1) | 93.7 | 原始权重量化（Unsloth，v3.1 之前的版本） | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
+| unsloth | UD-Q4_K_XL (pre-v3.1) | 111.3 | 原始权重量化（Unsloth，v3.1 中未变） | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | unsloth | UD-Q5_K_XL | 158.3 | 原始权重量化（Unsloth，v3.1 中未变） | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | unsloth | UD-Q6_K_XL | 169.2 | 原始权重量化（Unsloth，v3.1 中未变） | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | unsloth | Q8_0 | 188.2 | 原始权重量化（Unsloth，v3.1 中未变），质量参照点 | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json), [2026-11-04-q8-t3](../../../published/plain/rtx5090-128g/2026-11-04-q8-t3/models.json)) |
@@ -91,14 +91,15 @@
 
 <details><summary>编程用例的成果存放位置</summary>
 
-Tier 0、3 的编程任务是首里城的场景（英文提示，要求以 3D 体素艺术、用单个 HTML 文件回答；全文见 prompts/coding-shuri.json）。无论每个用例的输出形式如何，都按以下结构展开：
+Tier 0、3 的编程任务是“帆船停靠港口”的场景（英文提示，场景只给出标题，要求以 3D 体素艺术、用单个 HTML 文件回答；全文见 prompts/coding-harbor.json）。无论每个用例的输出形式如何，都按以下结构展开：
 
 ```
 <run-id>/cases/<case id>/artifact/
   response.md     最终回答全文（thinking 在 requests.jsonl 中）
   files/          从代码块中取出的文件（写了文件名就用该名称，否则用各语言的默认名）
   manifest.json   取出的文件、命名方式、形式（单个 HTML / 需要服务器 / 其他）、有无 README、运行方法
-  screenshot.png  仅当能以单个 HTML 或静态服务器打开时。用 headless 浏览器截图
+  screenshot.png  仅当能以单个 HTML 或静态服务器打开时。在 headless Chrome 中让页面运行 10 秒后截图
+  console.txt     当时的错误（未捕获的异常、console.error、加载失败）；manifest 的 screenshot 还记录是否画出了内容（几乎一种颜色或没有轮廓则为空白）以及页面是否卡死
 ```
 
 3 次的结果在 `artifact/` 下按 seed 分文件夹（`seed-1/` 等）。
@@ -161,9 +162,9 @@ Tier 0、3 的编程任务是首里城的场景（英文提示，要求以 3D �
     "none": 0,
     "low": 3000,
     "medium": 6000,
-    "high": 18000
+    "high": 66000
   },
-  "game_answer_tokens": 16000,
+  "game_answer_tokens": 20000,
   "task_answer_tokens": 550,
   "long_answer_tokens": 150,
   "sanity_output_tokens": 150,

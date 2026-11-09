@@ -101,10 +101,13 @@ TR = {
     'デスクトップアプリの保存値': ('the value saved by the desktop app', '桌面应用保存的值'),
     '画像は入れない。エンコーダが VRAM を取る分の損失だけを見る': (
         'no images; only the cost of the encoder taking VRAM', '不输入图像；只看编码器占用 VRAM 带来的损失'),
-    'P コア 1 つにつき 1 論理 CPU（lscpu で2スレッドを持つコア）、CPU 0 はホストスレッド用に除く。実際の値は計測する PC の lscpu で決まり、起動の記録（launch.txt）に残る': (
-        'one logical CPU per P-core (cores with 2 threads in lscpu), leaving CPU 0 for the host thread. '
-        "The list comes from the measuring PC's lscpu and is kept in the launch record (launch.txt)",
-        '每个 P 核取 1 个逻辑 CPU（lscpu 中有 2 个线程的核），CPU 0 留给主机线程。实际的值由测量用 PC 的 lscpu 决定，并记录在启动记录（launch.txt）中'),
+    'P コア 1 つにつき 1 論理 CPU（P コアはカーネルの cpu_core の一覧、それが無ければ lscpu で2スレッドを持つコア）、CPU 0 はホストスレッド用に除く。実際の値は計測する PC で決まり、起動の記録（launch.txt）に残る': (
+        'one logical CPU per P-core (the P-cores are the kernel\'s cpu_core list, or without one the cores with 2 threads in lscpu), leaving CPU 0 for the host thread. '
+        "The list comes from the measuring PC and is kept in the launch record (launch.txt)",
+        '每个 P 核取 1 个逻辑 CPU（P 核取自内核的 cpu_core 列表，没有该列表时取 lscpu 中有 2 个线程的核），CPU 0 留给主机线程。实际的值由测量用 PC 决定，并记录在启动记录（launch.txt）中'),
+    'カードの VRAM（env.json の gpu_vram_gib）に対する割合。MiB に直した値を渡す（切り捨て）。足りずに起動できない割合もそのまま結果になる': (
+        "a share of the card's VRAM (gpu_vram_gib in env.json), passed in MiB (rounded down). A share that leaves too little to start is a result as it is",
+        '占显卡 VRAM（env.json 的 gpu_vram_gib）的比例，换算为 MiB 后传入（向下取整）。因空间不足而无法启动的比例也照样作为结果'),
     'クライアント並列数も 2': ('2 concurrent clients as well', '客户端并发数也为 2'),
     'クライアント並列数も 4': ('4 concurrent clients as well', '客户端并发数也为 4'),
     'tuner の所要時間も記録': ('the tuner\'s time is recorded too', '同时记录 tuner 的耗时'),

@@ -542,16 +542,35 @@ def summarize(row, records):
 
 # ------------------------------------------------------------------ sessions
 
+def cpu_list(text):
+    """'0-5,8' -> {0, 1, 2, 3, 4, 5, 8}"""
+    out = set()
+    for part in text.strip().split(','):
+        if part:
+            lo, _, hi = part.partition('-')
+            out.update(range(int(lo), int(hi or lo) + 1))
+    return out
+
+
 def lscpu_pcores():
-    """One logical CPU per performance core (the cores with two hardware threads on a hybrid Intel), leaving the first
-    core to the engine's host thread, which the engine puts on CPU 0."""
+    """One logical CPU per performance core, leaving the first core to the engine's host thread, which the engine puts
+    on CPU 0. A hybrid Intel lists its performance cores' CPUs in the cpu_core PMU; without that list (an older kernel),
+    the performance cores are the ones with two hardware threads, which misses a hybrid CPU without Hyper-Threading
+    (Core Ultra 200S: the list is empty there)."""
     out = subprocess.run(['lscpu', '-e=CPU,CORE'], capture_output=True, text=True).stdout.split('\n')[1:]
     cores = {}
     for line in out:
         if line.strip():
             cpu, core = line.split()[:2]
             cores.setdefault(core, []).append(int(cpu))
-    firsts = sorted(min(cpus) for cpus in cores.values() if len(cpus) > 1)
+    try:
+        pcpus = cpu_list(Path('/sys/bus/event_source/devices/cpu_core/cpus').read_text())
+    except (OSError, ValueError):
+        pcpus = None
+    if pcpus:
+        firsts = sorted(min(cpus) for cpus in cores.values() if set(cpus) & pcpus)
+    else:
+        firsts = sorted(min(cpus) for cpus in cores.values() if len(cpus) > 1)
     return ','.join(str(c) for c in firsts if c != 0)
 
 
@@ -922,6 +941,19 @@ def run_harness_case(row, case_dir, tel, restart, h, proxy):
     return records
 
 
+def set_aside(case_dir):
+    """A case measured again (its last attempt was not done) starts from no records: the earlier attempt's
+    requests.jsonl is kept beside it as requests-attempt-N.jsonl and no longer counts in the summary. Otherwise a
+    failed launch's record stays among the new requests and the case reads 'partial' although every request passed."""
+    f = case_dir / 'requests.jsonl'
+    if not f.exists():
+        return
+    n = 1
+    while (case_dir / f'requests-attempt-{n}.jsonl').exists():
+        n += 1
+    f.rename(case_dir / f'requests-attempt-{n}.jsonl')
+
+
 def write_case(case_dir, row, records):
     case_dir.mkdir(parents=True, exist_ok=True)
     with (case_dir / 'requests.jsonl').open('a') as f:
@@ -1120,6 +1152,8 @@ def main():
             log(run_dir, f'session {name}: {len(todo)} cases x {restarts} start(s)')
             if a.dry_run:
                 continue
+            for r in todo:
+                set_aside(run_dir / 'cases' / r['id'])
             for restart in range(1, restarts + 1):
                 session_dir = run_dir / 'sessions' / f'{name}-T{step}' / f'start-{restart}'
                 tel, info = start_session(todo[0], session_dir, run_dir)

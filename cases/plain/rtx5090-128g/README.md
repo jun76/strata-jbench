@@ -26,12 +26,12 @@ Strata のデスクトップアプリは使っていない。CLI の <code>strat
 
 ## 概要
 
-- ケース: 1,340
-- 本計測リクエスト: 4,458
-- エンジン起動: 131
-- 見積もり: 29 時間
+- ケース: 1,376
+- 本計測リクエスト: 4,566
+- エンジン起動: 140
+- 見積もり: 34 時間
 - 基準モデル: qwen IQ3_S （env.json の ref、なければ Strata がこの RAM + VRAM に勧めるモデル）
-- 完了: 1,133
+- 完了: 1,125
 - 失敗: 0
 
 
@@ -39,15 +39,15 @@ Strata のデスクトップアプリは使っていない。CLI の <code>strat
 
 | Tier | 内容 | モデル | ケース | リクエスト | 見積 h | 完了 |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| [0](tier-0.md) | 計測器の検証（基準モデル × 起動3回、Gyro-S で作者の値と照合、コーディングの成果物の展開確認） | 2 | 25 | 183 | 0.4 | 24 |
+| [0](tier-0.md) | 計測器の検証（基準モデル × 起動3回、Gyro-S で作者の値と照合、コーディングの成果物の展開確認） | 2 | 25 | 183 | 0.5 | 24 |
 | [1](tier-1.md) | 全モデルの基礎速度（decode 5種 × temperature 3水準、prefill 4K / 32K / 128K）。decode は DFlash2 対応のモデルで DFlash2 でも測る | 18 | 489 | 1,467 | 2.5 | 489 |
 | [2](tier-2.md) | 公式 standard-v1（thinking xhigh、temperature 1.0）をスイートごと3回 | 18 | 270 | 810 | 3.0 | 270 |
-| [3](tier-3.md) | 推論エフォート none / high × 4問、コーディング（首里城）は high のみ（全モデル） | 18 | 162 | 486 | 3.8 | 144 |
+| [3](tier-3.md) | 推論エフォート none / high × 4問、コーディング（帆船）は high のみ（全モデル） | 18 | 162 | 486 | 8.3 | 144 |
 | [4a](tier-4a.md) | 容量の確保コスト（128K / 256K / 1M に同じ 4K 入力） | 18 | 54 | 162 | 1.4 | 54 |
 | [4b](tier-4b.md) | 学習範囲の長文（32K / 128K / 256K。基準モデル、系列ごとに最大のモデル、最小のモデル） | 5 | 60 | 180 | 1.8 | 48 |
 | [4c](tier-4c.md) | 拡張範囲の長文（512K / 1M。基準モデル、最小と最大のモデル） | 3 | 24 | 72 | 10.2 | 8 |
 | [4d](tier-4d.md) | YaRN の影響（基準モデル、同じ入力で設定だけ変える） | 1 | 16 | 48 | 1.1 | 16 |
-| [5](tier-5.md) | 起動オプションを1つずつ変える（基準モデル、最大と最小のモデル。自動 tune を含む） | 3 | 240 | 720 | 4.6 | 80 |
+| [5](tier-5.md) | 起動オプションを1つずつ変える（基準モデル、最大と最小のモデル。自動 tune を含む） | 3 | 276 | 828 | 5.0 | 72 |
 
 
 ## モデル
@@ -61,8 +61,8 @@ Strata のデスクトップアプリは使っていない。CLI の <code>strat
 | coder | IQ1_M | 58.4 | expert 半減の剪定版 | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF @ `5348543`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF/tree/5348543e0147355ac9cbcb031184a3546350988e) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | gyro | Gyro-S | 58.5 | 元重みの量子化 (trellis) | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | gyro | Gyro-M | 92.0 | 元重みの量子化 (trellis) | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json)) |
-| unsloth | UD-IQ4_XS | 93.7 | 元重みの量子化 (Unsloth、v3.1 前の版) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
-| unsloth | UD-Q4_K_XL | 111.3 | 元重みの量子化 (Unsloth、v3.1 でも同じ) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
+| unsloth | UD-IQ4_XS (pre-v3.1) | 93.7 | 元重みの量子化 (Unsloth、v3.1 前の版) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
+| unsloth | UD-Q4_K_XL (pre-v3.1) | 111.3 | 元重みの量子化 (Unsloth、v3.1 でも同じ) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | unsloth | UD-Q5_K_XL | 158.3 | 元重みの量子化 (Unsloth、v3.1 でも同じ) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | unsloth | UD-Q6_K_XL | 169.2 | 元重みの量子化 (Unsloth、v3.1 でも同じ) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | unsloth | Q8_0 | 188.2 | 元重みの量子化 (Unsloth、v3.1 でも同じ)、品質の参照点 | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json), [2026-11-04-q8-t3](../../../published/plain/rtx5090-128g/2026-11-04-q8-t3/models.json)) |
@@ -91,14 +91,15 @@ Strata のデスクトップアプリは使っていない。CLI の <code>strat
 
 <details><summary>コーディングのケースの成果物の置き場所</summary>
 
-Tier 0・3 のコーディングは首里城の情景（英文のプロンプトで、3D ボクセルアートで、単一の HTML ファイルで答えるよう指定する。全文は prompts/coding-shuri.json）。出力の形がケースごとに違っても、必ず次の形に展開する。
+Tier 0・3 のコーディングは「港に寄港する帆船」の情景（英文のプロンプトで、情景は題だけを示し、3D ボクセルアートで、単一の HTML ファイルで答えるよう指定する。全文は prompts/coding-harbor.json）。出力の形がケースごとに違っても、必ず次の形に展開する。
 
 ```
 <run-id>/cases/<case id>/artifact/
   response.md     最終回答の全文（thinking は requests.jsonl 側）
   files/          コードブロックから取り出したファイル（ファイル名が書かれていればその名前、なければ言語ごとの既定名）
   manifest.json   取り出したファイル、名前の決め方、形式（単体 HTML / 要サーバー / その他）、README の有無、起動方法
-  screenshot.png  単体 HTML か静的サーバーで開けた場合のみ。headless ブラウザで撮る
+  screenshot.png  単体 HTML か静的サーバーで開けた場合のみ。headless Chrome でページを 10 秒動かしてから撮る
+  console.txt     そのときのエラー（捕まえられなかった例外、console.error、読み込みの失敗）。manifest の screenshot に、描画されたか（ほぼ一色・輪郭なしなら空白）と、固まったかも残る
 ```
 
 3回分は `artifact/` の下に seed ごとのフォルダ（`seed-1/` など）で分ける。
@@ -161,9 +162,9 @@ Tier 0・3 のコーディングは首里城の情景（英文のプロンプト
     "none": 0,
     "low": 3000,
     "medium": 6000,
-    "high": 18000
+    "high": 66000
   },
-  "game_answer_tokens": 16000,
+  "game_answer_tokens": 20000,
   "task_answer_tokens": 550,
   "long_answer_tokens": 150,
   "sanity_output_tokens": 150,

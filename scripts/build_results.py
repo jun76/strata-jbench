@@ -32,6 +32,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import build_cases  # noqa: E402
+from build_cases import display_model as dm  # noqa: E402
 import envs  # noqa: E402
 import i18n  # noqa: E402
 import machine_info  # noqa: E402
@@ -201,7 +202,7 @@ def sample(row, run, path, base):
     reqs = [json.loads(x) for x in (case / 'requests.jsonl').read_text().splitlines() if x.strip()] \
         if (case / 'requests.jsonl').exists() else []
     first = reqs[0] if reqs else {}
-    out = {'id': row['id'], 'step': row['step'], 'model': f'{row["family"]} {row["model"]}', 'run_id': run.name,
+    out = {'id': row['id'], 'step': row['step'], 'model': f'{row["family"]} {dm(row["family"], row["model"])}', 'run_id': run.name,
            'context': row['context_label'], 'launch_opts': row['launch_opts'], 'config': row['config'],
            'fixture': row['fixture'], 'effort': row['effort'], 'temperature': row['temperature'],
            'output_cap': row['output_cap'], 'reps': row['reps'],
@@ -287,6 +288,7 @@ def collect_env(cfg, run_id, published_only, rel=''):
                                'input_tokens', 'output_cap', 'effort', 'temperature', 'config', 'launch_opts',
                                'concurrency', 'session')}
         c.update({k: s.get(k) for k in KEEP})
+        c['model_id'], c['model'] = r['model'], dm(r['family'], r['model'])   # the page shows the set's version
         c['env'] = env_id
         c['run_id'] = run.name
         c['decode_range'] = spread(s.get('per_request'), 'decode_tps')
@@ -306,18 +308,18 @@ def collect_env(cfg, run_id, published_only, rel=''):
         if r['fixture'].startswith(('coding-', 'game-')):
             c['artifacts'] = artifacts(path.parent, rel, s.get('per_request'))
         cases.append(c)
-    models = [{'key': f'{f} {m}', 'family': f, 'model': m, 'gb': gb, 'role': role,
+    models = [{'key': f'{f} {dm(f, m)}', 'family': f, 'model': dm(f, m), 'gb': gb, 'role': role,
                'derivative': (f, m) in build_cases.DERIVATIVE, 'ref': (f, m) == build_cases.REF}
               for f, m, gb, role in build_cases.env_models()]
     planned = {}
     for r in rows:
-        planned.setdefault(r['step'], set()).add(f'{r["family"]} {r["model"]}')
+        planned.setdefault(r['step'], set()).add(f'{r["family"]} {dm(r["family"], r["model"])}')
     env = {'id': env_id, 'label': envs.label(cfg), 'runs': [machine(d) for d in runs], 'models': models,
            'planned_models': {k: sorted(v) for k, v in planned.items()},
            'planned_cases': {k: sum(1 for r in rows if r['step'] == k) for k in planned},
-           'planned_per_model': {k: {m: sum(1 for r in rows if r['step'] == k and f'{r["family"]} {r["model"]}' == m) for m in v}
+           'planned_per_model': {k: {m: sum(1 for r in rows if r['step'] == k and f'{r["family"]} {dm(r["family"], r["model"])}' == m) for m in v}
                                  for k, v in planned.items()},
-           'dflash2_models': sorted({f'{r["family"]} {r["model"]}' for r in rows if r['config'] == 'drafter=DFlash2'}),
+           'dflash2_models': sorted({f'{r["family"]} {dm(r["family"], r["model"])}' for r in rows if r['config'] == 'drafter=DFlash2'}),
            'noise_pct': {k: restart_noise(found, k) for k in ('decode', 'prefill')}}
     env['ref'] = ' '.join(build_cases.REF) if build_cases.REF else None   # this environment's (build_cases.use_env)
     env['_rows'], env['_found'] = rows, found
@@ -396,7 +398,7 @@ def main():
         w = csv.writer(f)
         w.writerow(CSV_COLS)
         for c in data['cases']:
-            w.writerow(['' if c.get(k) is None else c.get(k) for k in CSV_COLS])
+            w.writerow(['' if c.get(k) is None else c.get('model_id', c[k]) if k == 'model' else c.get(k) for k in CSV_COLS])
     missing = i18n.untranslated([x for e in data['envs'] for m in e['models'] for x in (m['role'],)]
                                 + [c['config'] for c in data['cases']])
     if missing:

@@ -6,8 +6,9 @@
 1. The client's timing of the stream (SSE) against the engine's own timings, request by request: the first character
    cannot come before the engine has read the prompt (ttft_ms >= timings.prompt_ms), and what the client adds on top of
    the engine (ttft_ms - prompt_ms, total_ms - prompt_ms - predicted_ms) stays small: a request is listed when it is over
-   LATE_MS and also over LATE_SHARE of the client's time (the runner's own delays show on short prompts, while a long
-   prompt's text that the server tokenizes for the first time adds a second or two outside the engine's timings). Only for one request at a time with
+   LATE_MS plus TOKENIZE_MS_PER_1K per 1,000 prompt tokens and also over LATE_SHARE of the client's time (the runner's own
+   delays show on short prompts, while the server tokenizes a long prompt's whole text on every request, outside the
+   engine's timings, which adds a second or two to a 1M document even when the KV cache already holds it). Only for one request at a time with
    thinking off: with thinking on, the engine's prompt_ms also counts the text it adds when the thinking budget closes the
    thinking (after the first character), and with several requests at once a request also waits for the others in the
    batch. Those two are counted apart, not checked, and so are the runs of a harness division (a record there is one
@@ -30,6 +31,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import envs  # noqa: E402
 
 LATE_MS = 500        # client time beyond the engine's, per request, past which a request is listed ...
+TOKENIZE_MS_PER_1K = 3   # ... plus this per 1,000 prompt tokens (cache_n + prompt_n): the server tokenizes the whole
+                         # text on every request, outside the engine's timings, even when the KV cache holds it (a 1M
+                         # document read again: prompt_ms falls to seconds while tokenizing still takes 1-2.5 s on the
+                         # RTX 5070 PC's Core Ultra 5 235, about 2.2 ms per 1K)
 LATE_SHARE = 0.05    # ... when it is also this share of the client's own time (the server's tokenizing of a long text
                      # it has not seen yet lies outside the engine's timings but is a small part of that wait)
 EARLY_MS = -5        # the client seeing the first character this much before the engine finished the prompt
@@ -64,7 +69,8 @@ def timing(run_dir):
             b = r['total_ms'] - t['prompt_ms'] - (t.get('predicted_ms') or 0)
             first.append(a)
             rest.append(b)
-            late = lambda extra, of: extra > LATE_MS and extra > LATE_SHARE * of  # noqa: E731
+            allow = LATE_MS + TOKENIZE_MS_PER_1K * ((t.get('cache_n') or 0) + (t.get('prompt_n') or 0)) / 1000
+            late = lambda extra, of: extra > allow and extra > LATE_SHARE * of  # noqa: E731
             if a < EARLY_MS or late(a, r['ttft_ms']) or late(b, r['total_ms']):
                 odd.append({'case': r['case'], 'seed': r.get('seed'), 'restart': r.get('restart'),
                             'ttft_minus_prompt_ms': round(a, 1), 'total_minus_engine_ms': round(b, 1)})

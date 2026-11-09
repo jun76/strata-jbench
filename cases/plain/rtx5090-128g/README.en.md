@@ -26,12 +26,12 @@ environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-04-q8-t3
 
 ## Overview
 
-- cases: 1,340
-- measured requests: 4,458
-- engine launches: 131
-- estimate: 29 h
+- cases: 1,376
+- measured requests: 4,566
+- engine launches: 140
+- estimate: 34 h
 - reference model: qwen IQ3_S (env.json "ref", else the model Strata recommends for this RAM + VRAM)
-- done: 1,133
+- done: 1,125
 - failed: 0
 
 
@@ -39,15 +39,15 @@ environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-04-q8-t3
 
 | Tier | what | models | cases | requests | est. h | done |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| [0](tier-0.en.md) | validating the harness (the reference model × 3 launches, Gyro-S against the author's figures, unpacking the coding result) | 2 | 25 | 183 | 0.4 | 24 |
+| [0](tier-0.en.md) | validating the harness (the reference model × 3 launches, Gyro-S against the author's figures, unpacking the coding result) | 2 | 25 | 183 | 0.5 | 24 |
 | [1](tier-1.en.md) | base speed of every model (5 decode kinds × 3 temperatures, prefill 4K / 32K / 128K); decode also with DFlash2 on the models that have it | 18 | 489 | 1,467 | 2.5 | 489 |
 | [2](tier-2.en.md) | the official standard-v1 (thinking xhigh, temperature 1.0), the whole suite 3 times | 18 | 270 | 810 | 3.0 | 270 |
-| [3](tier-3.en.md) | reasoning effort none / high × 4 tasks, the coding task (Shuri Castle) at high only (every model) | 18 | 162 | 486 | 3.8 | 144 |
+| [3](tier-3.en.md) | reasoning effort none / high × 4 tasks, the coding task (sailing ship) at high only (every model) | 18 | 162 | 486 | 8.3 | 144 |
 | [4a](tier-4a.en.md) | the cost of reserving context (the same 4K input at 128K / 256K / 1M) | 18 | 54 | 162 | 1.4 | 54 |
 | [4b](tier-4b.en.md) | long inputs within the trained length (32K / 128K / 256K; the reference model, the largest of each family, the smallest) | 5 | 60 | 180 | 1.8 | 48 |
 | [4c](tier-4c.en.md) | long inputs in the extended range (512K / 1M; the reference model, the smallest and the largest) | 3 | 24 | 72 | 10.2 | 8 |
 | [4d](tier-4d.en.md) | the effect of YaRN (the reference model, same input, only the setting changes) | 1 | 16 | 48 | 1.1 | 16 |
-| [5](tier-5.en.md) | changing one launch option at a time (the reference model, the largest and the smallest; auto tune included) | 3 | 240 | 720 | 4.6 | 80 |
+| [5](tier-5.en.md) | changing one launch option at a time (the reference model, the largest and the smallest; auto tune included) | 3 | 276 | 828 | 5.0 | 72 |
 
 
 ## Models
@@ -61,8 +61,8 @@ environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-04-q8-t3
 | coder | IQ1_M | 58.4 | pruned to half the experts | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF @ `5348543`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF/tree/5348543e0147355ac9cbcb031184a3546350988e) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | gyro | Gyro-S | 58.5 | quantized from the original weights (trellis) | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | gyro | Gyro-M | 92.0 | quantized from the original weights (trellis) | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json)) |
-| unsloth | UD-IQ4_XS | 93.7 | quantized from the original weights (Unsloth, the version before v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
-| unsloth | UD-Q4_K_XL | 111.3 | quantized from the original weights (Unsloth, unchanged in v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
+| unsloth | UD-IQ4_XS (pre-v3.1) | 93.7 | quantized from the original weights (Unsloth, the version before v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
+| unsloth | UD-Q4_K_XL (pre-v3.1) | 111.3 | quantized from the original weights (Unsloth, unchanged in v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | unsloth | UD-Q5_K_XL | 158.3 | quantized from the original weights (Unsloth, unchanged in v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | unsloth | UD-Q6_K_XL | 169.2 | quantized from the original weights (Unsloth, unchanged in v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | unsloth | Q8_0 | 188.2 | quantized from the original weights (Unsloth, unchanged in v3.1), the quality reference | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json), [2026-11-04-q8-t3](../../../published/plain/rtx5090-128g/2026-11-04-q8-t3/models.json)) |
@@ -91,14 +91,15 @@ environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-04-q8-t3
 
 <details><summary>Where the coding cases' results go</summary>
 
-The coding task of Tiers 0 and 3 is a scene of Shuri Castle (an English prompt that asks for it in 3D voxel art, as one HTML file; the whole text is in prompts/coding-shuri.json). Whatever shape each answer takes, it is always unpacked like this:
+The coding task of Tiers 0 and 3 is a scene titled "A sailing ship calling at a harbor" (an English prompt that gives the scene by its title alone and asks for it in 3D voxel art, as one HTML file; the whole text is in prompts/coding-harbor.json). Whatever shape each answer takes, it is always unpacked like this:
 
 ```
 <run-id>/cases/<case id>/artifact/
   response.md     the whole final answer (the thinking is in requests.jsonl)
   files/          files taken from the code blocks (named as the answer names them, else a default per language)
   manifest.json   the files, how they were named, the form (single HTML / needs a server / other), README or not, how to run it
-  screenshot.png  only if it opens as a single HTML file or from a static server; taken with a headless browser
+  screenshot.png  only if it opens as a single HTML file or from a static server; taken after the page has run 10 s in headless Chrome
+  console.txt     its errors then (uncaught exceptions, console.error, failed loads); the manifest's screenshot also says whether anything was drawn (nearly one colour or no edges: empty) and whether the page froze
 ```
 
 The 3 runs go in one folder per seed under `artifact/` (`seed-1/` and so on).
@@ -161,9 +162,9 @@ The 3 runs go in one folder per seed under `artifact/` (`seed-1/` and so on).
     "none": 0,
     "low": 3000,
     "medium": 6000,
-    "high": 18000
+    "high": 66000
   },
-  "game_answer_tokens": 16000,
+  "game_answer_tokens": 20000,
   "task_answer_tokens": 550,
   "long_answer_tokens": 150,
   "sanity_output_tokens": 150,

@@ -11,6 +11,7 @@ when present, fills each row's status, headline metrics and evidence links. The 
     python3 -I scripts/build_cases.py --env <id>   # one environment's case list
 """
 import os
+import re
 import argparse
 import csv
 import json
@@ -57,6 +58,27 @@ MODELS = [
     ('nvfp4', 'NVFP4-NVIDIA', 128.0, '元重みの量子化 (RTN)'),
     ('nvfp4', 'NVFP4-QAD', 102.3, 'FP4 向け再学習版'),
 ]
+# Unsloth re-published its repository on 2026-11-04 as Dynamic v3.1 under the same names. Of the sets pinned before
+# (38bb39ee), UD-IQ4_XS and UD-Q4_K_XL were replaced on the Hub then (Strata keeps the old UD-Q4_K_XL, and calls the new
+# UD-IQ4_XS UD-IQ4_XS-v31); UD-Q5_K_XL, UD-Q6_K_XL and Q8_0 are the same files there still. The pages show which set a
+# replaced name is from; case ids and folders keep the plain names.
+UNSLOTH_V31 = {'UD-IQ1_M', 'UD-Q2_0', 'UD-IQ2_XS', 'UD-Q2_K_XL', 'UD-IQ3_XXS', 'UD-Q3_K_XL', 'UD-IQ4_XS-v31'}
+UNSLOTH_REPLACED = {'UD-IQ4_XS', 'UD-Q4_K_XL'}   # the files before v3.1, which the Hub's same names no longer serve
+
+
+def display_model(family, model):
+    """The model's name on the pages: 'UD-Q2_K_XL (v3.1)', 'UD-IQ4_XS (v3.1)' for UD-IQ4_XS-v31, 'UD-Q4_K_XL (pre-v3.1)'
+    for a set the Hub replaced under the same name, and the others (UD-Q5_K_XL, UD-Q6_K_XL, Q8_0, other families) as
+    they are."""
+    if family != 'unsloth':
+        return model
+    if model in UNSLOTH_V31:
+        return model.removesuffix('-v31') + ' (v3.1)'
+    if model in UNSLOTH_REPLACED:
+        return model + ' (pre-v3.1)'
+    return model
+
+
 DERIVATIVE = {('coder', 'IQ1_M'), ('swift', 'IQ2_XS'), ('swift', 'IQ3_XXS'), ('swift', 'IQ3_S'),
               ('nvfp4', 'NVFP4-QAD')}
 # The environment's reference model and the representatives of Tiers 4b, 4c and 5: set per environment by use_env, from
@@ -86,6 +108,11 @@ GAME_EFFORTS = ['high']
 QUESTIONS = [('q-d10', '10% の位置の事実'), ('q-d50', '50% の位置の事実'), ('q-d90', '90% の位置の事実'),
              ('q-multi', '離れた複数箇所の統合')]
 
+# Tier 5's VRAM reserve as a share of the card's VRAM (env.json hardware.gpu_vram_gib), the same rule in every
+# environment: a fixed MiB means little on a 12 GB card and nothing on a 32 GB one. vram_reserve_mib() turns it into MiB.
+VRAM_RESERVE_PCT = [10, 20, 30, 40, 50]
+VRAM_RESERVE_NOTE = 'カードの VRAM（env.json の gpu_vram_gib）に対する割合。MiB に直した値を渡す（切り捨て）。足りずに起動できない割合もそのまま結果になる'
+
 # Tier 5: one variable at a time from the baseline. (variable, id slug, level, launch option, note)
 TIER5_VARIANTS = [
     ('baseline', 'default', '既定', '', '同じセッション内の比較基準'),
@@ -98,11 +125,11 @@ TIER5_VARIANTS = [
     ('prefill-chunk', '1024', '1024', '--set prefill=1024', ''),
     ('prefill-chunk', '2048', '2048', '--set prefill=2048', ''),
     ('prefill-chunk', '4096', '4096', '--set prefill=4096', ''),
-    ('vram-reserve', '512', '512', '--set vram-reserve-mib=512', ''),
-    ('vram-reserve', '6512', '6512', '--set vram-reserve-mib=6512', 'デスクトップアプリの保存値'),
+    *[('vram-reserve', f'{pct}pct', f'{pct}%', f'--set vram-reserve-mib=<VRAM の {pct}%>', VRAM_RESERVE_NOTE)
+      for pct in VRAM_RESERVE_PCT],
     ('vision', 'gpu', 'gpu', '--vision gpu', '画像は入れない。エンコーダが VRAM を取る分の損失だけを見る'),
     ('pool-workers', '8', '8', '--set pool-workers=8', ''),
-    ('cpu-pin', 'pcore', 'P コアのみ', '--pool-cores <P コアの論理 CPU>', 'P コア 1 つにつき 1 論理 CPU（lscpu で2スレッドを持つコア）、CPU 0 はホストスレッド用に除く。実際の値は計測する PC の lscpu で決まり、起動の記録（launch.txt）に残る'),
+    ('cpu-pin', 'pcore', 'P コアのみ', '--pool-cores <P コアの論理 CPU>', 'P コア 1 つにつき 1 論理 CPU（P コアはカーネルの cpu_core の一覧、それが無ければ lscpu で2スレッドを持つコア）、CPU 0 はホストスレッド用に除く。実際の値は計測する PC で決まり、起動の記録（launch.txt）に残る'),
     ('ple-io', 'mmap', 'mmap', '--set ple-io=mmap', ''),
     ('parallel', '2', '2', '--parallel 2', 'クライアント並列数も 2'),
     ('parallel', '4', '4', '--parallel 4', 'クライアント並列数も 4'),
@@ -307,7 +334,7 @@ def build(cfg):
                     n = dict(PREFILL).get(fx, '短文')
                     conc = int(level) if var == 'parallel' else 1
                     out.append(base('5', '5', fam, model, _key=f'{var}-{slug}-{fx}',
-                                    config=f'{var}={level}', launch_opts=opts, fixture=fx,
+                                    config=f'{var}={level}', launch_opts=vram_reserve_mib(opts, cfg), fixture=fx,
                                     content=PREFILL_CONTENT if is_prefill else dict(DECODE)[fx],
                                     input_tokens=n, output_cap=128 if is_prefill else 512, concurrency=conc,
                                     measures='prefill tok/s, TTFT' if is_prefill else 'decode tok/s, MTP 採用率',
@@ -409,6 +436,17 @@ def session_of(r):
 
 SIZE = {(f, m): gb for f, m, gb, _ in MODELS}
 GIB = 1.073741824   # GB per GiB
+
+
+def vram_reserve_mib(opts, cfg):
+    """'--set vram-reserve-mib=<VRAM の 20%>' -> '--set vram-reserve-mib=2437' for this environment's card."""
+    m = re.search(r'<VRAM の (\d+)%>', opts)
+    if not m:
+        return opts
+    gib = (cfg.get('hardware') or {}).get('gpu_vram_gib')
+    if not gib:
+        raise SystemExit(f"{cfg.get('id')}: env.json has no hardware.gpu_vram_gib, needed for Tier 5's VRAM reserve")
+    return opts.replace(m.group(0), str(int(gib * 1024 * int(m.group(1)) / 100)))
 
 
 def size_class(gb, cfg):
@@ -876,7 +914,7 @@ def write_md(rows, out, cfg, published_only=False):
                     f'| family | model | GB | {L("種別", "kind", "类别")} | '
                     f'{L("測った版（リポジトリ @ コミット、RUN_ID の models.json）", "version measured (repository @ commit, the RUN_ID's models.json)", "测量的版本（仓库 @ 提交，RUN_ID 的 models.json）")} |\n'
                     '| --- | --- | ---: | --- | --- |\n')
-        text[-1] += ''.join(f'| {f} | {m} | {gb} | {md(tr(role, lang))} | {versions.get((f, m), "–")} |\n'
+        text[-1] += ''.join(f'| {f} | {display_model(f, m)} | {gb} | {md(tr(role, lang))} | {versions.get((f, m), "–")} |\n'
                             for f, m, gb, role in env_models())
         harness = division.get('harness')
         text.append(f'\n## {L("全ケース共通の条件", "Conditions shared by every case", "所有用例的共同条件")}\n\n{(HARNESS_COMMON if harness else COMMON)[lang]}')
@@ -898,7 +936,7 @@ def write_md(rows, out, cfg, published_only=False):
                     if k == 'id':
                         cells.append(f'`{r["id"]}`')
                     elif k == 'model':
-                        cells.append(f'{r["family"]} {r["model"]}')
+                        cells.append(f'{r["family"]} {display_model(r["family"], r["model"])}')
                     elif k == 'context_label':
                         cells.append(r['context_label'] + (f' (YaRN {r["yarn"]})' if r.get('yarn') else ''))
                     else:

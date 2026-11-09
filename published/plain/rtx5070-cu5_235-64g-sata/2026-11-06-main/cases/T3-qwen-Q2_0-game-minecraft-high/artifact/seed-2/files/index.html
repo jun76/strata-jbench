@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>マイクラ風 3D 箱庭ゲーム</title>
+<style>
+  :root {
+    --bg: #101426;
+    --panel: #1c2440;
+    --text: #f6f9ff;
+    --line: #3c4d70;
+    --accent: #4f8cff;
+    --danger: #ff5f6b;
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+
+  header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 22px;
+    letter-spacing: 0.03em;
+  }
+
+  .ui {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 16px;
+    background: #151c31;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .ui button {
+    border: 1px solid var(--line);
+    background: #243152;
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .ui button.active {
+    border-color: var(--accent);
+    background: #2d3d66;
+  }
+
+  .ui button:hover {
+    background: #2f426e;
+  }
+
+  .canvas-wrap {
+    padding: 12px 16px;
+  }
+
+  canvas {
+    width: 100%;
+    height: 540px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #081222;
+    box-shadow: 0 0 18px rgba(0,0,0,.35);
+  }
+
+  .controls {
+    padding: 12px 16px;
+    background: #151c31;
+    border-top: 1px solid var(--line);
+    line-height: 1.5;
+    font-size: 13px;
+  }
+
+  code {
+    background: #243152;
+    padding: 2px 6px;
+    border-radius: 6px;
+    color: #e6f1ff;
+  }
+
+  .hint {
+    color: #a9b7cc;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>マイクラ風 3D 箱庭ゲーム</h1>
+</header>
+
+<div class="ui">
+  <button data-type="1">1 Grass</button>
+  <button data-type="2">2 Dirt</button>
+  <button data-type="3">3 Stone</button>
+  <button data-type="4">4 Sand</button>
+  <button data-type="5">5 Wood</button>
+  <button data-type="6">6 Leaves</button>
+  <button data-type="7">7 Water</button>
+  <button data-type="8">8 Flower</button>
+  <button data-type="9">9 Glass</button>
+  <button id="regen">Random Terrain</button>
+  <button id="reset">Clear</button>
+</div>
+
+<div class="canvas-wrap">
+  <canvas id="canvas" width="900" height="540"></canvas>
+</div>
+
+<div class="controls">
+  <p>
+    <strong>操作</strong><br>
+    左クリック: 点击面を removal<br>
+    Shift + 左クリック / 右クリック: 点击面の隣に selected block を placement<br>
+    <span class="hint">Arrow keys: camera rotate</span><br>
+    <span class="hint">Z / X: zoom</span><br>
+    <span class="hint">1〜9: block select</span>
+  </p>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+
+  const W = 16;
+  const H = 16;
+  const MAX_Z = 18;
+
+  const blocks = new Uint8Array(W * H * MAX_Z);
+
+  const blockData = [
+    null,
+    { name: "Grass",  rgb: [48, 152, 85] },
+    { name: "Dirt",   rgb: [124, 78, 54] },
+    { name: "Stone",  rgb: [122, 130, 129] },
+    { name: "Sand",   rgb: [218, 199, 148] },
+    { name: "Wood",   rgb: [114, 84, 51] },
+    { name: "Leaves", rgb: [52, 127, 76] },
+    { name: "Water",  rgb: [63, 136, 184] },
+    { name: "Flower", rgb: [235, 90, 95] },
+    { name: "Glass",  rgb: [140, 190, 240] }
+  ];
+
+  let selected = 1;
+
+  let yaw = Math.PI / 4;
+  let pitch = 0.62;
+  let scale = 17;
+  let camDist = 80;
+
+  let forward = [0, 0, -1];
+  let right = [1, 0, 0];
+  let up = [0, 1, 0];
+  let camPos = [0, 0, 0];
+  let light = [0.22, 0.35, 0.93];
+
+  const originX = canvas.width / 2;
+  const originY = canvas.height / 2;
+  const worldCenter = {
+    x: W / 2,
+    y: H / 2,
+    z: 4
+  };
+
+  let seed = 1234567;
+  function rand() {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed / 0x7fffffff;
+  }
+
+  function idx(x, y, z) {
+    return (z * H + y) * W + x;
+  }
+
+  function inBounds(x, y, z) {
+    return x >= 0 && x < W && y >= 0 && y < H && z >= 0 && z < MAX_Z;
+  }
+
+  function getBlock(x, y, z) {
+    if (!inBounds(x, y, z)) return 0;
+    return blocks[idx(x, y, z)];
+  }
+
+  function setBlock(x, y, z, v) {
+    if (inBounds(x, y, z)) {
+      blocks[idx(x, y, z)] = v;
+    }
+  }
+
+  function normalize(v) {
+    const m = Math.hypot(v[0], v[1], v[2]) || 1;
+    return [v[0] / m, v[1] / m, v[2] / m];
+  }
+
+  function updateCamera() {
+    pitch = Math.max(0.15, Math.min(1.25, pitch));
+    yaw = yaw % (2 * Math.PI);
+
+    forward = normalize([
+      -Math.sin(yaw) * Math.cos(pitch),
+      Math.cos(yaw) * Math.cos(pitch),
+      -Math.sin(pitch)
+    ]);
+
+    right = normalize([forward[1], -forward[0], 0]);
+
+    up = normalize([
+      right[1] * forward[2] - right[2] * forward[1],
+      right[2] * forward[0] - right[0] * forward[2],
+      right[0] * forward[1] - right[1] * forward[0]
+    ]);
+
+    camPos = [-forward[0] * camDist, -forward[1] * camDist, -forward[2] * camDist];
+  }
+
+  function project(x, y, z) {
+    const px = x - worldCenter.x;
+    const py = y - worldCenter.y;
+    const pz = z - worldCenter.z;
+
+    const sx = originX + scale * (px * right[0] + py * right[1] + pz * right[2]);
+    const sy = originY - scale * (px * up[0] + py * up[1] + pz * up[2]);
+
+    return [sx, sy];
+  }
+
+  function shade(rgb, n) {
+    const dot = Math.max(0, n[0] * light[0] + n[1] * light[1] + n[2] * light[2]);
+    const f = 0.55 + 0.45 * dot;
+
+    const r = Math.min(255, Math.round(rgb[0] * f));
+    const g = Math.min(255, Math.round(rgb[1] * f));
+    const b = Math.min(255, Math.round(rgb[2] * f));
+
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+
+  const normals = [
+    [1, 0, 0],
+    [-1, 0, 0],
+    [0, 1, 0],
+    [0, -1, 0],
+    [0, 0, 1],
+    [0, 0, -1]
+  ];
+
+  const faceTemplates = [
+    [[1,0,0],[1,1,0],[1,1,1],[1,0,1]],
+    [[0,0,0],[0,1,0],[0,1,1],[0,0,1]],
+    [[0,1,0],[1,1,0],[1,1,1],[0,1,1]],
+    [[0,0,0],[1,0,0],[1,0,1],[0,0,1]],
+    [[0,0,1],[1,0,1],[1,1,1],[0,1,1]],
+    [[0,0,0],[1,0,0],[1,1,0],[0,1,0]]
+  ];
+
+  const visibleFaces = [];
+
+  function pointInPolygon(px, py, poly) {
+    let inside = false;
+
+    for (let i = 0; i < poly.length; i++) {
+      const j = (i + 1) % poly.length;
+      const x1 = poly[i][0];
+      const y1 = poly[i][1];
+      const x2 = poly[j][0];
+      const y2 = poly[j][1];
+
+      if (((y1 > py) !== (y2 > py)) &&
+          px < ((x2 - x1) * (py - y1) / (y2 - y1) + x1)) {
+        inside = !inside;
+      }
+    }
+
+    return inside;
+  }
+
+  function drawCube(x, y, z, type) {
+    const color = blockData[type].rgb;
+
+    for (let i = 0; i < normals.length; i++) {
+      const n = normals[i];
+
+      if (n[0] * forward[0] + n[1] * forward[1] + n[2] * forward[2] >= 0) {
+        continue;
+      }
+
+      const nx = x + n[0];
+      const ny = y + n[1];
+      const nz = z + n[2];
+
+      if (inBounds(nx, ny, nz) && getBlock(nx, ny, nz) !== 0) {
+        continue;
+      }
+
+      const poly = [];
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+      for (const v of faceTemplates[i]) {
+        const p = project(x + v[0], y + v[1], z + v[2]);
+        poly.push(p);
+        minX = Math.min(minX, p[0]);
+        minY = Math.min(minY, p[1]);
+        maxX = Math.max(maxX, p[0]);
+        maxY = Math.max(maxY, p[1]);
+      }
+
+      ctx.fillStyle = shade(color, n);
+      ctx.beginPath();
+      ctx.moveTo(poly[0][0], poly[0][1]);
+      for (let k = 1; k < poly.length; k++) {
+        ctx.lineTo(poly[k][0], poly[k][1]);
+      }
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.strokeStyle = "rgba(0,0,0,.35)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      visibleFaces.push({
+        poly,
+        bb: [minX, minY, maxX, maxY],
+        x,
+        y,
+        z,
+        nx: n[0],
+        ny: n[1],
+        nz: n[2]
+      });
+    }
+  }
+
+  function render() {
+    updateCamera();
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#081222";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const visibleBlocks = [];
+
+    for (let z = 0; z < MAX_Z; z++) {
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const type = getBlock(x, y, z);
+          if (type === 0) continue;
+
+          const cx = x + 0.5;
+          const cy = y + 0.5;
+          const cz = z + 0.5;
+
+          const vx = cx - camPos[0];
+          const vy = cy - camPos[1];
+          const vz = cz - camPos[2];
+
+          const depth =
+            vx * forward[0] +
+            vy * forward[1] +
+            vz * forward[2];
+
+          visibleBlocks.push({
+            x,
+            y,
+            z,
+            type,
+            depth
+          });
+        }
+      }
+    }
+
+    visibleBlocks.sort((a, b) => b.depth - a.depth);
+
+    visibleFaces.length = 0;
+
+    for (const b of visibleBlocks) {
+      drawCube(b.x, b.y, b.z, b.type);
+    }
+  }
+
+  function generateWorld() {
+    blocks.fill(0);
+
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const wave =
+          2.2 * Math.sin((x + 1) * 0.37 + (y + 1) * 0.43) +
+          2.2 * Math.sin((x + 2) * 0.14 + (y + 2) * 0.55);
+
+        const h = Math.max(2, Math.min(6, Math.floor(4 + wave)));
+
+        for (let z = 0; z < h; z++) {
+          if (z === h - 1) {
+            setBlock(x, y, z, 1);
+          } else if (z >= h - 2) {
+            setBlock(x, y, z, 2);
+          } else {
+            setBlock(x, y, z, 3);
+          }
+        }
+
+        if (h >= 3 && rand() < 0.05) {
+          const treeTop = h + 3;
+
+          for (let z = h; z <= treeTop && z < MAX_Z; z++) {
+            setBlock(x, y, z, 5);
+          }
+
+          for (let z = h + 1; z <= treeTop && z < MAX_Z; z++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              for (let dy = -1; dy <= 1; dy++) {
+                if (dx === 0 && dy === 0 && z >= h) continue;
+
+                const tx = x + dx;
+                const ty = y + dy;
+
+                if (inBounds(tx, ty, z) && getBlock(tx, ty, z) === 0) {
+                  setBlock(tx, ty, z, 6);
+                }
+              }
+            }
+          }
+        }
+
+        if (h >= 2 && rand() < 0.13) {
+          setBlock(x, y, h - 1, 8);
+        }
+      }
+    }
+
+    render();
+  }
+
+  function clearWorld() {
+    blocks.fill(0);
+    render();
+  }
+
+  function setActivePalette(type) {
+    selected = type;
+
+    const buttons = document.querySelectorAll(".ui button[data-type]");
+    for (const b of buttons) {
+      b.classList.toggle("active", Number(b.dataset.type) === type);
+    }
+  }
+
+  document.querySelectorAll(".ui button[data-type]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      setActivePalette(Number(btn.dataset.type));
+    });
+  });
+
+  document.getElementById("regen").addEventListener("click", generateWorld);
+  document.getElementById("reset").addEventListener("click", clearWorld);
+
+  window.addEventListener("keydown", e => {
+    const k = e.key.toLowerCase();
+
+    if (e.target.tagName === "BUTTON") return;
+
+    if (["arrowleft", "arrowright", "arrowup", "arrowdown", "z", "x"].includes(k)) {
+      e.preventDefault();
+    }
+
+    if (k === "arrowleft" || k === "q" || k === "a") {
+      yaw -= 0.12;
+      render();
+    } else if (k === "arrowright" || k === "e" || k === "d") {
+      yaw += 0.12;
+      render();
+    } else if (k === "arrowup" || k === "w") {
+      pitch += 0.05;
+      render();
+    } else if (k === "arrowdown" || k === "s") {
+      pitch -= 0.05;
+      render();
+    } else if (k === "z") {
+      scale = Math.max(8, scale - 2);
+      render();
+    } else if (k === "x") {
+      scale = Math.min(28, scale + 2);
+      render();
+    } else if (k >= "1" && k <= "9") {
+      setActivePalette(Number(k));
+    }
+  });
+
+  canvas.addEventListener("contextmenu", e => e.preventDefault());
+
+  canvas.addEventListener("mousedown", e => {
+    const rect = canvas.getBoundingClientRect();
+
+    const px = ((e.clientX - rect.left) * canvas.width) / rect.width;
+    const py = ((e.clientY - rect.top) * canvas.height) / rect.height;
+
+    let hit = null;
+
+    for (let i = visibleFaces.length - 1; i >= 0; i--) {
+      const f = visibleFaces[i];
+      const [minX, minY, maxX, maxY] = f.bb;
+
+      if (px < minX || px > maxX || py < minY || py > maxY) continue;
+
+      if (pointInPolygon(px, py, f.poly)) {
+        hit = f;
+        break;
+      }
+    }
+
+    if (!hit) return;
+
+    const place = e.shiftKey || e.button === 2;
+
+    if (place) {
+      const tx = hit.x + hit.nx;
+      const ty = hit.y + hit.ny;
+      const tz = hit.z + hit.nz;
+
+      if (inBounds(tx, ty, tz) && getBlock(tx, ty, tz) === 0) {
+        setBlock(tx, ty, tz, selected);
+        render();
+      }
+    } else {
+      setBlock(hit.x, hit.y, hit.z, 0);
+      render();
+    }
+  });
+
+  setActivePalette(1);
+  generateWorld();
+})();
+</script>
+</body>
+</html>
