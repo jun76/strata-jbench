@@ -309,14 +309,15 @@ def collect_env(cfg, run_id, published_only, rel=''):
         if r['fixture'].startswith(('coding-', 'game-')):
             c['artifacts'] = artifacts(path.parent, rel, s.get('per_request'))
         cases.append(c)
+    # Every model in every environment and chart: which ones an environment measures is the measurer's choice (a disk
+    # too small for some), not a property of the environment, so a model it has no value for reads "not measured".
     models = [{'key': f'{f} {dm(f, m)}', 'family': f, 'model': dm(f, m), 'gb': gb, 'role': role,
                'derivative': (f, m) in build_cases.DERIVATIVE, 'ref': (f, m) == build_cases.REF}
-              for f, m, gb, role in build_cases.page_models(rows)]
+              for f, m, gb, role in build_cases.MODELS]
     planned = {}
     for r in plan:
         planned.setdefault(r['step'], set()).add(f'{r["family"]} {dm(r["family"], r["model"])}')
     env = {'id': env_id, 'label': envs.label(cfg), 'runs': [machine(d) for d in runs], 'models': models,
-           'planned_models': {k: sorted(v) for k, v in planned.items()},
            'planned_cases': {k: sum(1 for r in plan if r['step'] == k) for k in planned},
            'planned_per_model': {k: {m: sum(1 for r in plan if r['step'] == k and f'{r["family"]} {dm(r["family"], r["model"])}' == m) for m in v}
                                  for k, v in planned.items()},

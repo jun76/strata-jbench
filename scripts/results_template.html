@@ -809,7 +809,6 @@ function scatter(k, pts, o) {
 
 // ------------------------------------------------------------------ sections
 function rowsFor(list) { return list.map(m => ({ key: m.key, label: m.key, m })); }
-const planned = (step, key) => (E.planned_models[step] || []).includes(key);
 
 function tiles() {
   const box = $('tiles'); box.replaceChildren();
@@ -1174,7 +1173,7 @@ function sThink() {
     }
     const games = (byModel[r.key] || []).filter(c => c.step === '3' && c.effort === 'high' && CODING(c.fixture) && done(c));
     const game = games[0];
-    return { ...r, vals, toks, game: game ? game.total_ms / 1000 : null, drawn: game && game.drawn, note: notes.join(' / '), missing: planned('3', r.key) ? null : L('対象外（計画で除外）', 'not in the plan', '不在计划内') };
+    return { ...r, vals, toks, game: game ? game.total_ms / 1000 : null, drawn: game && game.drawn, note: notes.join(' / '), missing: null };
   });
   dots(k, data, KEYS, { fmt: fmtS, tick: fmtTick, x: L('回答が終わるまでの時間（s）', 'time until the answer is complete (s)', '回答完成所需时间（s）'), y: MODEL_AXIS(), emptyMsg: NO_RESULT('3'), aria: L('thinking の有無と回答時間', 'thinking and answer time', '有无 thinking 与回答时间') });
   const tok = v => v == null ? '–' : Math.round(v).toLocaleString();
@@ -1366,7 +1365,7 @@ function sCompare() {
     .filter(key => state.family === 'all' || key.split(' ')[0] === state.family);
   const rows = get => order.map(key => { const vals = {};
     for (const id of have) vals[id] = get(key, id);
-    return { key, label: key, vals, note: null, missing: null }; }).filter(r => have.some(id => r.vals[id] != null));
+    return { key, label: key, vals, note: null, missing: null }; });
   const kd = card('c-cmp-decode', L('decode 速度 × 環境', 'decode speed × environment', 'decode 速度 × 环境'),
     L(`${decodeLabel(state.content)}、${state.temp === 'all' ? 'temperature 3水準' : 'temperature ' + state.temp}。tok/s、右ほど速い。`,
       `${decodeLabel(state.content)}, ${state.temp === 'all' ? 'all 3 temperatures' : 'temperature ' + state.temp}. tok/s, further right is faster.`,

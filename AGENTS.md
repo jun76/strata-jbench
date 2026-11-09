@@ -175,7 +175,9 @@ the user's call); the pinned version goes into `tools/harness/` beside it. Nothi
    in the lists or the pages (the history goes in docs/SCOUTING.md and the commit message).
    A model is another matter: one left out of env.json `models` (its files replaced, a disk too small) keeps its
    results on the pages and in the lists, for every case the plan builder still makes the same way
-   (`build_cases.measured_rows`); only the plan and the estimate follow `models`.
+   (`build_cases.measured_rows`); only the plan and the estimate follow `models`. The charts list every model of
+   `build_cases.py` in every environment, the same set everywhere: which models an environment measures is the
+   measurer's choice (a disk too small for some), so a model with no value reads "not measured".
 
 ### 2.2 Settings and checks before starting (do not start until these pass)
 1. **Go through the settings with the user.** Run `python3 -I scripts/bench.py config` and show the user every
