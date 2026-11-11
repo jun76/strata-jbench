@@ -176,16 +176,17 @@ TR = {
     '完了時間, ターン数, tool call, ハーネスの前置き token, cached の割合, 成果物が動くか': (
         'time to finish, turns, tool calls, the harness\'s preamble tokens, cached share, whether the result runs',
         '完成时间、轮数、tool call、harness 前置部分的 token、cached 占比、成果是否能运行'),
-    'thinking on: reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true、reasoning_budget_tokens 16,384'
-    '（明示。コーディングは cap の半分: 3/4 だと回答のコードが途中で切れたため）。ハーネスに one shot で渡す（形式の指示なし）。'
+    'thinking on: reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true、reasoning_budget_tokens 32,768'
+    '（明示。ハーネス部門は完走が前提: 思考を 32K に固定し、cap は窓いっぱい（各リクエストで文脈の残りに縮む）、止めるのは時間制限だけ）。ハーネスに one shot で渡す（形式の指示なし）。'
     '成果物は作業ディレクトリに書かれた HTML、なければ回答のコードブロックから artifact/ に展開。'
     'sampling・thinking・seed・出力 cap は記録プロキシがリクエストごとに入れる': (
-        'thinking on: reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true, reasoning_budget_tokens 16,384 '
-        '(explicit; half the cap for the coding task, since at 3/4 the answer\'s code was cut off). Handed to the harness in one shot '
+        'thinking on: reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true, reasoning_budget_tokens 32,768 '
+        '(explicit; a harness case is meant to finish: thinking fixed at 32K, the cap the whole window (shortened on every '
+        'request to what the context has left), only the time limit stops it). Handed to the harness in one shot '
         '(no format instructions). The result is the HTML written into the work folder, else the answer\'s code blocks, unpacked '
         'into artifact/. Sampling, thinking, seed and output cap are put into every request by the recording proxy',
-        'thinking on：reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true，reasoning_budget_tokens 16,384'
-        '（显式指定；编程任务取 cap 的一半，因为 3/4 时回答中的代码会被截断）。一次性交给 harness（不附加格式要求）。'
+        'thinking on：reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true，reasoning_budget_tokens 32,768'
+        '（显式指定；harness 部门以跑完为前提：思考固定为 32K，cap 为整个窗口（每个请求缩短为上下文剩余的部分），只由时间限制停止）。一次性交给 harness（不附加格式要求）。'
         '成果取写入工作目录的 HTML，否则取回答的代码块，展开到 artifact/。sampling、thinking、seed、输出 cap 由记录代理写入每个请求'),
 }
 

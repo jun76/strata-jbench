@@ -152,6 +152,10 @@ GAME_PROMPT = ('Create a 3D voxel art scene: "A sailing ship calling at a harbor
 # (bench_runner.CODING_THINKING): every model thinks all of its budget on this task, and the page has the other 63K.
 CODING_CAP = 128 * K - 1024
 CODING_THINKING = 65536
+# The harness divisions' game: thinking fixed at 32K (bench_runner.HARNESS_THINKING) and the same whole-window cap,
+# which the engine shortens on every request to what the prompt leaves of the context (fit_max_tokens): a harness case
+# is meant to finish, and only the time limit stops one that loops.
+HARNESS_THINKING = 32768
 GAME_NOTE = ('成果物は artifact/ に展開（response.md、files/、manifest.json、静的 HTML なら screenshot.png）。'
              '単一の HTML ファイルか、形式（単体 HTML / 要サーバー / README の有無）は manifest に記録')
 HARNESS_FIXTURE = 'game-minecraft'
@@ -208,13 +212,13 @@ def thinking_budget(cap):
 
 
 def effort_note(effort, cap, coding=None):
-    """coding: 'page' (plain's coding task: 64K) or 'game' (the harness divisions': half the cap), as
+    """coding: 'page' (plain's coding task: 64K) or 'game' (the harness divisions': 32K), as
     bench_runner.thinking_budget sends."""
     if effort == 'none':
         return 'thinking off: reasoning_effort "none" + chat_template_kwargs.enable_thinking false'
-    budget = {'page': min(CODING_THINKING, cap), 'game': cap // 2}.get(coding, thinking_budget(cap))
+    budget = {'page': min(CODING_THINKING, cap), 'game': min(HARNESS_THINKING, cap)}.get(coding, thinking_budget(cap))
     why = {'page': '。コーディングは思考を 64K に固定し、cap はコンテキスト 128K の枠いっぱい: どのモデルも思考の予算を使い切るので、残りの約 63K をページに充てる）',
-           'game': '。コーディングは cap の半分: 3/4 だと回答のコードが途中で切れたため）'}.get(coding, '）')
+           'game': '。ハーネス部門は完走が前提: 思考を 32K に固定し、cap は窓いっぱい（各リクエストで文脈の残りに縮む）、止めるのは時間制限だけ）'}.get(coding, '）')
     return (f'thinking on: reasoning_effort "xhigh" + chat_template_kwargs.enable_thinking true、'
             f'reasoning_budget_tokens {budget:,}（明示' + why)
 
@@ -397,10 +401,10 @@ def harness_build(division):
             continue
         rows.append(base('G', 'G', fam, model, _key=f'{HARNESS_FIXTURE}-high', fixture=HARNESS_FIXTURE,
                          content=f'「{HARNESS_PROMPT}」（ハーネス越しの実用的なコーディング）', input_tokens='短文',
-                         output_cap=32768, effort='high', temperature=1.0, timeout_s=3600, artifact=True,
+                         output_cap=CODING_CAP, effort='high', temperature=1.0, timeout_s=3600, artifact=True,
                          harness=division['harness'],
                          measures='完了時間, ターン数, tool call, ハーネスの前置き token, cached の割合, 成果物が動くか',
-                         note=effort_note('high', 32768, coding='game') + '。' + HARNESS_NOTE))
+                         note=effort_note('high', CODING_CAP, coding='game') + '。' + HARNESS_NOTE))
     return rows
 
 
@@ -806,19 +810,19 @@ GAME_LAYOUT = {
 HARNESS_COMMON = {
     'ja': '''- ケースはコーディング（マイクラ、「マイクラ風3D箱庭ゲーム作って」）だけ。形式の指示を足さずに、ハーネスに one shot で渡す（非対話、プロンプトは stdin かファイル）。各3回（seed 1 / 2 / 3）。
 - エンジンの起動はプレーンの基準と同じ: コンテキスト 128K、`--vision off --parallel 1 --tune skip --drafting mtp`。
-- ハーネスはエンジンに直接つながず、ランナーの記録プロキシを通す。プロキシは各リクエストの sampling（temperature 1.0、top_p 0.95 / top_k 20 / min_p 0 / presence_penalty 0 / repetition_penalty 1.0）、thinking（xhigh、思考の上限 16,384）、seed、出力 cap 32,768 をケースの値にそろえ、ハーネスが送った元の値は記録する。ハーネスの差だけが残るようにするため（送らない項目は Strata が共有の Chat 設定や model card で埋めるので、ハーネスごとに条件がずれる）。
+- ハーネスはエンジンに直接つながず、ランナーの記録プロキシを通す。プロキシは各リクエストの sampling（temperature 1.0、top_p 0.95 / top_k 20 / min_p 0 / presence_penalty 0 / repetition_penalty 1.0）、thinking（xhigh、思考の上限 32,768）、seed、出力 cap 130,048（窓いっぱい。エンジンが各リクエストで文脈の残りに縮める）をケースの値にそろえ、ハーネスが送った元の値は記録する。ハーネスの差だけが残るようにするため（送らない項目は Strata が共有の Chat 設定や model card で埋めるので、ハーネスごとに条件がずれる）。
 - ハーネスの設定は、版を固定し、ユーザーの設定とは分けたディレクトリに作る。窓 131,072 / 出力上限 32,768。自動の compaction と、タイトル生成などの副次リクエストは切る（切れないものは記録して本筋と分けて数える）。tool は作業ディレクトリの中では承認なしで実行し、閉じ込めは外側（bubblewrap）で行う。
 - 作業ディレクトリはケースと seed ごとの使い捨て。測るのは完了までの壁時計、その内訳（ハーネスの起動、ターン数、tool call、ハーネスの前置きの token、prefix cache の再利用）と成果物。
 ''',
     'en': '''- The only case is the coding task (Minecraft, “マイクラ風3D箱庭ゲーム作って”), handed to the harness in one shot with no format instructions (non-interactive, the prompt on stdin or in a file). 3 runs each (seed 1 / 2 / 3).
 - The engine is launched as for plain's baseline: context 128K, `--vision off --parallel 1 --tune skip --drafting mtp`.
-- The harness does not talk to the engine directly but through the runner's recording proxy. The proxy sets each request's sampling (temperature 1.0, top_p 0.95 / top_k 20 / min_p 0 / presence_penalty 0 / repetition_penalty 1.0), thinking (xhigh, a thinking budget of 16,384), seed and output cap 32,768 to the case's values and records what the harness sent, so that only the harness differs (what a harness leaves out, Strata fills in from the shared Chat settings or the model card, which would differ per harness).
+- The harness does not talk to the engine directly but through the runner's recording proxy. The proxy sets each request's sampling (temperature 1.0, top_p 0.95 / top_k 20 / min_p 0 / presence_penalty 0 / repetition_penalty 1.0), thinking (xhigh, a thinking budget of 32,768), seed and output cap 130,048 (the whole window, which the engine shortens on every request to what the context has left) to the case's values and records what the harness sent, so that only the harness differs (what a harness leaves out, Strata fills in from the shared Chat settings or the model card, which would differ per harness).
 - Each harness is pinned to a version and configured in a folder of its own, apart from the user's settings: window 131,072 / output limit 32,768. Automatic compaction and side requests such as title generation are off (any that cannot be turned off are recorded and counted apart). Tools run without approval inside the work folder, confined from outside (bubblewrap).
 - A fresh work folder per case and seed. Measured: the wall-clock time to the end, what it is made of (the harness's start, turns, tool calls, the tokens of the harness's own preamble, prefix-cache reuse) and the result.
 ''',
     'zh': '''- 用例只有编程任务（Minecraft，“マイクラ風3D箱庭ゲーム作って”），不附加格式要求，一次性交给 harness（非交互，提示经 stdin 或文件传入）。各 3 次（seed 1 / 2 / 3）。
 - 引擎启动与纯模型的基准相同：上下文 128K，`--vision off --parallel 1 --tune skip --drafting mtp`。
-- harness 不直接连接引擎，而是经过 runner 的记录代理。代理把每个请求的 sampling（temperature 1.0，top_p 0.95 / top_k 20 / min_p 0 / presence_penalty 0 / repetition_penalty 1.0）、thinking（xhigh，思考上限 16,384）、seed、输出 cap 32,768 统一为用例的值，并记录 harness 原本发送的值，使差异只来自 harness（harness 不发送的项目由 Strata 用共享的 Chat 设置或 model card 填充，各 harness 的条件会不同）。
+- harness 不直接连接引擎，而是经过 runner 的记录代理。代理把每个请求的 sampling（temperature 1.0，top_p 0.95 / top_k 20 / min_p 0 / presence_penalty 0 / repetition_penalty 1.0）、thinking（xhigh，思考上限 32,768）、seed、输出 cap 130,048（整个窗口，引擎在每个请求中缩短为上下文剩余的部分）统一为用例的值，并记录 harness 原本发送的值，使差异只来自 harness（harness 不发送的项目由 Strata 用共享的 Chat 设置或 model card 填充，各 harness 的条件会不同）。
 - 每个 harness 固定版本，配置放在与用户设置分开的目录中：窗口 131,072 / 输出上限 32,768。关闭自动 compaction 与标题生成等附带请求（无法关闭的另行记录、分开计数）。tool 在工作目录内无需批准即可执行，由外部（bubblewrap）隔离。
 - 每个用例与 seed 使用一次性的工作目录。测量到完成为止的实际时间、其构成（harness 启动、轮数、tool call、harness 自身前置部分的 token、prefix cache 的复用）以及成果物。
 ''',

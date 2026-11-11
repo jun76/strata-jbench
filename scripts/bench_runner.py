@@ -76,17 +76,18 @@ def log(run_dir, msg):
 
 
 CODING_THINKING = 65536
+HARNESS_THINKING = 32768
 
 
 def thinking_budget(cap, fixture_name=''):
     """Strata's answer_room value for this cap, sent explicitly. The coding cases leave the page more room: the harness
-    divisions' Minecraft (game-) half the cap, since with three quarters spent thinking two of three test answers were
-    cut off; plain's coding task (coding-) 64K, with the cap at the whole 128K window: every model thinks all of its
+    divisions' Minecraft (game-) 32K, with the cap at the whole window (the engine shortens it on every request to what
+    the context has left), since a harness case is meant to finish and only the time limit stops it; plain's coding task (coding-) 64K, with the cap at the whole 128K window: every model thinks all of its
     budget on it (at 16K and 32K the pages had more errors the less they thought), and the page has the other 63K."""
     if fixture_name.startswith('coding-'):
         return min(CODING_THINKING, cap)
     if fixture_name.startswith('game-'):
-        return cap // 2
+        return min(HARNESS_THINKING, cap)
     return cap - min(max(512, cap // 4), cap // 2)
 
 

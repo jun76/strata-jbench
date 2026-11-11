@@ -24,7 +24,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 TOOLS = ROOT / 'tools' / 'harness'
 WINDOW = 131072                 # the engine's context (plain's baseline, 128K)
-OUTPUT = 32768                  # the game's output cap: the harness's own limit is set to it too
+OUTPUT = 32768                  # the output the harness plans for (its compaction reserve); the proxy pins the case's cap
 MODEL = 'strata'                # the model id the harnesses send (the engine serves one model whatever the name)
 
 
@@ -67,6 +67,14 @@ def marked(root, pin):
     return m.get('source') == pin.get('source') and m.get('version') == pin.get('version')
 
 
+def venv_home(root):
+    """The Python folder a venv was made from (pyvenv.cfg "home")."""
+    try:
+        return next(l.split('=', 1)[1].strip() for l in (root / 'pyvenv.cfg').read_text().splitlines() if l.startswith('home'))
+    except (OSError, StopIteration):
+        return 'unknown'
+
+
 def find(div):
     """{'ok', 'bin', 'version', 'where', 'reason'} for the division's pinned harness."""
     pin = load_pin(div)
@@ -80,6 +88,10 @@ def find(div):
         return {'ok': False, 'bin': None, 'version': None, 'where': None,
                 'reason': f'not installed (pinned {pin.get("name")} {ver}, extracted into {root.relative_to(ROOT)}/)'}
     mine = root / ('node_modules/.bin' if how == 'npm' else 'bin') / name
+    if how == 'pip' and mine.exists() and not (root / 'bin/python').exists():
+        # the venv's Python is gone: Strata's bundled one goes with its Control folder, which an update removes
+        return {'ok': False, 'bin': None, 'version': None, 'where': None,
+                'reason': f'the venv in {root.relative_to(ROOT)}/ lost its Python ({venv_home(root)}); installing again rebuilds it'}
     if mine.exists():
         if how == 'npm' and npm_version(mine, pin['package']) == ver or how == 'pip' and marked(root, pin):
             return {'ok': True, 'bin': str(mine), 'version': ver, 'where': 'jbench', 'reason': ''}
@@ -148,7 +160,9 @@ def install(div, say=print):
         # a checkout at the pinned commit installed in place (Hermes builds no wheel: "use an editable install")
         repo, commit = pin['source'].removeprefix('git+').rsplit('@', 1)
         src = root / 'src'
-        shutil.rmtree(src, ignore_errors=True)
+        # a fresh venv each time: one made from a Python that is gone (or another minor version) cannot be reused
+        shutil.rmtree(root, ignore_errors=True)
+        root.mkdir(parents=True)
         rc = (run(['git', 'clone', '--quiet', '--filter=blob:none', repo, str(src)])
               or run(['git', '-C', str(src), 'checkout', '--quiet', commit])
               or run([py, '-m', 'venv', str(root)])
@@ -226,7 +240,7 @@ class Harness:
 class Dsh(Harness):
     """DeepSeek Harness, `dsh --profile headless --json -` (the task on stdin; one JSON event per line). Its own home
     (DSH_HOME) gets a home-level patch: the proxy as an OpenAI-compatible provider (thinking through the chat template,
-    as the Strata app configures it), the session title request and the telemetry export off, compaction off. Approvals:
+    as the Strata app configures it), the session title request and the telemetry export off; compaction as dsh ships it. Approvals:
     DSH_PERMISSION_MODE danger-full-access (approval never), inside the sandbox."""
     tested = True
     stdin = True
@@ -246,7 +260,6 @@ class Dsh(Harness):
             {'id': 'agent-default-model', 'config': {'provider': 'jbench', 'model': MODEL, 'reasoningEffort': 'high'}},
             {'id': 'session-title-llm', 'disabled': True},
             {'id': 'session-telemetry-otel', 'disabled': True},
-            {'id': 'compaction-basic', 'disabled': True},
         ]
         # YAML is a superset of JSON: the patch is written as JSON lines in a YAML list
         (home / 'cordis.patch.yml').write_text(''.join(f'- {json.dumps(p, ensure_ascii=False)}\n' for p in patch))
@@ -278,8 +291,8 @@ class Dsh(Harness):
 
 class Pi(Harness):
     """pi, `pi --mode json --no-session --offline <task>` (JSONL events). Its agent folder (PI_CODING_AGENT_DIR) gets
-    models.json and settings.json as `strata connect pi` writes them, with the window and output limit of this bench and
-    compaction off. pi has no approvals."""
+    models.json and settings.json as `strata connect pi` writes them, with the window and output limit of this bench;
+    compaction as pi ships it. pi has no approvals."""
     tested = True
 
     def prepare(self, home, base_url):
@@ -290,7 +303,7 @@ class Pi(Harness):
             'models': [{'id': MODEL, 'name': 'Strata (jbench)', 'reasoning': True, 'input': ['text'], 'contextWindow': WINDOW,
                         'maxTokens': OUTPUT, 'cost': {'input': 0, 'output': 0, 'cacheRead': 0, 'cacheWrite': 0}}]}}}, indent=2))
         (home / 'settings.json').write_text(json.dumps({'defaultProvider': 'jbench', 'defaultModel': MODEL,
-                                                        'defaultThinkingLevel': 'high', 'compaction': {'enabled': False},
+                                                        'defaultThinkingLevel': 'high',
                                                         'enableInstallTelemetry': False, 'cacheWarming': 'off'}, indent=2))
         return {**self.env(home), 'PI_CODING_AGENT_DIR': str(home), 'PI_SKIP_VERSION_CHECK': '1', 'PI_TELEMETRY': '0',
                 'PI_OFFLINE': '1'}
@@ -329,7 +342,7 @@ class OpenCode(Harness):
     """opencode, `opencode run --format json --auto --pure --title jbench <task>` with stdin closed (it waits for typing
     otherwise): --auto approves the tools (inside the sandbox), --pure leaves external plug-ins out and --title names the
     session, which saves the title request it would send first. Its config (XDG_CONFIG_HOME/opencode/opencode.json) is
-    `strata connect opencode`'s with this bench's limits, compaction off, sharing and updates off; the environment turns
+    `strata connect opencode`'s with this bench's limits, compaction as opencode ships it, sharing and updates off; the environment turns
     off the model catalog fetch, LSP downloads and the configs and skills it would read from elsewhere."""
     tested = True
 
@@ -338,14 +351,14 @@ class OpenCode(Harness):
         cfg.mkdir(parents=True, exist_ok=True)
         (cfg / 'opencode.json').write_text(json.dumps({
             '$schema': 'https://opencode.ai/config.json', 'model': f'jbench/{MODEL}', 'small_model': f'jbench/{MODEL}',
-            'autoupdate': False, 'share': 'disabled', 'compaction': {'auto': False},
+            'autoupdate': False, 'share': 'disabled',
             'provider': {'jbench': {'npm': '@ai-sdk/openai-compatible', 'name': 'Strata (jbench proxy)',
                                     'options': {'baseURL': base_url, 'apiKey': 'strata-local'},
                                     'models': {MODEL: {'name': 'Strata (jbench)', 'tool_call': True, 'reasoning': True,
                                                        'limit': {'context': WINDOW, 'input': WINDOW - OUTPUT, 'output': OUTPUT}}}}}},
             indent=2))
         return {**self.env(home), 'OPENCODE_DISABLE_AUTOUPDATE': '1', 'OPENCODE_DISABLE_SHARE': '1',
-                'OPENCODE_DISABLE_MODELS_FETCH': '1', 'OPENCODE_DISABLE_AUTOCOMPACT': '1', 'OPENCODE_DISABLE_LSP_DOWNLOAD': '1',
+                'OPENCODE_DISABLE_MODELS_FETCH': '1', 'OPENCODE_DISABLE_LSP_DOWNLOAD': '1',
                 'OPENCODE_DISABLE_CLAUDE_CODE': '1', 'OPENCODE_DISABLE_PROJECT_CONFIG': '1',
                 'OPENCODE_DISABLE_EXTERNAL_SKILLS': '1', 'OPENCODE_DISABLE_DEFAULT_PLUGINS': '1'}
 
@@ -374,14 +387,15 @@ class OpenCode(Harness):
 
 class Hermes(Harness):
     """Hermes Agent, `hermes chat --oneshot --yolo --format stream-json --query-file <task file>`. Its home (HERMES_HOME)
-    gets config.yaml as `strata connect hermes` writes it, with compression and title generation off."""
+    gets config.yaml as `strata connect hermes` writes it (compression on, its summariser on the same model), with title
+    generation off."""
     tested = True
 
     def prepare(self, home, base_url):
         home.mkdir(parents=True, exist_ok=True)
         (home / 'config.yaml').write_text(
             f'model:\n  default: {MODEL}\n  provider: lmstudio\n  base_url: {base_url}\n  context_length: {WINDOW}\n'
-            'compression:\n  enabled: false\nauxiliary:\n  title_generation:\n    enabled: false\n'
+            'compression:\n  enabled: true\nauxiliary:\n  title_generation:\n    enabled: false\n'
             '  compression:\n    context_length: 65536\n')
         return {**self.env(home), 'HERMES_HOME': str(home), 'OPENAI_API_KEY': 'strata-local'}
 
