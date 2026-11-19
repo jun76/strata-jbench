@@ -135,11 +135,12 @@ def machine(run):
     limit = re.search(r'Current Power Limit\s+:\s+([\d.]+) W', smi)
     gpu = re.search(r'Product Name\s+:\s+(.+)', smi)
     cpu = re.search(r'^(?:Model name|モデル名):\s+(.+)$', m.get('lscpu', ''), re.M)   # lscpu follows the locale
+    model_file = 'sync-models.json' if (run / 'sync-models.json').exists() else 'models.json'
     strata = re.sub(r';\s*python .*\)', ')', m.get('strata') or '')                 # without the install path
     return {'run_id': run.name, 'power_limit_w': float(limit.group(1)) if limit else None,
             'gpu': gpu.group(1).strip() if gpu else None, 'cpu': cpu.group(1).strip() if cpu else None,
             'strata': strata, 'created_at': m.get('created_at'),
-            'models_json': str((run / 'models.json').relative_to(ROOT)) if (run / 'models.json').exists() else None}
+            'models_json': str((run / model_file).relative_to(ROOT)) if (run / model_file).exists() else None}
 
 
 def spread(per_request, key):
@@ -313,7 +314,7 @@ def collect_env(cfg, run_id, published_only, rel=''):
     # too small for some), not a property of the environment, so a model it has no value for reads "not measured".
     models = [{'key': f'{f} {dm(f, m)}', 'family': f, 'model': dm(f, m), 'gb': gb, 'role': role,
                'derivative': (f, m) in build_cases.DERIVATIVE, 'ref': (f, m) == build_cases.REF}
-              for f, m, gb, role in build_cases.MODELS]
+              for f, m, gb, role in build_cases.model_catalog()]
     planned = {}
     for r in plan:
         planned.setdefault(r['step'], set()).add(f'{r["family"]} {dm(r["family"], r["model"])}')
@@ -339,6 +340,45 @@ def collect(run_id, published_only=False, rel=''):
         out['envs'].append(env)
         out['cases'] += [{'division': out['division'], **c} for c in cases]
     return out
+
+
+def sync_page(page):
+    titles = ('Sync-Strata ベンチマーク結果', 'Sync-Strata benchmark results', 'Sync-Strata 基准测试结果')
+    heading = i18n.L(*titles)
+    page = re.sub(r'<title[^>]*>[^<]*</title>',
+                  '<title ' + ' '.join(f'data-{lang}="{html.escape(title)}"'
+                                       for lang, title in zip(('ja', 'en', 'zh'), titles)) + f'>{titles[0]}</title>', page)
+    page = re.sub(r'<h1>.*?</h1>', f'<h1>{heading}</h1>', page, count=1)
+    intro = i18n.L(
+        'Sync-Strata で Sync-XS・Sync-S・Sync-M の Tier 1 を R10（tail skip 無効）で計測した結果。'
+        '条件と記録は<a href="{{cases}}">ケース一覧</a>、全数値は <a href="{{csv}}">summary.csv</a>。',
+        'Tier 1 results for Sync-XS, Sync-S and Sync-M on Sync-Strata at R10 (tail skip off). '
+        'See the <a href="{{cases}}">case lists</a> and <a href="{{csv}}">summary.csv</a>.',
+        'Sync-XS、Sync-S、Sync-M 在 Sync-Strata 上以 R10（关闭 tail skip）测得的 Tier 1 结果。'
+        '参见<a href="{{cases}}">用例一览</a>和 <a href="{{csv}}">summary.csv</a>。', escape=False)
+    method = i18n.L(
+        'Sync-Strata の API を直接呼び、各ケースを seed 1・2・3 で測る。値は中央値、細い線は3回の範囲。',
+        'Each case calls the Sync-Strata API directly with seeds 1, 2 and 3. Values are medians; thin lines show the range.',
+        '直接调用 Sync-Strata API，每个用例使用 seed 1、2、3。数值为中位数，细线为范围。')
+    conditions = i18n.L(
+        'R10、コンテキスト 128K、KV k8v4、thinking off、MTP。短文 decode は5種類の指示を温度 0 / 0.7 / 1.0 で測る。'
+        'prefill は 4K / 32K / 128K の固定レコード列を使う。',
+        'R10, 128K context, k8v4 KV, thinking off and MTP. Decode uses five short prompts at temperatures 0 / 0.7 / 1.0. '
+        'Prefill uses fixed 4K / 32K / 128K record lists.',
+        'R10、128K 上下文、k8v4 KV、关闭 thinking、启用 MTP。decode 使用五种短提示和温度 0 / 0.7 / 1.0。'
+        'prefill 使用 4K / 32K / 128K 的固定记录列。')
+    speed = i18n.L('全モデルで R10、128K、KV k8v4、MTP。各ケースを seed 1・2・3 で計測。',
+                   'All models use R10, 128K context, k8v4 KV and MTP. Each case runs with seeds 1, 2 and 3.',
+                   '所有模型均使用 R10、128K 上下文、k8v4 KV 和 MTP。每个用例使用 seed 1、2、3。')
+    long_prompt = i18n.L('入力長 4K・32K・128K ごとの TTFT、prefill、続く decode を比べる。',
+                         'Compare TTFT, prefill and subsequent decode at 4K, 32K and 128K input lengths.',
+                         '比较输入长度为 4K、32K 和 128K 时的 TTFT、prefill 和后续 decode。')
+    for id_, copy in [('results-intro', intro), ('tier1-lead', speed), ('tier1-long-lead', long_prompt)]:
+        page = re.sub(fr'(<p [^>]*id="{id_}">).*?(</p>)', lambda m: m[1] + copy + m[2], page)
+    for id_, copy in [('overview-method', method), ('tier1-conditions', conditions)]:
+        page = re.sub(fr'(<dt id="{id_}">.*?</dt><dd>).*?(</dd>)', lambda m: m[1] + copy + m[2], page)
+    page = page.replace('<div id="c-drafter"></div>', '')
+    return re.sub(r'(<button [^>]*data-tab="(?:t2|t3|t4a|t4bc|t4d|t5)")', r'\1 disabled', page)
 
 
 def main():
@@ -385,6 +425,8 @@ def main():
     cases_link = base + 'cases/README.md' if snap else os.path.relpath(envs.PREVIEW / 'cases/README.md', page_path.parent)
     data['published'] = bool(snap)
     page = Path(__file__).with_name('results_template.html').read_text()
+    if data['division'] == 'plain-sync':
+        page = sync_page(page)
     blob = json.dumps(data, ensure_ascii=False).replace('</', '<\\/')
     page = page.replace('{{data}}', blob).replace('{{generated}}', html.escape(data['generated']))
     boxes = ''.join(f'<div class="envwrap" data-env="{html.escape(e["id"])}">'

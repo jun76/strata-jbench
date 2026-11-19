@@ -87,7 +87,7 @@ def cpu_power_limits():
     return out or None
 
 
-def env_summary(lscpu_c, smi, memory, gpu_index=0):
+def env_summary(lscpu_c, smi, memory, gpu_index=0, models_dir=MODELS_DIR):
     os_release = dict(re.findall(r'^(\w+)="?([^"\n]*)"?$', read('/etc/os-release'), re.M))
     mem_kb = int(re.search(r'MemTotal:\s+(\d+)', read('/proc/meminfo')).group(1))
     # one card: the one the environment measures on (env.json "gpu_index"); a PC with two cards lists both otherwise
@@ -95,7 +95,7 @@ def env_summary(lscpu_c, smi, memory, gpu_index=0):
                  '--format=csv,noheader,nounits']).strip().split(', ')
     threads = int(field(lscpu_c, 'CPU(s)') or 0)
     cores = int(field(lscpu_c, 'Core(s) per socket') or 0) * int(field(lscpu_c, 'Socket(s)') or 1)
-    drive, bus = drive_of(MODELS_DIR)
+    drive, bus = drive_of(models_dir)
     limit = re.search(r'Current Power Limit\s+:\s+([\d.]+) W', smi)
     default = re.search(r'Default Power Limit\s+:\s+([\d.]+) W', smi)
     return {
@@ -119,13 +119,19 @@ def env_summary(lscpu_c, smi, memory, gpu_index=0):
     }
 
 
-def collect(p_cores=None, memory=None, gpu_index=0):
+def collect(p_cores=None, memory=None, gpu_index=0, sync=False):
     """memory: the environment's hand-written RAM details (envs/<id>/env.json), which need root to read. gpu_index: the card
     the environment measures on (env.json "gpu_index")."""
     lscpu = run(['lscpu'])
     smi = run(['nvidia-smi', '-q', '-i', str(gpu_index)])[:20000]
-    strata = run(['strata', '--version']).strip()
-    env = env_summary(run(['lscpu'], {'LC_ALL': 'C'}), smi, memory, gpu_index)
+    if sync:
+        import sync_engine
+        strata = 'Sync-Strata ' + sync_engine.installation()['release']
+        models_dir = sync_engine.models_dir()
+    else:
+        strata = run(['strata', '--version']).strip()
+        models_dir = MODELS_DIR
+    env = env_summary(run(['lscpu'], {'LC_ALL': 'C'}), smi, memory, gpu_index, models_dir)
     env['strata'] = re.sub(r';\s*python .*\)', ')', strata)   # without the install path
     out = {'lscpu': lscpu, 'nvidia_smi': smi, 'strata': strata, 'uname': ' '.join(os.uname()), 'env': env}
     if p_cores is not None:
@@ -201,6 +207,12 @@ def how_html(L=None):
     """How the measurements are taken (the desktop app is not used), in all three languages (L: i18n.one(lang) for one)."""
     if L is None:
         from i18n import L
+    import envs
+    import sync_engine
+    if sync_engine.enabled(envs.division()):
+        return L('Sync-Strata の API を直接呼ぶ。Tier 1 を tail skip R10、128K、KV k8v4 で計測する。',
+                 'Tier 1 calls the Sync-Strata API directly, at tail skip R10, 128K context and k8v4 KV.',
+                 'Tier 1 直接调用 Sync-Strata API，使用 tail skip R10、128K 上下文和 k8v4 KV。')
     return L('Strata のデスクトップアプリは使っていない。CLI の <code>strata launch --no-tui</code> でエンジンを専用ポート（18600）に起動し、'
             'OpenAI 互換の HTTP API（<code>POST /v1/chat/completions</code>、ストリーミング）を <code>scripts/bench_runner.py</code> から直接呼んで測る。'
             'Tier 2 だけは Strata 同梱のベンチ <code>strata bench run --suite standard-v1</code> を同じエンジンに向けて実行する。',
@@ -265,7 +277,7 @@ def env_rows(env, run_id, cfg, L):
         (L('マザーボード', 'Motherboard', '主板'), e(board)),
         (L('モデルの置き場所', 'Model storage', '模型存放'), drive_text(env, e, L)),
         ('OS', f'{e(env.get("os"))} (Linux {e(env.get("kernel"))})'),
-        ('Strata', e(env.get('strata'))),
+        (L('推論エンジン', 'Inference engine', '推理引擎'), e(env.get('strata'))),
     ]
     src = (L(f'RUN_ID {run_id} の記録（machine.json）', f'as recorded for RUN_ID {run_id} (machine.json)', f'RUN_ID {run_id} 的记录（machine.json）')
            if run_id else L('まだ計測の記録が無いので、env.json とこの PC の現在の構成から', 'no run recorded yet: from env.json and this PC now',

@@ -31,6 +31,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 import config  # noqa: E402
 import envs  # noqa: E402
+import sync_engine  # noqa: E402
 
 PY = [sys.executable, '-I']
 STATUS = ROOT / 'run-status'
@@ -145,8 +146,11 @@ def cmd_start(a):
     cur = load(CURRENT)
     if cur.get('run_dir') and supervisor_pid(ROOT / cur['run_dir']):
         raise SystemExit(f'another run is running: {cur["run_dir"]} (scripts/bench.py stop first)')
+    using_sync = sync_engine.enabled(div)
+    if using_sync and cfg['fetch']:
+        raise SystemExit('plain-sync uses the installed Sync models; set fetch=false')
     fetch = ['--no-fetch'] if not cfg['fetch'] else []
-    if subprocess.run(PY + ['scripts/setup_acquire.py'] + fetch, cwd=ROOT).returncode != 0:
+    if not using_sync and subprocess.run(PY + ['scripts/setup_acquire.py'] + fetch, cwd=ROOT).returncode != 0:
         return 1
     plan, rows, warn = chosen(cfg, env_id)
     for w in warn:
@@ -218,7 +222,12 @@ def cmd_stop(a):
                 pass
     if pid and alive(pid):
         os.kill(pid, signal.SIGKILL)
-    subprocess.run(['strata', 'launch', '--stop'], capture_output=True, cwd='/tmp')
+    if sync_engine.enabled(cur['division']):
+        stopped = sync_engine.stop(run_dir)
+        if stopped and stopped.returncode:
+            raise SystemExit(f'Sync engine could not be stopped: {stopped.stderr}')
+    else:
+        subprocess.run(['strata', 'launch', '--stop'], capture_output=True, cwd='/tmp')
     q = run_dir / 'queue.log'
     last = q.read_text(errors='replace').strip().splitlines()[-1:] if q.exists() else []
     if last and not any(w in last[0] for w in ('queue stopped', 'queue finished')):

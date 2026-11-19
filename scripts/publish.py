@@ -39,7 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import envs  # noqa: E402
 
 ROOT = envs.ROOT
-KEEP_LOCAL = {'raw'}                                     # folder names, anywhere in the run
+KEEP_LOCAL = {'raw', 'sync-home'}                                     # folder names, anywhere in the run
 KEEP_LOCAL_FILES = {'stats/snapshots.jsonl.gz', 'stats/last.json', 'queue.pid', 'supervisor.json', 'supervise.err'}
 
 
@@ -77,10 +77,11 @@ def size(paths):
 
 # README.md (Japanese), README.en.md and README.zh.md each carry the list; a run's line in each is NOTE.md, NOTE.en.md,
 # NOTE.zh.md (the Japanese one where a translation is missing)
+README_DIVISION = 'plain-sync'
 READMES = {'ja': ROOT / 'README.md', 'en': ROOT / 'README.en.md', 'zh': ROOT / 'README.zh.md'}
-HEAD = {'ja': ['計測完了', '部門', '環境', 'RUN_ID', 'Tier', 'ケース（done / 全体）', '内容', '見る'],
-        'en': ['Finished', 'Division', 'Environment', 'RUN_ID', 'Tier', 'Cases (done / all)', 'Content', 'See'],
-        'zh': ['测量完成', '部门', '环境', 'RUN_ID', 'Tier', '用例（done / 全部）', '内容', '查看']}
+HEAD = {'ja': ['計測完了', '環境', 'RUN_ID', 'Tier', 'ケース（done / 全体）', '内容', '見る'],
+        'en': ['Finished', 'Environment', 'RUN_ID', 'Tier', 'Cases (done / all)', 'Content', 'See'],
+        'zh': ['测量完成', '环境', 'RUN_ID', 'Tier', '用例（done / 全部）', '内容', '查看']}
 LINKS = {'ja': ('グラフ', 'ケース一覧', 'エビデンス'), 'en': ('Charts', 'Cases', 'Evidence'), 'zh': ('图表', '用例一览', '证据')}
 # One emoji per link keeps the narrow column readable; the name is the link's title (shown on hover)
 ICONS = ('📈', '📋', '📁')
@@ -97,16 +98,16 @@ def run_rows():
     """One row per published run, the last to finish first: when it finished, its division and environment, its Tiers and cases,
     its note."""
     rows = []
-    for d in sorted(envs.PUBLISHED.glob('*/*/*/cases')):
+    for d in sorted((envs.PUBLISHED / README_DIVISION).glob('*/*/cases')):
         run, env_id, div = d.parent, d.parent.parent.name, d.parents[2].name
-        label = envs.load(env_id, published_only=True).get('label', env_id)
+        label = json.loads((run / 'env.json').read_text()).get('label', env_id)
         steps = {c.name.split('-', 1)[0][1:] for c in d.iterdir() if c.is_dir()}
         done = sum(json.loads(s.read_text()).get('status') == 'done' for s in d.glob('*/summary.json'))
         total = len(list(d.glob('*/summary.json')))
         end = envs.finished(run)   # the last finish, to the second
         notes = {lang: (run / name).read_text().strip() for lang, name in (('ja', 'NOTE.md'), ('en', 'NOTE.en.md'), ('zh', 'NOTE.zh.md'))
                  if (run / name).exists()}
-        rows.append({'div': div, 'div_label': envs.load_division(div)['label'], 'env': env_id, 'label': label, 'run': run.name, 'finished': end, 'date': end[:16].replace('T', ' ') if end else '?', 'notes': notes,
+        rows.append({'div': div, 'env': env_id, 'label': label, 'run': run.name, 'finished': end, 'date': end[:16].replace('T', ' ') if end else '?', 'notes': notes,
                      'tiers': ', '.join(t for t in TIER_ORDER if t in steps), 'cases': f'{done} / {total}'})
     return sorted(rows, key=lambda r: (datetime.fromisoformat(r['finished']).timestamp() if r['finished'] else 0, r['run']), reverse=True)
 
@@ -114,7 +115,7 @@ def run_rows():
 def update_readme():
     """Rewrite the list of published runs (between MARK) in each README, from published/."""
     rows = run_rows()
-    repo, pages = envs.github()
+    repo, _ = envs.github()
     for lang, path in READMES.items():
         if not path.exists():
             continue
@@ -126,17 +127,17 @@ def update_readme():
 
         def row(r):
             note = r['notes'].get(lang) or r['notes'].get('ja') or '–'
-            snap = f'snapshots/{r["div"]}/{r["env"]}/{r["run"]}/?env={r["env"]}'
+            snap = f'snapshots/{r["div"]}/{r["env"]}/{r["run"]}/index.html'
             lists = f'cases/{r["div"]}/{r["env"]}/README{SUFFIX[lang]}.md'
             tag = envs.tag(r['env'], r['run'], r['div'])
-            return (f'| {r["date"]} | {r["div_label"][lang]} | {r["label"]} | `{r["run"]}` | '
+            return (f'| {r["date"]} | {r["label"]} | `{r["run"]}` | '
                     f'{r["tiers"]} | {r["cases"]} | {note} | '
-                    f'[{ICONS[0]}]({f"{pages}/{snap}" if pages else snap} "{charts}") '
+                    f'[{ICONS[0]}]({snap} "{charts}") '
                     f'[{ICONS[1]}]({f"{repo}/blob/{tag}/{lists}" if repo else lists} "{cases}") '
                     f'[{ICONS[2]}](published/{r["div"]}/{r["env"]}/{r["run"]}/ "{files}") |')
         lines = table + [row(r) for r in rows[:SHOWN]]
         if not rows:
-            lines.append('| ' + ' | '.join(['–'] * 6 + [NONE[lang], '–']) + ' |')
+            lines.append('| ' + ' | '.join(['–'] * 5 + [NONE[lang], '–']) + ' |')
         if rows[SHOWN:]:
             # blank lines around the table: GitHub renders Markdown inside <details> only when it is set apart
             lines += ['', '<details>', f'<summary>{OLDER[lang].format(n=len(rows) - SHOWN)}</summary>', '',
@@ -160,7 +161,7 @@ def write_pages_index():
 def write_snapshots():
     """The charts as of each published run that has no snapshot yet (scripts/build_results.py --snapshot). A snapshot
     is never rewritten: it shows the run as it was published."""
-    for run in sorted(envs.PUBLISHED.glob('*/*/*/cases'), key=lambda d: envs.finished_ts(d.parent)):
+    for run in sorted((envs.PUBLISHED / README_DIVISION).glob('*/*/cases'), key=lambda d: envs.finished_ts(d.parent)):
         run = run.parent
         div, env_id = run.parents[1].name, run.parent.name
         if (envs.snapshot_dir(env_id, run.name, div) / 'index.html').exists():
@@ -215,7 +216,7 @@ def main():
     stay = [p for p in files if local_only(p.relative_to(src))]
     cases = len(list(src.glob('cases/*/summary.json')))
     print(f'{src.relative_to(ROOT)} -> {dst.relative_to(ROOT)}: {cases} cases, {len(move)} files, {size(move) / 1e6:.1f} MB')
-    print(f'stays in {src.relative_to(ROOT)} (not published): {len(stay)} files, {size(stay) / 1e6:.1f} MB (raw/, machine snapshots)')
+    print(f'stays in {src.relative_to(ROOT)} (not published): {len(stay)} files, {size(stay) / 1e6:.1f} MB (raw/, engine runtime state, machine snapshots)')
     if a.dry_run:
         return
     for p in move:
@@ -232,9 +233,8 @@ def main():
     subprocess.run([sys.executable, '-I', str(ROOT / 'scripts' / 'build_cases.py'), '--published'], check=True, cwd=ROOT)
     write_snapshots()
     update_readme()
-    subprocess.run([sys.executable, '-I', str(ROOT / 'scripts' / 'tuned_configs.py')], check=True, cwd=ROOT)
     tag = envs.tag(a.env, a.run_id)
-    print(f'published. Commit {os.path.relpath(dst, ROOT)}/ with cases/, snapshots/, README*.md, index.html and configs/tuned/, then '
+    print(f'published. Commit {os.path.relpath(dst, ROOT)}/ with cases/, snapshots/, README*.md and index.html, then '
           f'tag that commit: git tag -a {tag} -m "{a.run_id}" (the README links the case lists at this tag; '
           'push with --follow-tags)')
 

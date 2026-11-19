@@ -21,9 +21,8 @@ PARAMS = {
                'The run: results/<division>/<env>/<run_id>/. A new name starts a run, an existing one resumes it '
                '(finished cases are skipped). A name starting with test- is for checks: never in the lists or charts, '
                'never published. When the same case is in two runs, the pages show the run whose name sorts last.'),
-    'division': ('plain', str,
-                 'How the models are driven (divisions/README.md): plain (the engine API directly) or a harness '
-                 'division (dsh, strata, opencode, hermes, pi). Only a division whose status is active can be measured.'),
+    'division': ('plain-sync', str,
+                 'The division to measure. This branch defaults to the Sync-Strata plain division.'),
     'env': (None, str,
             'The environment (envs/<env>/env.json). null: the one this hardware matches; a name must match it too.'),
     'tiers': (None, list,

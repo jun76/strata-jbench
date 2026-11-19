@@ -49,11 +49,13 @@ import envs  # noqa: E402
 import harnesses  # noqa: E402
 import machine_info  # noqa: E402
 import model_files  # noqa: E402
+import sync_engine  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 PROMPTS = ROOT / 'prompts'
 PORT = 18600
 HOST = '127.0.0.1'
+API_MODEL = 'strata'
 SAMPLING = {'top_p': 0.95, 'top_k': 20, 'min_p': 0.0, 'presence_penalty': 0.0, 'repetition_penalty': 1.0}
 AUTHOR_SAMPLING = {'top_p': 0.95, 'top_k': 20, 'min_p': 0.05, 'presence_penalty': 0.0, 'repetition_penalty': 1.0}
 UNEXPECTED_CACHE = 64            # cached prompt tokens above this on a fresh-prompt case: the run is flagged
@@ -137,7 +139,7 @@ def request_body(row, seed, nonce, doc_nonce=None):
     effort = row['effort']
     cap = int(row['output_cap'])
     body = {
-        'model': 'strata', 'stream': True, 'stream_options': {'include_usage': True},
+        'model': API_MODEL, 'stream': True, 'stream_options': {'include_usage': True},
         'messages': [{'role': 'user', 'content': user_text(row, nonce, doc_nonce)}],
         'max_tokens': cap, 'temperature': row['temperature'], 'seed': seed,
         **(AUTHOR_SAMPLING if row['config'] == 'author-protocol' else SAMPLING),
@@ -234,13 +236,16 @@ def stream_chat(body, timeout, raw_path):
 class Telemetry:
     """nvidia-smi once a second, plus the engine's RSS and bytes read from disk."""
 
-    def __init__(self, path):
+    def __init__(self, path, pid=None):
         self.path = path
+        self.pid = pid
         self.samples = []
         self.stop = threading.Event()
         self.thread = threading.Thread(target=self.loop, daemon=True)
 
     def engine_pid(self):
+        if self.pid is not None:
+            return self.pid
         out = subprocess.run(['pgrep', '-f', f'strata --serve'], capture_output=True, text=True).stdout.split()
         return int(out[0]) if out else None
 
@@ -693,8 +698,91 @@ def gpu_used_mib():
     return int(out.split()[0]) if out else None
 
 
+def start_sync_session(row, session_dir, run_dir):
+    global API_MODEL
+    home = sync_engine.home_for(run_dir)
+    args = sync_engine.launch_args(row['model'], row['context'])
+    info = {'backend': 'sync', 'argv': args, 'rc': 1, 'started_at': now()}
+    t0 = time.monotonic()
+    stdout = stderr = ''
+    try:
+        stopped = sync_engine.stop(run_dir)
+        if stopped and stopped.returncode:
+            raise ValueError(f'could not stop the preceding Sync session: {stopped.stderr}')
+        if not sync_engine.port_free() or sync_engine.compute_busy(GPU):
+            raise ValueError('benchmark port in use or GPU already has a compute process')
+        sync_engine.setup(home)
+        proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                                env=sync_engine.child_env(home))
+        try:
+            stdout, stderr = proc.communicate(timeout=LAUNCH_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            stdout, stderr = proc.communicate()
+            info['rc'] = None
+            raise ValueError('Sync launch timed out') from None
+        info['rc'] = proc.returncode
+        if proc.returncode:
+            raise ValueError(f'Sync launcher exited {proc.returncode}: {stderr[-450:]}')
+        result = json.loads(stdout)
+        expected = row['model'].lower()
+        if not result['ok'] or result['pick']['model'] != expected or result['pick']['r'] != 10:
+            raise ValueError('Sync launcher did not start the requested model at R10')
+        owned = sync_engine.read(home / 'run/procs.json')['engine']
+        if owned['port'] != PORT or result['settings']['api_port'] != PORT:
+            raise ValueError('Sync moved away from the benchmark port')
+        started = sync_engine.read(home / 'run/cfg/started.json')
+        cfg = sync_engine.read(Path(started['config']))
+        missing = sync_engine.config_errors(cfg, row['model'], row['context'], GPU)
+        if missing:
+            raise ValueError('Sync settings not applied: ' + ', '.join(missing))
+        (session_dir / 'sync-config.json').write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + '\n')
+        text = Path(started['log']).read_bytes()[started['log_offset']:].decode(errors='replace')
+        info.update(engine_log=started['log'], sync_log_offset=started['log_offset'])
+        if 'draft layer loaded' not in text:
+            info['mtp_missing'] = True
+            raise ValueError('Sync MTP draft layer was not loaded')
+        status, models = get_json('/v1/models')
+        if status != 200 or cfg['model_name'] not in {item['id'] for item in models['data']}:
+            raise ValueError('Sync API did not report the configured model')
+        API_MODEL = cfg['model_name']
+        info.update(api_model=API_MODEL, tail_skip='R10', gpu=GPU, requested_context=row['context'],
+                    requested_model=row['model'], settings_verified=True)
+        pid = sync_engine.worker_pid(owned['pid'])
+        if pid == 0:
+            raise ValueError('Sync worker PID not found under the recorded server PID')
+        if b'STRATA_ROUTE_TAIL_SKIP=0' not in Path(f'/proc/{pid}/environ').read_bytes().split(b'\0'):
+            raise ValueError('Sync worker did not receive STRATA_ROUTE_TAIL_SKIP=0')
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as e:
+        info['error'] = str(e)
+        try:
+            stopped = sync_engine.stop(run_dir)
+            if stopped and stopped.returncode:
+                info['error'] += f'; cleanup failed: {stopped.stderr}'
+        except subprocess.SubprocessError as cleanup:
+            info['error'] += f'; cleanup failed: {cleanup}'
+    (session_dir / 'launch.txt').write_text(shlex.join(args) + '\n\n' + stderr + stdout)
+    info['launch_s'] = round(time.monotonic() - t0, 1)
+    if 'error' in info:
+        (session_dir / 'session.json').write_text(json.dumps(info, indent=2) + '\n')
+        return None, info
+    for name in ('settings', 'config', 'props'):
+        _, data = get_json('/' + name)
+        if name == 'props' and isinstance(data, dict):
+            template = data.pop('chat_template', '')
+            info['chat_template_sha256'] = hashlib.sha256(template.encode()).hexdigest()
+        (session_dir / f'{name}.json').write_text(json.dumps(data, indent=2, ensure_ascii=False) + '\n')
+    tel = Telemetry(session_dir / 'telemetry.csv', pid)
+    tel.thread.start()
+    (session_dir / 'session.json').write_text(json.dumps(info, indent=2) + '\n')
+    return tel, info
+
+
+
 def start_session(row, session_dir, run_dir):
     session_dir.mkdir(parents=True, exist_ok=True)
+    if row['family'] == 'sync':
+        return start_sync_session(row, session_dir, run_dir)
     stop_engine(None)
     used = gpu_used_mib()
     if used and used > 4000:
@@ -765,17 +853,24 @@ def end_session(tel, info, session_dir):
     if tel:
         tel.stop.set()
         tel.thread.join(5)
-    if info.get('engine_log'):
-        text = Path(info['engine_log']).read_text(errors='replace')
-        start = text.rfind('\n', 0, info.get('engine_log_offset', 0)) + 1
-        (session_dir / 'engine.log').write_text(text[start:])
-    stop_engine(session_dir)
+    if info.get('backend') == 'sync':
+        log = Path(info['engine_log']).read_bytes()[info['sync_log_offset']:]
+        (session_dir / 'engine.log').write_bytes(log)
+        stopped = sync_engine.stop(session_dir.parents[2])
+        if stopped and stopped.returncode:
+            raise RuntimeError(f'Sync engine could not be stopped: {stopped.stderr}')
+    else:
+        if info.get('engine_log'):
+            text = Path(info['engine_log']).read_text(errors='replace')
+            start = text.rfind('\n', 0, info.get('engine_log_offset', 0)) + 1
+            (session_dir / 'engine.log').write_text(text[start:])
+        stop_engine(session_dir)
     info['ended_at'] = now()
     (session_dir / 'session.json').write_text(json.dumps(info, ensure_ascii=False, indent=2) + '\n')
 
 
 def warmup(session_dir):
-    body = {'model': 'strata', 'stream': True, 'stream_options': {'include_usage': True}, 'max_tokens': 128,
+    body = {'model': API_MODEL, 'stream': True, 'stream_options': {'include_usage': True}, 'max_tokens': 128,
             'temperature': 0.7, 'seed': 1, 'reasoning_effort': 'none', 'chat_template_kwargs': {'enable_thinking': False},
             'messages': [{'role': 'user', 'content': f'[warmup {time.time_ns()}]\nExplain briefly what a hash table is.'}],
             **SAMPLING}
@@ -1104,15 +1199,19 @@ def main():
     rows = [json.loads(l) for l in (envs.plan_dir(env_id) / 'cases.jsonl').read_text().splitlines()]
     rows = [r for r in rows if r['step'] in steps and (not models or (r['family'], r['model']) in models)
             and (not ids or r['id'] in ids)]
+    using_sync = sync_engine.enabled(div)
     if not (run_dir / 'machine.json').exists():
         (run_dir / 'machine.json').write_text(json.dumps(
-            {**machine_info.collect(P_CORES, cfg.get('memory'), GPU), 'env_id': env_id, 'created_at': now()},
+            {**machine_info.collect(P_CORES, cfg.get('memory'), GPU, sync=using_sync), 'env_id': env_id, 'created_at': now()},
             indent=2, ensure_ascii=False) + '\n')
     # the env.json this start measured with (envs/ is outside Git): published with the run, and the pages read it
     if (envs.ENVS / env_id / 'env.json').exists():
         shutil.copyfile(envs.ENVS / env_id / 'env.json', run_dir / 'env.json')
     log(run_dir, f'start env={env_id} division={div} steps={steps} cases={len(rows)} dry={a.dry_run}')
-    log(run_dir, f'models.json: {model_files.record(run_dir)}')
+    if using_sync:
+        sync_engine.record(run_dir, {r['model'].lower() for r in rows})
+    else:
+        log(run_dir, f'models.json: {model_files.record(run_dir)}')
     if harness:
         # the harness this start drove (published with the run, beside models.json)
         hinfo = {'division': div, 'harness': harness, 'pin': harnesses.load_pin(div),

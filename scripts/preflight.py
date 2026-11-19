@@ -13,6 +13,8 @@ import json
 import os
 import shutil
 import subprocess
+import tempfile
+import time
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 import envs  # noqa: E402
+import sync_engine  # noqa: E402
 import overnight  # noqa: E402  (paths and model completeness of the acquisition phase)
 
 results = []
@@ -86,6 +89,9 @@ def bench_checks(steps, env_id):
                       if r['step'] != '2' and not (ROOT / 'prompts' / f'{r["fixture"]}.json').exists()})
     check('fixtures: every case of the selected steps has its prompt file', not missing, ', '.join(missing))
     models = list(dict.fromkeys((r['family'], r['model']) for r in rows))
+    if sync_engine.enabled(envs.division()):
+        sync_checks(rows, cfg)
+        return
     card = str(envs.gpu_index(cfg))              # the environment's card: the runner launches on it alone (--gpu)
     bad = []
     for fam, model in models:
@@ -125,6 +131,23 @@ def bench_checks(steps, env_id):
         except (ValueError, KeyError):
             gb = None
         check('DFlash2 drafter is on disk (strata drafting fetch)', gb == 0, f'plan download {gb} GB')
+    power_checks(cfg, card)
+    rc, out = run(['pgrep', '-af', 'strata --serve'])
+    check('no other Strata engine is running', rc != 0, out)
+    chrome = shutil.which('google-chrome') or shutil.which('chromium')
+    check('headless Chrome for game screenshots', chrome, 'not found')
+    # the packs a first launch builds (about 1.5 GB a model; a canonical Q2_0 pack on an AVX-512 CPU about 40 GB) plus the
+    # same 10 GB headroom as the downloader (results are well under 1 GB a run without raw/)
+    packs = Path.home() / '.local/share/strata/Strata-data/packs'
+    new = [m for _, m in models if not (packs / m.lower()).exists() and not any(packs.glob(f'*-{m.lower()}'))]
+    q2 = any(m == 'Q2_0' for m in new) and 'avx512f' in Path('/proc/cpuinfo').read_text()
+    need = 10e9 + 2e9 * len(new) + (40e9 if q2 else 0)
+    free = shutil.disk_usage(ROOT).free
+    check(f'disk: {need / 1e9:.0f} GB free (packs of {len(new)} models not launched yet + 10 GB)', free > need,
+          f'{free / 1e9:.0f} GB')
+
+
+def power_checks(cfg, card):
     want = cfg.get('gpu_power_limit_w')
     if want:
         rc, out = run(['nvidia-smi', '-i', card, '--query-gpu=power.limit', '--format=csv,noheader,nounits'])
@@ -141,19 +164,55 @@ def bench_checks(steps, env_id):
     rc, out = run(['nvidia-smi', '-i', card, '--query-gpu=memory.used', '--format=csv,noheader,nounits'])
     used = int(out.split()[0]) if rc == 0 and out.strip() else None
     check(f'GPU {card}: no other engine holds VRAM (< 4 GB used)', used is not None and used < 4000, f'{used} MiB')
-    rc, out = run(['pgrep', '-af', 'strata --serve'])
-    check('no other Strata engine is running', rc != 0, out)
-    chrome = shutil.which('google-chrome') or shutil.which('chromium')
-    check('headless Chrome for game screenshots', chrome, 'not found')
-    # the packs a first launch builds (about 1.5 GB a model; a canonical Q2_0 pack on an AVX-512 CPU about 40 GB) plus the
-    # same 10 GB headroom as the downloader (results are well under 1 GB a run without raw/)
-    packs = Path.home() / '.local/share/strata/Strata-data/packs'
-    new = [m for _, m in models if not (packs / m.lower()).exists() and not any(packs.glob(f'*-{m.lower()}'))]
-    q2 = any(m == 'Q2_0' for m in new) and 'avx512f' in Path('/proc/cpuinfo').read_text()
-    need = 10e9 + 2e9 * len(new) + (40e9 if q2 else 0)
-    free = shutil.disk_usage(ROOT).free
-    check(f'disk: {need / 1e9:.0f} GB free (packs of {len(new)} models not launched yet + 10 GB)', free > need,
-          f'{free / 1e9:.0f} GB')
+
+
+def sync_checks(rows, cfg):
+    card = envs.gpu_index(cfg)
+    power_checks(cfg, str(card))
+    port_ok = check('Sync benchmark port is free', sync_engine.port_free(), sync_engine.PORT)
+    check('no GPU compute process on the benchmark card', not sync_engine.compute_busy(card))
+    check('disk space for Tier 1 logs and raw streams', shutil.disk_usage(ROOT).free > 2e9)
+    if not port_ok:
+        return
+    if not check('Sync-Strata launcher exists', sync_engine.CLI.is_file(), sync_engine.CLI):
+        return
+    with tempfile.TemporaryDirectory(prefix='jbench-sync-plan-') as directory:
+        home = Path(directory)
+        sync_engine.setup(home)
+        for model, ctx in dict.fromkeys((r['model'], r['context']) for r in rows):
+            args = sync_engine.launch_args(model, ctx) + ['--dry']
+            try:
+                p = subprocess.run(args, env=sync_engine.child_env(home), capture_output=True,
+                                   text=True, timeout=30)
+                out = json.loads(p.stdout)
+                errors = sync_engine.config_errors(sync_engine.read(Path(out['config'])), model, ctx, card)
+                ok = p.returncode == 0 and out['ok'] and out['pick']['r'] == 10 and out['settings']['api_port'] == sync_engine.PORT
+                check(f'{model}: R10 launch plan', ok and not errors, ', '.join(errors) or p.stderr[-300:])
+            except (OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as e:
+                check(f'{model}: R10 launch plan', False, e)
+
+
+def smoke_sync(env_id):
+    div = sync_engine.DIVISION
+    rows = [json.loads(line) for line in (envs.plan_dir(env_id, div) / 'cases.jsonl').read_text().splitlines()]
+    chosen = [r for r in rows if r['fixture'] == 'decode-prose-en' and r['temperature'] == 0.7]
+    run_id = f'test-sync-preflight-{time.time_ns()}'
+    run_dir = envs.run_dir(env_id, run_id, div)
+    rc, out = run([sys.executable, 'scripts/bench_runner.py', '--run-id', run_id, '--steps', '1', '--env', env_id,
+                   '--ids', ','.join(r['id'] for r in chosen)], timeout=2400, cwd=ROOT,
+                  env={**os.environ, 'BENCH_DIVISION': div})
+    if rc:
+        stopped = sync_engine.stop(run_dir)
+        if stopped and stopped.returncode:
+            check('Sync smoke engine stopped', False, stopped.stderr)
+    for row in chosen:
+        file = run_dir / 'cases' / row['id'] / 'summary.json'
+        result = json.loads(file.read_text()) if file.is_file() else {}
+        ok = (result.get('status') == 'done' and result.get('decode_tps') is not None
+              and result.get('prefill_tps') is not None and result.get('ttft_ms') is not None)
+        check(f'smoke: {row["model"]} R10 with MTP and SSE timings', rc == 0 and ok,
+              f'{run_dir.relative_to(ROOT)}: {out[-260:]}')
+
 
 
 def harness_checks(div):
@@ -204,7 +263,14 @@ def main():
     a = ap.parse_args()
     env_id = None
     if a.phase in ('acquire', 'all'):
-        acquire_checks()
+        if sync_engine.enabled(envs.division()):
+            import acquire
+            env_id = envs.current(a.env)
+            found = acquire.check(env_id, sync_engine.DIVISION)
+            check('Sync packs and shared files available', found['ok'],
+                  ', '.join(i['what'] for i in found['items'] if i['state'] != 'ok'))
+        else:
+            acquire_checks()
     if a.phase in ('bench', 'all'):
         env_id = env_check(a.env)
         if env_id:
@@ -212,7 +278,10 @@ def main():
             if envs.load_division(envs.division()).get('harness'):
                 harness_checks(envs.division())
             if not a.no_smoke and all(r['ok'] for r in results):
-                smoke(env_id)
+                if sync_engine.enabled(envs.division()):
+                    smoke_sync(env_id)
+                else:
+                    smoke(env_id)
     out = ROOT / 'run-status'
     out.mkdir(exist_ok=True)
     ok = all(r['ok'] for r in results)

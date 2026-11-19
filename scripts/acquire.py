@@ -36,6 +36,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 import config  # noqa: E402
+import sync_engine  # noqa: E402
 import envs  # noqa: E402
 import harnesses  # noqa: E402
 import install_configs  # noqa: E402
@@ -152,13 +153,22 @@ def tool_items(div):
 
 def check(env_id, div):
     models, dflash = needed(env_id, div)
-    items = model_items(models)
+    if sync_engine.enabled(div):
+        try:
+            items = sync_engine.models(models)
+            root = sync_engine.models_dir()
+        except (OSError, ValueError, KeyError) as e:
+            items = [{'item': 'sync-model', 'what': 'Sync-Strata installation', 'state': 'unknown', 'detail': str(e)}]
+            root = ROOT
+    else:
+        items = model_items(models)
+        root = overnight.models_root()
     if dflash:
         items.append(dflash2_item(dflash))
     if envs.load_division(div).get('harness'):
         items.append(harness_item(div))
     items += tool_items(div)
-    free = shutil.disk_usage(overnight.models_root()).free
+    free = shutil.disk_usage(root).free
     out = {'at': now(), 'env': env_id, 'division': div, 'ok': all(i['state'] == 'ok' for i in items),
            'free_bytes': free, 'items': items}
     (ROOT / 'run-status').mkdir(exist_ok=True)
@@ -191,6 +201,8 @@ def ask(question, yes):
 
 
 def fetch(out, wanted, yes, skip_models=False):
+    if sync_engine.enabled(out['division']):
+        raise SystemExit('Install Sync models with Sync-Strata before running jbench')
     busy = queue_running()
     if busy:
         raise SystemExit(f'a benchmark queue is running ({busy}): nothing is fetched during a measurement (AGENTS.md 1.8)')

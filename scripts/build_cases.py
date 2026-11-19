@@ -26,6 +26,8 @@ import machine_info  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 
 # (family, model, size GB, role). How large a model is for the environment's memory: size_class() (for the estimates).
+import sync_engine  # noqa: E402
+
 MODELS = [
     ('qwen', 'Q2_0', 67.3, '元重みの量子化 (ISTA)'),
     ('qwen', 'IQ2_XS', 68.0, '元重みの量子化 (ISTA)'),
@@ -247,6 +249,9 @@ def tier1_cases(tier, step, fam, model, **kw):
 def build(cfg):
     use_env(cfg)
     division = envs.load_division(envs.division())
+    if sync_engine.enabled(division['id']):
+        return finish([r for f, m, *_ in env_models() for r in tier1_cases('1', '1', f, m,
+                       note='tail skip R10')], cfg)
     if division.get('harness'):
         return finish(harness_build(division), cfg)
     names = {(f, m) for f, m, *_ in env_models()}
@@ -438,7 +443,7 @@ def session_of(r):
     return '-'.join(parts)
 
 
-SIZE = {(f, m): gb for f, m, gb, _ in MODELS}
+SIZE = {(f, m): gb for f, m, gb, _ in MODELS + sync_engine.MODELS}
 GIB = 1.073741824   # GB per GiB
 
 
@@ -476,6 +481,9 @@ def use_env(cfg):
     global ENV, ASSUME_ENV, REF, TIER4B, TIER4C, TIER5
     ENV = cfg
     ASSUME_ENV = {**ASSUME, **(cfg.get('assume') or {})}
+    if sync_engine.enabled(envs.division()):
+        REF, TIER4B, TIER4C, TIER5 = None, [], [], []
+        return
     models = env_models()
     want = tuple((envs.ref(cfg) or '').split()) or None
     if want not in {(f, m) for f, m, *_ in models}:
@@ -487,10 +495,15 @@ def use_env(cfg):
     TIER4B, TIER4C, TIER5 = representatives(models)
 
 
+def model_catalog():
+    return sync_engine.MODELS if sync_engine.enabled(envs.division()) else MODELS
+
+
 def env_models():
     """The models this environment runs: every model, or the ones env.json lists."""
-    keep = ENV.get('models') if ENV else None
-    return [m for m in MODELS if not keep or f'{m[0]} {m[1]}' in keep]
+    catalog = model_catalog()
+    keep = ENV.get('models') if ENV and catalog is MODELS else None
+    return [m for m in catalog if not keep or f'{m[0]} {m[1]}' in keep]
 
 
 def result_ids(env_id, published_only=False):
@@ -514,7 +527,7 @@ def measured_rows(cfg, plan, have):
 def page_models(rows):
     """The models the pages list: this environment's, then the ones only its earlier results have, in MODELS order."""
     keep = {(f, m) for f, m, *_ in env_models()} | {(r['family'], r['model']) for r in rows}
-    return [m for m in MODELS if (m[0], m[1]) in keep]
+    return [m for m in model_catalog() if (m[0], m[1]) in keep]
 
 
 def speeds(r):
@@ -896,13 +909,14 @@ def write_md(rows, out, cfg, published_only=False):
     total_h = sum(s['total_h'] for s in est.values())
     steps = list(dict.fromkeys(r['step'] for r in rows))
     division = envs.load_division(envs.division())
+    engine_name = 'Sync-Strata' if sync_engine.enabled(division['id']) else 'Strata'
     for lang, suffix in LANG_FILES.items():
         L = one(lang)
         versions = model_versions(rows, cfg['id'], published_only, up, lang)
         done = sum(r['status'] == 'done' for r in rows)
         failed = sum(r['status'] in ('failed', 'unreadable') for r in rows)
         text = [langs_line('README'), f'[{L("← 環境の一覧", "← all environments", "← 环境一览")}]({os.path.relpath(out.parents[1], out)}/README{suffix}.md)\n',
-                f'# {L("Strata ベンチ ケース一覧", "Strata bench cases", "Strata 基准测试 用例一览")}: {envs.label(cfg)}\n']
+                f'# {engine_name + " " + L("ベンチ ケース一覧", "bench cases", "基准测试 用例一览")}: {envs.label(cfg)}\n']
         if not published_only:
             text.append(PREVIEW_NOTE[lang])
         text.append(f'**{L("部門", "Division", "部门")}: {division["label"][lang]}** — {division["summary"][lang]} '
@@ -1014,9 +1028,10 @@ def write_index(summaries, out_root, published_only):
     out = out_root / 'cases'
     out.mkdir(parents=True, exist_ok=True)
     division = envs.load_division(envs.division())
+    engine_name = 'Sync-Strata' if sync_engine.enabled(division['id']) else 'Strata'
     for lang, suffix in LANG_FILES.items():
         L = one(lang)
-        text = [langs_line('README'), f'# {L("Strata ベンチ ケース一覧", "Strata bench cases", "Strata 基准测试 用例一览")}\n']
+        text = [langs_line('README'), f'# {engine_name + " " + L("ベンチ ケース一覧", "bench cases", "基准测试 用例一览")}\n']
         if not published_only:
             text.append(PREVIEW_NOTE[lang])
         text.append(L('ベンチを回すハードウェア構成（GPU と RAM の組み合わせ）ごとに、計画と結果を分けて持つ。環境の名前を開くと、その環境の全ケースの一覧。',
@@ -1054,7 +1069,7 @@ def main():
             write_plan(plan, env_id)
         write_md(rows, out_root / 'cases' / envs.division() / env_id, cfg, a.published)
         missing = untranslated([r[k] for r in rows for k, _ in COLUMNS if k not in UNTRANSLATED_COLS]
-                               + [x for m in MODELS for x in m[3:]])
+                               + [x for m in model_catalog() for x in m[3:]])
         if missing:
             print(f'cases/{envs.division()}/{env_id}/: {len(missing)} string(s) without a translation in scripts/i18n.py TR (shown in Japanese):')
             for s in missing:

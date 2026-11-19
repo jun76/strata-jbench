@@ -90,7 +90,14 @@ def settings(run_dir):
         log = s.with_name('engine.log')
         if not info.get('argv') or info.get('rc') != 0 or not log.exists():
             continue
-        m = br.not_applied(info['argv'], log.read_text(errors='replace'))
+        if info.get('backend') == 'sync':
+            from sync_engine import config_errors
+            cfg = json.loads(s.with_name('sync-config.json').read_text())
+            m = config_errors(cfg, info['requested_model'], info['requested_context'], info['gpu'])
+            if 'draft layer loaded' not in log.read_text(errors='replace'):
+                m.append('MTP not loaded')
+        else:
+            m = br.not_applied(info['argv'], log.read_text(errors='replace'))
         if m:
             missing.append({'session': str(s.parent.relative_to(run_dir)), 'missing': m})
     return {'missing': missing, 'ok': not missing}

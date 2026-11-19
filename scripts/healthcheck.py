@@ -24,6 +24,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 import config  # noqa: E402
+import sync_engine  # noqa: E402
 import envs  # noqa: E402
 DL = ROOT / 'downloads'
 OUT = ROOT / 'run-status'
@@ -186,7 +187,14 @@ def main():
     if not os.environ.get('BENCH_DIVISION') and current.get('run_id') == a.run_id and current.get('division'):
         os.environ['BENCH_DIVISION'] = current['division']
     run_dir = envs.run_dir(env_id, a.run_id)
-    parts = [acquire_state(), bench_state(run_dir, env_id)]
+    if sync_engine.enabled(envs.division()):
+        state = load(OUT / 'acquire.json')
+        acquired = state.get('division') == envs.division() and state.get('env') == env_id and state.get('ok')
+        acquire = {'phase': 'acquire', 'state': 'DONE' if acquired else 'NOT_STARTED',
+                   'detail': 'Sync model packs and shared files are present' if acquired else ''}
+    else:
+        acquire = acquire_state()
+    parts = [acquire, bench_state(run_dir, env_id)]
     bad = [p for p in parts if p['state'] in ('FAILED', 'STUCK')]
     overall = bad[0]['state'] if bad else 'STOPPED' if parts[1]['state'] == 'STOPPED' \
         else 'DONE' if all(p['state'] in ('DONE', 'NOT_STARTED') for p in parts) else 'RUNNING'

@@ -32,6 +32,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 import config  # noqa: E402
+import sync_engine  # noqa: E402
 import envs  # noqa: E402
 
 PY = [sys.executable, '-I']
@@ -104,10 +105,19 @@ def notify(text):
         log(f'notify: {text}' + (f' (notify-send exit {r.returncode}: {r.stderr.strip()})' if r.returncode else ''))
 
 
+def stop_engine():
+    if sync_engine.enabled(RUN_DIR.parent.parent.name):
+        stopped = sync_engine.stop(RUN_DIR)
+        if stopped and stopped.returncode:
+            log(f'could not stop Sync engine: {stopped.stderr}')
+    else:
+        subprocess.run(['strata', 'launch', '--stop'], capture_output=True, cwd='/tmp')
+
+
 def on_term(signum, frame):
     for name in list(CHILDREN):
         stop_child(name, grace=30)
-    subprocess.run(['strata', 'launch', '--stop'], capture_output=True, cwd='/tmp')
+    stop_engine()
     log('queue stopped')
     health()
     sys.exit(143)
@@ -172,7 +182,7 @@ def run_tier(step, cfg, models, ids):
                     break
         if stuck:
             stop_child('runner')
-            subprocess.run(['strata', 'launch', '--stop'], capture_output=True, cwd='/tmp')
+            stop_engine()
             stucks += 1
             if stucks > cfg['stuck_restarts']:
                 log(f'steps {step}: the runner was stuck {stucks} time(s); giving up on this Tier')
@@ -210,13 +220,28 @@ def main():
     plan = [json.loads(x) for x in (envs.plan_dir(STATE['env']) / 'cases.jsonl').read_text().splitlines() if x.strip()]
     rows = config.select(plan, cfg)
     tiers = list(dict.fromkeys(r['step'] for r in rows))
-    log('run configs')
-    if run(PY + ['scripts/install_configs.py', '--env', STATE['env']]) != 0:
-        log('run configs failed; not starting')
-        health()
-        return 1
+    if not sync_engine.enabled(RUN_DIR.parent.parent.name):
+        log('run configs')
+        if run(PY + ['scripts/install_configs.py', '--env', STATE['env']]) != 0:
+            log('run configs failed; not starting')
+            health()
+            return 1
     log('preflight')
-    if run(PY + ['scripts/preflight.py', '--phase', 'bench', '--steps', ','.join(tiers)] + ([] if cfg['smoke'] else ['--no-smoke'])) != 0:
+    preflight = PY + ['scripts/preflight.py', '--phase', 'bench', '--steps', ','.join(tiers)]
+    if not cfg['smoke']:
+        preflight.append('--no-smoke')
+    if sync_engine.enabled(RUN_DIR.parent.parent.name):
+        os.environ['BENCH_SYNC_OWNER'] = str(RUN_DIR)
+        child = spawn('preflight', preflight)
+        while child.poll() is None:
+            time.sleep(1)
+        preflight_rc = child.returncode
+        os.environ.pop('BENCH_SYNC_OWNER')
+        CHILDREN.pop('preflight', None)
+        save_state()
+    else:
+        preflight_rc = run(preflight)
+    if preflight_rc != 0:
         log('preflight failed; not starting (see run-status/preflight.json)')
         health()
         notify('the run did not start: preflight failed')
