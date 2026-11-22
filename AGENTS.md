@@ -298,7 +298,8 @@ After fixing a code or environment problem, run one affected case under a `test-
    RUN_IDs are never shown). Another environment is another case.
 3. The coding cases' pages are judged by their capture (`scripts/page_shot.mjs`, called by the runner: the page runs
    10 s in headless Chrome over the DevTools protocol, then its errors, whether it froze and whether anything was
-   drawn go into the manifest's `screenshot`). After changing that step, `python3 -I scripts/recheck_artifacts.py
+   drawn go into the manifest's `screenshot`; a page that answers but is never painted while requests are still open, a
+   CDN not answering, is `stalled`, not frozen, and is captured again after a minute, up to four times). After changing that step, `python3 -I scripts/recheck_artifacts.py
    results/<division>/<env>/<RUN_ID>` captures a run's pages again without asking the models again (while nothing
    is measured), then rebuild the pages as in step 2.
 

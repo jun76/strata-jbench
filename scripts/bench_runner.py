@@ -427,11 +427,21 @@ def screenshot(files_dir, entry, dest):
     software GL, since the engine holds the GPU's memory): scripts/page_shot.mjs lets it run PAGE_WAIT_MS in real time
     and records its errors and whether it froze; page_look says whether anything was drawn. A page found empty or
     frozen is opened once more in a fresh browser and the second capture is kept: a slow CDN or a GL context that
-    failed to start once left a page empty that drew every time after."""
+    failed to start once left a page empty that drew every time after. A page stalled on the network (a CDN script that
+    does not answer, page_shot.mjs "stalled") is opened again after STALL_RETRY_S, up to STALL_ATTEMPTS times in all:
+    the CDN was not answering for minutes on 2026-11-22, and a page that drew at once afterwards was judged frozen."""
     shot = capture(files_dir, entry, dest)
+    attempts = 1
     if shot.get('drawn') is False or shot.get('hung'):
-        shot = capture(files_dir, entry, dest) | {'attempts': 2}
-    return shot
+        shot, attempts = capture(files_dir, entry, dest), 2
+    while shot.get('stalled') and attempts < STALL_ATTEMPTS:
+        time.sleep(STALL_RETRY_S)
+        shot, attempts = capture(files_dir, entry, dest), attempts + 1
+    return shot | ({'attempts': attempts} if attempts > 1 else {})
+
+
+STALL_ATTEMPTS = 4     # captures of a page stalled on the network, in all
+STALL_RETRY_S = 60     # wait between them
 
 
 def capture(files_dir, entry, dest):
@@ -537,6 +547,7 @@ def summarize(row, records):
         shots = [a.get('screenshot') or {} for a in arts]
         s['drawn'] = f'{sum(1 for x in shots if x.get("drawn"))}/{len(arts)}'
         s['hung'] = sum(1 for x in shots if x.get('hung'))
+        s['stalled'] = sum(1 for x in shots if x.get('stalled'))
         s['from_workspace'] = sum(1 for a in arts if a.get('source') == 'workspace')
     return s
 

@@ -109,7 +109,7 @@ The coding task of Tiers 0 and 3 is a scene titled "A sailing ship calling at a 
   files/          files taken from the code blocks (named as the answer names them, else a default per language)
   manifest.json   the files, how they were named, the form (single HTML / needs a server / other), README or not, how to run it
   screenshot.png  only if it opens as a single HTML file or from a static server; taken after the page has run 10 s in headless Chrome
-  console.txt     its errors then (uncaught exceptions, console.error, failed loads); the manifest's screenshot also says whether anything was drawn (nearly one colour or no edges: empty) and whether the page froze
+  console.txt     its errors then (uncaught exceptions, console.error, failed loads); the manifest's screenshot also says whether anything was drawn (nearly one colour or no edges: empty) and whether the page froze (or only stalled on a CDN)
 ```
 
 The 3 runs go in one folder per seed under `artifact/` (`seed-1/` and so on).

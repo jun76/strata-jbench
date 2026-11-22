@@ -804,7 +804,7 @@ GAME_LAYOUT = {
   files/          コードブロックから取り出したファイル（ファイル名が書かれていればその名前、なければ言語ごとの既定名）
   manifest.json   取り出したファイル、名前の決め方、形式（単体 HTML / 要サーバー / その他）、README の有無、起動方法
   screenshot.png  単体 HTML か静的サーバーで開けた場合のみ。headless Chrome でページを 10 秒動かしてから撮る
-  console.txt     そのときのエラー（捕まえられなかった例外、console.error、読み込みの失敗）。manifest の screenshot に、描画されたか（ほぼ一色・輪郭なしなら空白）と、固まったかも残る''',
+  console.txt     そのときのエラー（捕まえられなかった例外、console.error、読み込みの失敗）。manifest の screenshot に、描画されたか（ほぼ一色・輪郭なしなら空白）と、固まったか（読み込みが CDN で止まっただけなら「読み込み待ち」）も残る''',
            '3回分は `artifact/` の下に seed ごとのフォルダ（`seed-1/` など）で分ける。'),
     'en': ('Where the coding cases\' results go',
            'The coding task of Tiers 0 and 3 is a scene titled "A sailing ship calling at a harbor" (an English prompt that gives the scene by its title alone and asks for it in 3D voxel art, as one HTML file; the whole text is in prompts/coding-harbor.json). Whatever shape each answer takes, it is always unpacked like this:',
@@ -813,7 +813,7 @@ GAME_LAYOUT = {
   files/          files taken from the code blocks (named as the answer names them, else a default per language)
   manifest.json   the files, how they were named, the form (single HTML / needs a server / other), README or not, how to run it
   screenshot.png  only if it opens as a single HTML file or from a static server; taken after the page has run 10 s in headless Chrome
-  console.txt     its errors then (uncaught exceptions, console.error, failed loads); the manifest's screenshot also says whether anything was drawn (nearly one colour or no edges: empty) and whether the page froze''',
+  console.txt     its errors then (uncaught exceptions, console.error, failed loads); the manifest's screenshot also says whether anything was drawn (nearly one colour or no edges: empty) and whether the page froze (or only stalled on a CDN)''',
            'The 3 runs go in one folder per seed under `artifact/` (`seed-1/` and so on).'),
     'zh': ('编程用例的成果存放位置',
            'Tier 0、3 的编程任务是“帆船停靠港口”的场景（英文提示，场景只给出标题，要求以 3D 体素艺术、用单个 HTML 文件回答；全文见 prompts/coding-harbor.json）。无论每个用例的输出形式如何，都按以下结构展开：',
@@ -854,7 +854,7 @@ HARNESS_LAYOUT = {
   files/          作業ディレクトリに書かれたファイル（またはコードブロックから取り出したファイル）
   manifest.json   取ったファイル、取り方（作業ディレクトリ / 回答）、形式、起動方法
   screenshot.png  単体 HTML か静的サーバーで開けた場合のみ。headless Chrome でページを 10 秒動かしてから撮る
-  console.txt     そのときのエラー（捕まえられなかった例外、console.error、読み込みの失敗）。manifest の screenshot に、描画されたか（ほぼ一色・輪郭なしなら空白）と、固まったかも残る''',
+  console.txt     そのときのエラー（捕まえられなかった例外、console.error、読み込みの失敗）。manifest の screenshot に、描画されたか（ほぼ一色・輪郭なしなら空白）と、固まったか（読み込みが CDN で止まっただけなら「読み込み待ち」）も残る''',
            'ハーネスの出力（イベント）とプロキシの記録（各リクエスト）は `harness/seed-N/` に残る。'),
     'en': ('Where the coding cases\' results go',
            'The HTML the harness wrote into its work folder is taken (the one there is, else index.html, else the last one written). With no HTML file, the files come from the code blocks of the last answer. The manifest says which.',
@@ -863,7 +863,7 @@ HARNESS_LAYOUT = {
   files/          the files written into the work folder (or taken from the code blocks)
   manifest.json   the files, where they came from (work folder / answer), the form, how to run it
   screenshot.png  only if it opens as a single HTML file or from a static server; taken after the page has run 10 s in headless Chrome
-  console.txt     its errors then (uncaught exceptions, console.error, failed loads); the manifest's screenshot also says whether anything was drawn (nearly one colour or no edges: empty) and whether the page froze''',
+  console.txt     its errors then (uncaught exceptions, console.error, failed loads); the manifest's screenshot also says whether anything was drawn (nearly one colour or no edges: empty) and whether the page froze (or only stalled on a CDN)''',
            'The harness\'s output (its events) and the proxy\'s record (every request) are kept in `harness/seed-N/`.'),
     'zh': ('编程用例的成果存放位置',
            '取 harness 写入工作目录的 HTML（只有一个就取它，多个则取 index.html，否则取最后写入的）。没有 HTML 文件时，从最后回答的代码块中取出。取法记录在 manifest 中。',

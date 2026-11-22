@@ -5,7 +5,7 @@ the page's errors, whether it froze, whether anything was drawn), without asking
   python3 -I scripts/recheck_artifacts.py results/plain/rtx5090-128g/<RUN_ID> [--ids <case id>,...]
 
 Rewrites each seed's screenshot.png, console.txt and the manifest's "screenshot", the same record in requests.jsonl,
-and the counts in summary.json ("drawn", "hung"). Run it while no measurement is running (Chrome uses the CPU).
+and the counts in summary.json ("drawn", "hung", "stalled"). Run it while no measurement is running (Chrome uses the CPU).
 """
 import argparse
 import json
@@ -30,7 +30,7 @@ def recheck(case_dir):
         mf.write_text(json.dumps(m, ensure_ascii=False, indent=2) + '\n')
         shots[int(d.name.split('-')[1])] = m['screenshot']
         s = m['screenshot']
-        print(f"  {d.name}: {'drawn' if s.get('drawn') else 'hung' if s.get('hung') else 'empty' if s.get('ok') else s.get('error')}"
+        print(f"  {d.name}: {'drawn' if s.get('drawn') else 'hung' if s.get('hung') else 'stalled' if s.get('stalled') else 'empty' if s.get('ok') else s.get('error')}"
               f", {len(s.get('console_errors') or [])} errors")
     if not shots:
         return
@@ -49,6 +49,7 @@ def recheck(case_dir):
         arts = [a for a in arts if a]
         s['drawn'] = f"{sum(1 for a in arts if (a.get('screenshot') or {}).get('drawn'))}/{len(arts)}"
         s['hung'] = sum(1 for a in arts if (a.get('screenshot') or {}).get('hung'))
+        s['stalled'] = sum(1 for a in arts if (a.get('screenshot') or {}).get('stalled'))
         sf.write_text(json.dumps(s, ensure_ascii=False, indent=2) + '\n')
 
 

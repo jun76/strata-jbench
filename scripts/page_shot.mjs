@@ -1,9 +1,12 @@
 // Open a page in headless Chrome over the DevTools protocol, let it run for a fixed real time, and capture it.
 //   node scripts/page_shot.mjs <url> <out.png> [--wait ms] [--size WxH] [--gpu]
-// Prints one JSON line: {ok, hung, hung_at, error, console_errors, load_ms}. Real time rather than Chrome's virtual time: a page
+// Prints one JSON line: {ok, hung, hung_at, stalled, pending, error, console_errors, load_ms}. Real time rather than Chrome's virtual time: a page
 // that keeps a request open or works hard on the main thread never let --virtual-time-budget expire, and the
 // command-line --screenshot then never fired. A page whose main thread does not answer within HUNG_MS after the wait
-// is reported as hung (the same page freezes a visitor's tab), with where its script was busy (hung_at). console_errors holds uncaught exceptions, console.error
+// is reported as hung (the same page freezes a visitor's tab), with where its script was busy (hung_at). A page whose
+// script answers but which cannot be captured while requests are still open (a parser-blocking <script src> from a CDN
+// that does not answer: nothing is ever painted) is reported as stalled, with those requests (pending), not as hung: the
+// page is not at fault, the network is. console_errors holds uncaught exceptions, console.error
 // calls and the browser's own errors (failed requests, WebGL), each "kind: text (source:line)".
 import { spawn } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
@@ -19,7 +22,8 @@ const [width, height] = opt('--size', '1280x800').split('x').map(Number);
 const gl = args.includes('--gpu') ? [] : ['--disable-gpu', '--use-gl=swiftshader', '--enable-unsafe-swiftshader'];
 const chrome = process.env.CHROME || 'google-chrome';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const result = { ok: false, hung: false, hung_at: null, error: null, console_errors: [], load_ms: null };
+const result = { ok: false, hung: false, hung_at: null, stalled: false, pending: [], error: null, console_errors: [], load_ms: null };
+const inflight = new Map();   // requestId -> url, the page's requests not finished yet
 const profile = mkdtempSync(join(tmpdir(), 'bench-chrome-'));
 const proc = spawn(chrome, ['--headless=new', ...gl, '--remote-debugging-port=0', `--user-data-dir=${profile}`,
   `--window-size=${width},${height}`, '--no-first-run', '--no-default-browser-check', 'about:blank'],
@@ -69,6 +73,10 @@ async function main() {
       const f = p.callFrames?.[0];
       result.hung_at = f ? `${f.functionName || '(anonymous)'}${where(f.url, f.location.lineNumber + 1)}` : null;
       send('Debugger.resume').catch(() => {});
+    } else if (m.method === 'Network.requestWillBeSent') {
+      inflight.set(p.requestId, p.request.url);
+    } else if (m.method === 'Network.loadingFinished' || m.method === 'Network.loadingFailed') {
+      inflight.delete(p.requestId);
     } else if (m.method === 'Page.loadEventFired' && result.load_ms === null) {
       result.load_ms = Date.now() - t0;
     }
@@ -77,18 +85,28 @@ async function main() {
   await send('Log.enable');
   await send('Page.enable');
   await send('Debugger.enable');
+  await send('Network.enable');
   await send('Page.navigate', { url });
   await sleep(wait);
+  let answered = false;
   try {
     await send('Runtime.evaluate', { expression: '1' }, HUNG_MS);
+    answered = true;
     const shot = await send('Page.captureScreenshot', { format: 'png' }, HUNG_MS);
     writeFileSync(out, Buffer.from(shot.data, 'base64'));
     result.ok = true;
   } catch (e) {
-    result.hung = true;
-    result.error = `page did not answer within ${HUNG_MS / 1000} s after ${wait / 1000} s`;
-    await send('Debugger.pause', {}, 5000).catch(() => {});   // where its script is busy, from Debugger.paused
-    await sleep(1000);
+    const open = [...new Set(inflight.values())].filter(u => !u.startsWith('data:'));
+    if (answered && (open.length || result.load_ms === null)) {
+      result.stalled = true;
+      result.pending = open.slice(0, 10);
+      result.error = `page not drawn within ${HUNG_MS / 1000} s after ${wait / 1000} s, ${open.length} request(s) still open`;
+    } else {
+      result.hung = true;
+      result.error = `page did not answer within ${HUNG_MS / 1000} s after ${wait / 1000} s`;
+      await send('Debugger.pause', {}, 5000).catch(() => {});   // where its script is busy, from Debugger.paused
+      await sleep(1000);
+    }
   }
   result.console_errors = result.console_errors.slice(0, 50);
 }

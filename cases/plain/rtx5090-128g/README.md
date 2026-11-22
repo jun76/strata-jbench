@@ -109,7 +109,7 @@ Tier 0・3 のコーディングは「港に寄港する帆船」の情景（英
   files/          コードブロックから取り出したファイル（ファイル名が書かれていればその名前、なければ言語ごとの既定名）
   manifest.json   取り出したファイル、名前の決め方、形式（単体 HTML / 要サーバー / その他）、README の有無、起動方法
   screenshot.png  単体 HTML か静的サーバーで開けた場合のみ。headless Chrome でページを 10 秒動かしてから撮る
-  console.txt     そのときのエラー（捕まえられなかった例外、console.error、読み込みの失敗）。manifest の screenshot に、描画されたか（ほぼ一色・輪郭なしなら空白）と、固まったかも残る
+  console.txt     そのときのエラー（捕まえられなかった例外、console.error、読み込みの失敗）。manifest の screenshot に、描画されたか（ほぼ一色・輪郭なしなら空白）と、固まったか（読み込みが CDN で止まっただけなら「読み込み待ち」）も残る
 ```
 
 3回分は `artifact/` の下に seed ごとのフォルダ（`seed-1/` など）で分ける。

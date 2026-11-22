@@ -186,6 +186,7 @@ th.sort:hover::after, th.sort:focus-visible::after { content: " ⇅"; color: var
 .shot .meta { padding: 6px 8px 8px; font-size: 12px; color: var(--text-2); line-height: 1.5; }
 .shot .look { font-weight: 600; }
 .shot .look.empty, .shot .look.hung { color: var(--bad); }
+.shot .look.stalled { color: var(--muted); }
 .shot.empty img, .shot.hung img { opacity: .6; }
 .shot .meta b { color: var(--text); }
 .shot .meta a { margin-right: 8px; }
@@ -1493,7 +1494,8 @@ function openViewer(c, a) {
   $('viewer-frame').src = a.page;   // after the dialog is shown: a frame loaded while it was hidden stayed blank
 }
 
-const LOOK = { drawn: () => L('描画あり', 'drawn', '已绘制'), empty: () => L('空白', 'empty', '空白'), hung: () => L('固まった', 'froze', '卡死') };
+const LOOK = { drawn: () => L('描画あり', 'drawn', '已绘制'), empty: () => L('空白', 'empty', '空白'), hung: () => L('固まった', 'froze', '卡死'),
+  stalled: () => L('読み込み待ち（CDN）', 'stalled on the network', '加载停滞（CDN）') };
 
 function sCoding() {
   const box = $('c-coding'); box.replaceChildren();
@@ -1512,9 +1514,10 @@ function sCoding() {
       const grp = h('div', { class: 'mgroup' }, g);
       const head = h('h4', {}, grp, `${c.family} ${c.model}`);
       const arts = c.artifacts, cut = arts.filter(a => a.truncated).length, err = arts.filter(a => a.console_errors).length;
-      const judged = arts.filter(a => a.look), drawn = judged.filter(a => a.look === 'drawn').length, hung = arts.filter(a => a.look === 'hung').length;
+      const judged = arts.filter(a => a.look), drawn = judged.filter(a => a.look === 'drawn').length, hung = arts.filter(a => a.look === 'hung').length, stalled = arts.filter(a => a.look === 'stalled').length;
       const sum = [judged.length ? L(`描画あり ${drawn}/${arts.length}`, `${drawn}/${arts.length} drawn`, `已绘制 ${drawn}/${arts.length}`) : L(`${arts.length} 回`, `${arts.length} runs`, `${arts.length} 次`),
         hung ? L(`固まった ${hung}`, `${hung} froze`, `卡死 ${hung}`) : '',
+        stalled ? L(`読み込み待ち ${stalled}`, `${stalled} stalled on the network`, `加载停滞 ${stalled}`) : '',
         cut ? L(`途中で切れた ${cut}`, `${cut} cut off`, `被截断 ${cut}`) : '',
         err ? L(`コンソールのエラー ${err}`, `${err} with console errors`, `控制台错误 ${err}`) : ''].filter(Boolean);
       h('small', {}, head, sum.join(' · '));

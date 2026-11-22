@@ -42,7 +42,7 @@ CASE_LINE = re.compile(r'^(\S+) {3}(\S+): \w+ prefill=')
 SESSION_LINE = re.compile(r'^(\S+) session (\S+): ')
 KEEP = ['status', 'n', 'planned', 'prefill_tps', 'decode_tps', 'ttft_ms', 'first_answer_ms', 'total_ms',
         'completion_tokens', 'reasoning_chars', 'accept_rate', 'capped', 'correct', 'gpu_mem_peak_mib', 'rss_peak_mib',
-        'disk_read_mib', 'power_peak_w', 'flags', 'single_file', 'from_workspace', 'drawn', 'hung',
+        'disk_read_mib', 'power_peak_w', 'flags', 'single_file', 'from_workspace', 'drawn', 'hung', 'stalled',
         # harness divisions (scripts/bench_runner.py run_harness_case)
         'harness', 'harness_version', 'requests', 'requests_without_tools', 'tool_calls_n', 'steps', 'preamble_tokens',
         'tools_offered', 'cached_share', 'engine_share', 'harness_start_ms']
@@ -260,8 +260,9 @@ def artifacts(case, rel, per_request=None):
                     'tool_calls_n': run.get('tool_calls_n'),
                     'single_file': m.get('single_file'), 'truncated': m.get('truncated'),
                     'console_errors': len(look.get('console_errors') or []),
-                    # what the capture shows (bench_runner.screenshot): drawn / empty / hung; None where it was not judged
-                    'look': 'hung' if look.get('hung') else None if 'drawn' not in look else 'drawn' if look['drawn'] else 'empty',
+                    # what the capture shows (bench_runner.screenshot): drawn / empty / hung / stalled (on the network,
+                    # not the page's fault); None where it was not judged
+                    'look': 'hung' if look.get('hung') else 'stalled' if look.get('stalled') else None if 'drawn' not in look else 'drawn' if look['drawn'] else 'empty',
                     'files': len(m.get('files') or []),
                     'screenshot': rel + str(shot.relative_to(ROOT)) if shot.exists() else None,
                     'page': rel + str(page.relative_to(ROOT)) if page and page.exists() else None,
