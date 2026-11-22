@@ -282,6 +282,21 @@ def source_root(path):
     return path / 'terminal' if (path / 'terminal' / 'setup.py').exists() else path
 
 
+def strata_models_dir():
+    """The models folder Strata itself downloads into and, for a family it looks up in one place only (Hy4-Flash:
+    setup.py hy4_folder), reads from: <data_dir>/models, data_dir being Strata's saved data folder
+    (~/.config/strata/settings.json), else ~/.local/share/strata/Strata-data/models."""
+    try:
+        d = json.loads((Path.home() / '.config/strata/settings.json').read_text()).get('data_dir')
+    except (OSError, ValueError):
+        d = None
+    return (Path(d) if d else Path.home() / '.local/share/strata/Strata-data') / 'models'
+
+
+# Families Strata reads from strata_models_dir() alone (it fetches them again when they are anywhere else)
+STRATA_FOLDER_ONLY = ('hy4-flash',)
+
+
 STRATA_SOURCE = source_root(os.environ.get('STRATA_SOURCE') or Path.home() / 'Strata')
 REF_BELOW_TIERS = 'gyro Gyro-S'
 

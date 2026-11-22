@@ -446,6 +446,9 @@ policy, report the cause and a proposal, and stop.
   `--draft dfly2`. Its responses carry no draft counts (`draft_n` 0), so Hy4 has no acceptance rate. `strata install`
   puts the files in Strata's saved data folder (`data_dir` in `~/.config/strata/settings.json`; on `rtx5090-128g`
   `/mnt/data/strata/Strata-data`), and fetches them again if they are anywhere else; the folder in the models root
-  links there.
+  links there. `scripts/download_models.py` makes that link before fetching (and refuses when the folder is
+  elsewhere), and `scripts/install_configs.py` installs such a model only when its files are there, and stops a setup
+  that starts downloading a model file (`envs.STRATA_FOLDER_ONLY`; SQ-64 and Engram were fetched twice on 2026-11-22).
+  Run `strata install` by hand only through `install_configs.py`.
 - Since 0.2.18 Strata's source keeps `setup.py`, `tools/` and the requirements in `terminal/`; the scripts read either layout.
 - Q2_0's first launch builds a pack for AVX-512 (about 40 GB). The first launch's time is not part of the measurements.

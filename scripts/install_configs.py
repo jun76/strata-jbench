@@ -6,7 +6,10 @@ is here (the downloads come from scripts/download_models.py, not from Strata's s
 config was written for another card, this runs Strata's setup in install-only mode (`strata install ... --no-start`, the
 setup.py `strata launch` runs itself), with the choices the runner launches with: --gpu <the environment's card>,
 --vision no, --mtp on (setup keeps the MTP draft layer; AGENTS.md 5), --context 131072. Setup checks the files (by their
-finish marks) and writes the config and the start script; it downloads nothing that is already on disk.
+finish marks) and writes the config and the start script; it downloads nothing that is already on disk where it looks.
+It is never left to fetch a model: a family Strata reads from its own models folder alone (envs.STRATA_FOLDER_ONLY) is
+installed only when its files are there, and a setup that starts downloading a model file anyway is stopped and fails
+(the 2026-11-22 Hy4-Flash run fetched SQ-64 and Engram twice, jbench's copy being in another folder).
 
 It changes Strata's saved settings (the run configs), so it runs only with the user's agreement (AGENTS.md 3);
 The run's supervisor (scripts/supervise.py) runs it once the run's models are on disk, before preflight.
@@ -15,6 +18,7 @@ The run's supervisor (scripts/supervise.py) runs it once the run's models are on
 """
 import argparse
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -60,6 +64,35 @@ def needs_install(fam, model, card):
     return None
 
 
+PROGRESS = re.compile(r'\d+\.\d+ / \d+\.\d+ GB \(\d+%\)')   # setup's download progress ("0.02 / 62.03 GB (0%)")
+
+
+def outside_strata_folder(fam, model):
+    """Files of the model that are not in the folder Strata reads the family from (only for envs.STRATA_FOLDER_ONLY)."""
+    if fam not in envs.STRATA_FOLDER_ONLY:
+        return []
+    root, want = overnight.models_root(), (envs.strata_models_dir() / fam).resolve()
+    return [f['path'] for f in overnight.manifest()['files'] if f['family'] == fam and f['model'] == model
+            and (root / f['path']).resolve().parent != want]
+
+
+def run_install(args):
+    """Run setup; stop it (rc -1) as soon as it shows a model download. Returns (rc, output)."""
+    p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd='/tmp')
+    out = b''
+    while chunk := p.stdout.read1(65536):
+        out += chunk
+        if PROGRESS.search(out[-4096:].decode(errors='replace')):
+            p.terminate()
+            try:
+                p.wait(30)
+            except subprocess.TimeoutExpired:
+                p.kill()
+            text = out.decode(errors='replace').replace('\r', '\n')
+            return -1, text + '\nstopped: setup started downloading a model file that jbench has on disk'
+    return p.wait(), out.decode(errors='replace').replace('\r', '\n')
+
+
 def install_args(fam, model, card):
     args = ['strata', 'install', '--family', fam, '--model', model, '--yes', '--no-start', '--context', '131072',
             '--vision', 'no', '--gpu', str(card)]
@@ -89,15 +122,22 @@ def main():
             print(f'{fam} {model}: run config ok', flush=True)
             continue
         args = install_args(fam, model, card)
+        away = outside_strata_folder(fam, model)
+        if away:
+            failed.append(f'{fam} {model}')
+            print(f'{fam} {model}: {why}, but not installed: Strata reads {fam} only from '
+                  f'{envs.strata_models_dir() / fam} and would fetch {", ".join(away)} again', flush=True)
+            continue
         print(f'{fam} {model}: {why}; {" ".join(args)}', flush=True)
         if a.dry_run:
             continue
-        r = subprocess.run(args, capture_output=True, text=True, cwd='/tmp', timeout=7200)
-        tail = '\n'.join((r.stdout + r.stderr).strip().splitlines()[-6:])
-        left = needs_install(fam, model, card) if r.returncode == 0 else None
-        if r.returncode != 0 or left:
+        rc, out = run_install(args)
+        tail = '\n'.join(l for l in out.strip().splitlines() if not PROGRESS.search(l))
+        tail = '\n'.join(tail.splitlines()[-6:])
+        left = needs_install(fam, model, card) if rc == 0 else None
+        if rc != 0 or left:
             failed.append(f'{fam} {model}')
-            print(f'{fam} {model}: FAILED (rc {r.returncode}{", " + left if left else ""})\n{tail}', flush=True)
+            print(f'{fam} {model}: FAILED (rc {rc}{", " + left if left else ""})\n{tail}', flush=True)
         else:
             print(f'{fam} {model}: installed', flush=True)
     if failed:

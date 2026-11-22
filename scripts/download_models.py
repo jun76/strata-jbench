@@ -181,6 +181,23 @@ def main():
         print(f"Prepared {len(manifest['choices'])} models, {len(manifest['files'])} paths", flush=True)
         return
     manifest = json.loads(manifest_path.read_text())
+    # A family Strata reads only from its own models folder (envs.STRATA_FOLDER_ONLY) is fetched there: the folder in
+    # the models root links to it, so `strata install` finds the files and does not fetch them a second time.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import envs
+    for family in sorted({f['family'] for f in manifest['files']} & set(envs.STRATA_FOLDER_ONLY)):
+        want = envs.strata_models_dir() / family
+        here = args.models / family
+        if here.resolve() == want.resolve():
+            continue
+        if here.is_symlink() or (here.exists() and any(here.iterdir())):
+            raise RuntimeError(f'{here} is not Strata\'s folder for {family} ({want}): Strata would fetch the files '
+                               f'again. Move the files to {want} and link {here} there.')
+        want.mkdir(parents=True, exist_ok=True)
+        if here.exists():
+            here.rmdir()
+        here.symlink_to(want)
+        print(f'{here} -> {want} (Strata reads {family} from there)', flush=True)
     if hashlib.sha256((args.source / 'setup.py').read_bytes()).hexdigest() != manifest['source_setup_sha256']:
         raise RuntimeError('setup.py changed after manifest creation; refusing changed download code')
     if Path(manifest['models_root']) != args.models:
