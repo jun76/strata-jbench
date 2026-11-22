@@ -18,21 +18,21 @@ Tier ごとにケースの表がある（1行が1ケース）。全パラメー�
 | マザーボード | MSI Z790 GAMING PLUS WIFI (MS-7E06) |
 | モデルの置き場所 | Fanxiang S880E 2TB (NVMe) |
 | OS | Ubuntu 26.10 (Linux 7.3.0-10-generic) |
-| Strata | strata 0.2.12 (build 0.1.58) |
+| Strata | strata 0.2.18 (build 0.1.64) |
 
 Strata のデスクトップアプリは使っていない。CLI の <code>strata launch --no-tui</code> でエンジンを専用ポート（18600）に起動し、OpenAI 互換の HTTP API（<code>POST /v1/chat/completions</code>、ストリーミング）を <code>scripts/bench_runner.py</code> から直接呼んで測る。Tier 2 だけは Strata 同梱のベンチ <code>strata bench run --suite standard-v1</code> を同じエンジンに向けて実行する。
 
-環境 <code>rtx5090-128g</code> · RUN_ID 2026-11-09-harbor の記録（machine.json）
+環境 <code>rtx5090-128g</code> · RUN_ID 2026-11-22-hy4 の記録（machine.json）
 
 ## 概要
 
-- ケース: 1,803
-- 本計測リクエスト: 5,973
-- エンジン起動: 168
-- 見積もり: 32 時間
+- ケース: 1,950
+- 本計測リクエスト: 6,468
+- エンジン起動: 177
+- 見積もり: 34 時間
 - 基準モデル: qwen IQ3_S （env.json の ref、なければ Strata がこの RAM + VRAM に勧めるモデル）
-- 完了: 1,218
-- 失敗: 0
+- 完了: 1,358
+- 失敗: 7
 
 
 ## Tier ごとの内訳
@@ -40,11 +40,11 @@ Strata のデスクトップアプリは使っていない。CLI の <code>strat
 | Tier | 内容 | モデル | ケース | リクエスト | 見積 h | 完了 |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
 | [0](tier-0.md) | 計測器の検証（基準モデル × 起動3回、Gyro-S で作者の値と照合、コーディングの成果物の展開確認） | 2 | 25 | 183 | 0.5 | 25 |
-| [1](tier-1.md) | 全モデルの基礎速度（decode 5種 × temperature 3水準、prefill 4K / 32K / 128K）。decode は DFlash2 対応のモデルで DFlash2 でも測る | 25 | 720 | 2,160 | 3.3 | 489 |
-| [2](tier-2.md) | 公式 standard-v1（thinking xhigh、temperature 1.0）をスイートごと3回 | 25 | 375 | 1,125 | 4.0 | 270 |
-| [3](tier-3.md) | 推論エフォート none / high × 4問、コーディング（帆船）は high のみ（全モデル） | 25 | 220 | 660 | 7.5 | 164 |
-| [4a](tier-4a.md) | 容量の確保コスト（128K / 256K / 1M に同じ 4K 入力） | 25 | 75 | 225 | 1.8 | 54 |
-| [4b](tier-4b.md) | 学習範囲の長文（32K / 128K / 256K。基準モデル、系列ごとに最大のモデル、最小のモデル） | 6 | 72 | 216 | 2.0 | 48 |
+| [1](tier-1.md) | 全モデルの基礎速度（decode 5種 × temperature 3水準、prefill 4K / 32K / 128K）。decode は DFlash2 対応のモデルで DFlash2 でも測る | 28 | 774 | 2,322 | 3.5 | 543 |
+| [2](tier-2.md) | 公式 standard-v1（thinking xhigh、temperature 1.0）をスイートごと3回 | 28 | 420 | 1,260 | 4.4 | 315 |
+| [3](tier-3.md) | 推論エフォート none / high × 4問、コーディング（帆船）は high のみ（全モデル） | 28 | 247 | 741 | 8.5 | 191 |
+| [4a](tier-4a.md) | 容量の確保コスト（128K / 256K / 1M に同じ 4K 入力） | 28 | 84 | 252 | 2.0 | 60 |
+| [4b](tier-4b.md) | 学習範囲の長文（32K / 128K / 256K。基準モデル、系列ごとに最大のモデル、最小のモデル） | 7 | 84 | 252 | 2.3 | 56 |
 | [4c](tier-4c.md) | 拡張範囲の長文（512K / 1M。基準モデル、最小と最大のモデル） | 3 | 24 | 72 | 7.7 | 8 |
 | [4d](tier-4d.md) | YaRN の影響（基準モデル、同じ入力で設定だけ変える） | 1 | 16 | 48 | 1.1 | 16 |
 | [5](tier-5.md) | 起動オプションを1つずつ変える（基準モデル、最大と最小のモデル。自動 tune を含む） | 3 | 276 | 828 | 4.0 | 144 |
@@ -79,6 +79,9 @@ Strata のデスクトップアプリは使っていない。CLI の <code>strat
 | nvfp4 | NVFP4 | 128.0 | 元重みの量子化 (GPTQ) | [Maximilian228/Qwen3.8-Flash-Next-NVFP4-GPTQ-Strata @ `640a1db`](https://huggingface.co/Maximilian228/Qwen3.8-Flash-Next-NVFP4-GPTQ-Strata/tree/640a1db97446ddd5e89d2b70ecd0297987192c93) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json), [2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
 | nvfp4 | NVFP4-NVIDIA | 128.0 | 元重みの量子化 (RTN) | [Maximilian228/Qwen3.8-Flash-Next-NVIDIA-NVFP4-Strata @ `cca8f7f`](https://huggingface.co/Maximilian228/Qwen3.8-Flash-Next-NVIDIA-NVFP4-Strata/tree/cca8f7fee5ce0af932097340a75e06df25c4e57d) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
 | nvfp4 | NVFP4-QAD | 102.3 | FP4 向け再学習版 | [nvidia/Qwen3.8-Flash-Next-FP4-Local @ `b9ce18a`](https://huggingface.co/nvidia/Qwen3.8-Flash-Next-FP4-Local/tree/b9ce18a6887e18c089fdea8509a33e63429a3300) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
+| hy4-flash | SQ-64 | 62.0 | Strata の量子化 (別モデル Hy4-Flash、64 GB RAM 向け) | [strata-engine/Hy4-Flash-Strata @ `995bac2`](https://huggingface.co/strata-engine/Hy4-Flash-Strata/tree/995bac227ab7e0d221772be641e2b5954a9fac06) ([2026-11-22-hy4](../../../published/plain/rtx5090-128g/2026-11-22-hy4/models.json)) |
+| hy4-flash | SQ-96 | 89.6 | Strata の量子化 (別モデル Hy4-Flash、96 GB RAM 向け) | [strata-engine/Hy4-Flash-Strata @ `995bac2`](https://huggingface.co/strata-engine/Hy4-Flash-Strata/tree/995bac227ab7e0d221772be641e2b5954a9fac06) ([2026-11-22-hy4](../../../published/plain/rtx5090-128g/2026-11-22-hy4/models.json)) |
+| hy4-flash | SQ-128 | 113.7 | Strata の量子化 (別モデル Hy4-Flash、128 GB RAM 向け、元重みに最も近い) | [strata-engine/Hy4-Flash-Strata @ `995bac2`](https://huggingface.co/strata-engine/Hy4-Flash-Strata/tree/995bac227ab7e0d221772be641e2b5954a9fac06) ([2026-11-22-hy4](../../../published/plain/rtx5090-128g/2026-11-22-hy4/models.json)) |
 
 
 ## 全ケース共通の条件

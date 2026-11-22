@@ -70,6 +70,29 @@ def models_root():
     return Path(manifest()['models_root'])
 
 
+def disk_of(path):
+    """The folder whose disk a file at `path` lands on: its nearest existing parent, links followed (a model folder may
+    link to another disk: Hy4-Flash's hy4-flash -> /mnt/data on rtx5090-128g)."""
+    p = Path(path).parent
+    while not p.exists():
+        p = p.parent
+    return p.resolve()
+
+
+def missing_by_disk(files):
+    """{folder: (bytes still to fetch, bytes free)} per disk, for manifest files not yet on disk (each SHA-256 once)."""
+    root, seen, need = models_root(), set(), {}
+    for f in files:
+        if f['sha256'] in seen:
+            continue
+        seen.add(f['sha256'])
+        d = disk_of(root / f['path'])
+        dev = os.stat(d).st_dev
+        b, _ = need.get(dev, (0, d))
+        need[dev] = (b + f['bytes'], d)
+    return {d: (b, shutil.disk_usage(d).free) for b, d in need.values()}
+
+
 def model_complete(family, model):
     """Every file of the model is on disk with its .done mark (the downloader's verified state)."""
     root = models_root()

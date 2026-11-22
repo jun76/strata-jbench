@@ -1,0 +1,1 @@
+Added Tencent Hy4-Flash (SQ-64, SQ-96, SQ-128), supported since Strata 0.2.18, and measured it (Tiers 1-4b, 140 of 147 cases done). 1M ran out of GPU memory at launch, and SQ-128's 256K document is longer than the window in Hy4's tokenizer, so neither was measured

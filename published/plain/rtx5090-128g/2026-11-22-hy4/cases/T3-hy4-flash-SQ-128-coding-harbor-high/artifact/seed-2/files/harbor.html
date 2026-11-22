@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Voxel Harbor Scene</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #9fd9e8;
+    }
+    canvas {
+      display: block;
+    }
+    #hud {
+      position: fixed;
+      top: 14px;
+      left: 14px;
+      z-index: 10;
+      color: #fff;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.45);
+      pointer-events: none;
+    }
+    #hud .title {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+    }
+    #hud .sub {
+      margin-top: 4px;
+      font-size: 13px;
+      opacity: 0.9;
+    }
+    #help {
+      position: fixed;
+      left: 14px;
+      bottom: 14px;
+      z-index: 10;
+      padding: 8px 11px;
+      border-radius: 8px;
+      color: #eefcff;
+      background: rgba(12, 38, 48, 0.55);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 12px;
+      pointer-events: none;
+      backdrop-filter: blur(4px);
+    }
+  </style>
+</head>
+<body>
+  <div id="hud">
+    <div class="title">⚓ Sailing Ship Calling at Harbor</div>
+    <div class="sub">Voxel art scene</div>
+  </div>
+  <div id="help">Left drag: orbit &nbsp;•&nbsp; Wheel: zoom &nbsp;•&nbsp; Right drag: pan</div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+  <script>
+  (function () {
+    'use strict';
+
+    const help = document.getElementById('help');
+    if (!window.THREE) {
+      help.textContent = 'Could not load Three.js. Check your internet connection.';
+      return;
+    }
+    if (!THREE.OrbitControls) {
+      help.textContent = 'Could not load OrbitControls. Check your internet connection.';
+      return;
+    }
+
+    const PALETTE = {
+      waterDeep: 0x176a8c,
+      water: 0x218aa9,
+      waterLight: 0x48b7c8,
+      foam: 0xd8f6f4,
+
+      stone: 0x87949a,
+      stoneDark: 0x66767e,
+      stoneLight: 0xa8b3b7,
+
+      woodPlank: 0xa97343,
+      woodPlankAlt: 0xbd8650,
+      woodDark: 0x5a3828,
+      woodLight: 0xc08a4a,
+
+      crate: 0xc28a4a,
+      crateDark: 0x7e4f2e,
+      barrel: 0x9a6236,
+
+      metalDark: 0x27323a,
+      metalLight: 0x9aa7ad,
+
+      brick: 0xa85d48,
+      brickDark: 0x7f3f34,
+      roof: 0x2e5d66,
+      roofDark: 0x24484e,
+
+      window: 0x4aa6c7,
+      windowWarm: 0xffd982,
+
+      cream: 0xf2dfb5,
+      creamDark: 0xd3b98b,
+      white: 0xf7f2df,
+      red: 0xc9433f,
+      flagGold: 0xffd45a,
+      lamp: 0xffe66b,
+
+      hullDark: 0x3b241c,
+      hull: 0x6f432c,
+      hullTrim: 0xc08a4a,
+      deck: 0xb77f4c,
+      mast: 0x6b4529,
+
+      sail: 0xf6eed5,
+      sailShade: 0xd9cfb4,
+      rope: 0x4a3a2c,
+
+      cabin: 0xe8d2a3,
+      cabinRoof: 0x9a4a3b,
+
+      buoyRed: 0xe65343,
+      buoyWhite: 0xf5f0df
+    };
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xa9e3f0);
+    scene.fog = new THREE.Fog(0xa9e3f0, 55, 105);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    document.body.appendChild(renderer.domElement);
+
+    const frustumSize = 44;
+    const aspect = window.innerWidth / window.innerHeight;
+    const camera = new THREE.OrthographicCamera(
+      -frustumSize * aspect / 2,
+       frustumSize * aspect / 2,
+       frustumSize / 2,
+      -frustumSize / 2,
+      0.1,
+      200
+    );
+    camera.position.set(32, 24, 34);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 5.5, 0);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.075;
+    controls.screenSpacePanning = true;
+    controls.minZoom = 0.55;
+    controls.maxZoom = 2.6;
+    controls.minPolarAngle = Math.PI * 0.08;
+    controls.maxPolarAngle = Math.PI * 0.48;
+    controls.update();
+
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x486b75, 0.9));
+
+    const sun = new THREE.DirectionalLight(0xfff0cf, 0.95);
+    sun.position.set(-24, 42, 28);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -48;
+    sun.shadow.camera.right = 48;
+    sun.shadow.camera.top = 42;
+    sun.shadow.camera.bottom = -42;
+    sun.shadow.camera.near = 1;
+    sun.shadow.camera.far = 120;
+    sun.shadow.bias = -0.0005;
+    sun.target.position.set(0, 0, 0);
+    scene.add(sun);
+    scene.add(sun.target);
+
+    const cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
+
+    class Batch {
+      constructor() {
+        this.voxels = Object.create(null);
+      }
+
+      add(color, x, y, z, sx = 1, sy = 1, sz = 1) {
+        if (!this.voxels[color]) this.voxels[color] = [];
+        this.voxels[color].push({ x, y, z, sx, sy, sz });
+      }
+
+      build(parent) {
+        const p = new THREE.Vector3();
+        const s = new THREE.Vector3();
+        const q = new THREE.Quaternion();
+        const m = new THREE.Matrix4();
+
+        for (const name of Object.keys(this.voxels)) {
+          const cubes = this.voxels[name];
+          const material = new THREE.MeshLambertMaterial({ color: PALETTE[name] });
+          const mesh = new THREE.InstancedMesh(cubeGeometry, material, cubes.length);
+
+          for (let i = 0; i < cubes.length; i++) {
+            const c = cubes[i];
+            p.set(c.x, c.y, c.z);
+            s.set(c.sx, c.sy, c.sz);
+            m.compose(p, q, s);
+            mesh.setMatrixAt(i, m);
+          }
+
+          mesh.instanceMatrix.needsUpdate = true;
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          mesh.frustumCulled = false;
+          parent.add(mesh);
+        }
+      }
+    }
+
+    const world = new Batch();
+    const ship = new Batch();
+    const birds = new Batch();
+
+    function buildWater() {
+      for (let x = -25; x <= 25; x++) {
+        for (let z = -20; z <= 20; z++) {
+          const n =
+            Math.sin(x * 0.47) * 0.7 +
+            Math.sin(z * 0.36) * 0.7 +
+            Math.sin((x + z) * 0.21);
+
+          let color = 'water';
+          if (n > 0.9) color = 'waterLight';
+          else if (n < -0.9) color = 'waterDeep';
+
+          const y = -0.28 + (n > 1.55 ? 0.06 : 0);
+          world.add(color, x, y, z, 1, 0.52, 1);
+        }
+      }
+
+      // Foam near the bow.
+      for (let i = 0; i < 18; i++) {
+        const x = -8 + (i % 6) * 2;
+        const z = -12 - Math.floor(i / 6) * 2;
+        world.add('foam', x, 0.02, z, 1.2, 0.08, 0.35);
+      }
+
+      // Foam near the stern.
+      for (let i = 0; i < 12; i++) {
+        const x = -7 + (i % 6) * 2;
+        const z = 10 + Math.floor(i / 6) * 2;
+        world.add('foam', x, 0.02, z, 1.1, 0.08, 0.35);
+      }
+
+      // Small glints on the water.
+      for (let i = 0; i < 40; i++) {
+        const x = -24 + ((i * 13) % 49);
+        const z = -18 + ((i * 7) % 37);
+        world.add('waterLight', x, 0.01, z, 1.4, 0.05, 0.25);
+      }
+    }
+
+    function addBollard(z) {
+      world.add('metalDark', 7.15, 2.45, z, 0.9, 0.8, 0.9);
+      world.add('metalLight', 7.15, 2.9, z, 1.15, 0.22, 1.15);
+    }
+
+    function buildDock() {
+      // Main stone quay.
+      for (let x = 7; x <= 22; x++) {
+        for (let z = -15; z <= 15; z++) {
+          world.add((x + z) % 2 === 0 ? 'stone' : 'stoneDark', x, 0.5, z);
+          world.add((x + z) % 3 === 0 ? 'stoneLight' : 'stone', x, 1.5, z);
+        }
+      }
+
+      // Wooden planks on top.
+      for (let z = -14; z <= 14; z++) {
+        world.add(z % 2 === 0 ? 'woodPlank' : 'woodPlankAlt', 14.5, 2.08, z, 15, 0.16, 0.92);
+      }
+
+      // Pier extension for lighthouse.
+      for (let x = 17; x <= 22; x++) {
+        for (let z = -19; z <= -15; z++) {
+          world.add((x + z) % 2 === 0 ? 'stone' : 'stoneDark', x, 0.5, z);
+          world.add((x + z) % 3 === 0 ? 'stoneLight' : 'stone', x, 1.5, z);
+        }
+      }
+      for (let z = -19; z <= -15; z++) {
+        world.add('woodPlank', 19.5, 2.08, z, 6, 0.16, 0.92);
+      }
+
+      // Dark edge cap along the water side.
+      for (let z = -15; z <= 15; z++) {
+        world.add('stoneDark', 7, 1.9, z, 0.25, 0.35, 1);
+      }
+
+      // Bollards.
+      for (const z of [-12, -7, -2, 3, 8, 13]) addBollard(z);
+
+      // Small ladder down to the water.
+      for (let y = 0.4; y <= 2.2; y += 0.45) {
+        world.add('metalLight', 7.25, y, 13, 0.18, 0.12, 1.5);
+      }
+      world.add('metalDark', 7.0, 2.45, 12.25, 0.2, 1.2, 0.2);
+      world.add('metalDark', 7.0, 2.45, 13.75, 0.2, 1.2, 0.2);
+    }
+
+    function addCrate(x, y, z) {
+      world.add('crate', x, y, z);
+      world.add('crateDark', x, y, z + 0.49, 0.9, 0.15, 0.08);
+      world.add('crateDark', x, y, z - 0.49, 0.9, 0.15, 0.08);
+      world.add('crateDark', x + 0.49, y, z, 0.08, 0.15, 0.9);
+      world.add('crateDark', x - 0.49, y, z, 0.08, 0.15, 0.9);
+    }
+
+    function addBarrel(x, z, y = 2.6) {
+      world.add('barrel', x, y, z);
+      world.add('metalDark', x, y + 0.32, z, 1.05, 0.12, 1.05);
+      world.add('metalDark', x, y - 0.32, z, 1.05, 0.12, 1.05);
+    }
+
+    function buildProps() {
+      // Stacked cargo.
+      for (let dx = 0; dx < 2; dx++) {
+        for (let dz = 0; dz < 2; dz++) {
+          addCrate(9 + dx, 2.6, -8 + dz);
+          addCrate(9 + dx, 3.6, -8 + dz);
+        }
+      }
+      addCrate(12, 2.6, -5);
+      addCrate(13, 2.6, -5);
+
+      // Barrels.
+      addBarrel(10, 3);
+      addBarrel(11, 3);
+      addBarrel(10, 4);
+      addBarrel(18, 1);
+      addBarrel(19, 1);
+
+      // Coiled rope.
+      for (let i = 0; i < 3; i++) {
+        world.add('rope', 9.4 + i * 0.25, 2.16, 8, 0.9, 0.08, 0.9);
+      }
+    }
+
+    function buildBuilding(x0, z0, w, d, h, wall, trim, roofColor) {
+      const top = 2 + h;
+
+      // Hollow voxel walls.
+      for (let y = 3; y <= top; y++) {
+        for (let x = x0; x < x0 + w; x++) {
+          for (let z = z0; z < z0 + d; z++) {
+            const edge = x === x0 || x === x0 + w - 1 || z === z0 || z === z0 + d - 1;
+            if (edge) world.add(wall, x, y, z);
+          }
+        }
+      }
+
+      // Corner trim.
+      for (let y = 3; y <= top; y++) {
+        world.add(trim, x0, y, z0);
+        world.add(trim, x0 + w - 1, y, z0);
+        world.add(trim, x0, y, z0 + d - 1);
+        world.add(trim, x0 + w - 1, y, z0 + d - 1);
+      }
+
+      // Stepped roof.
+      for (let x = x0 - 1; x <= x0 + w; x++) {
+        for (let z = z0 - 1; z <= z0 + d; z++) {
+          world.add(roofColor, x, top + 1, z);
+        }
+      }
+      for (let x = x0; x < x0 + w; x++) {
+        for (let z = z0; z < z0 + d; z++) {
+          world.add('roofDark', x, top + 2, z);
+        }
+      }
+
+      // Windows on the near face.
+      const frontZ = z0 + d - 1 + 0.51;
+      for (let wx = x0 + 1; wx < x0 + w - 1; wx += 2) {
+        for (let wy = 4; wy <= Math.min(top - 1, 6); wy += 2) {
+          world.add('window', wx, wy, frontZ, 0.75, 0.75, 0.08);
+        }
+      }
+
+      // Windows on the right face.
+      const rightX = x0 + w - 1 + 0.51;
+      for (let wz = z0 + 1; wz < z0 + d - 1; wz += 2) {
+        for (let wy = 4; wy <= top - 1; wy += 2) {
+          world.add('windowWarm', rightX, wy, wz, 0.08, 0.75, 0.75);
+        }
+      }
+
+      // Door.
+      const doorX = x0 + Math.floor(w / 2);
+      world.add('woodDark', doorX, 3.5, frontZ, 1.0, 1.5, 0.1);
+      world.add('metalLight', doorX + 0.3, 3.5, frontZ + 0.06, 0.12, 0.12, 0.12);
+    }
+
+    function buildLighthouse(cx, cz) {
+      // Stone base.
+      for (let x = cx - 2; x <= cx + 2; x++) {
+        for (let z = cz - 2; z <= cz + 2; z++) {
+          world.add('stone', x, 2.6, z);
+          world.add('stoneLight', x, 3.2, z);
+        }
+      }
+
+      // Rounded voxel tower with red/white bands.
+      for (let i = 0; i < 10; i++) {
+        const y = 3.7 + i;
+        const color = Math.floor(i / 2) % 2 === 0 ? 'white' : 'red';
+
+        for (let x = cx - 1; x <= cx + 1; x++) {
+          for (let z = cz - 1; z <= cz + 1; z++) {
+            if (Math.abs(x - cx) === 1 && Math.abs(z - cz) === 1) continue;
+            world.add(color, x, y, z);
+          }
+        }
+      }
+
+      // Gallery, lamp, and roof.
+      world.add('metalDark', cx, 13.6, cz, 4.2, 0.35, 4.2);
+      world.add('metalLight', cx, 14.0, cz, 3.6, 0.18, 3.6);
+      world.add('lamp', cx, 15.0, cz, 2.1, 1.5, 2.1);
+      world.add('metalDark', cx, 15.8, cz, 2.5, 0.18, 2.5);
+      world.add('red', cx, 16.4, cz, 2.6, 0.8, 2.6);
+    }
+
+    function buildGangplank() {
+      // Sloped plank from ship to quay.
+      for (let x = -1; x <= 7; x++) {
+        const y = 3.02 - (x + 1) * 0.105;
+        world.add('woodPlank', x, y, 0.5, 1, 0.22, 0.95);
+        world.add('woodPlankAlt', x, y, 1.5, 1, 0.22, 0.95);
+      }
+
+      // Rope handrail posts.
+      for (let x = -1; x <= 7; x += 2) {
+        const y = 3.02 - (x + 1) * 0.105;
+        world.add('metalDark', x, y + 0.65, 0, 0.14, 0.9, 0.14);
+        world.add('metalDark', x, y + 0.65, 2, 0.14, 0.9, 0.14);
+        world.add('rope', x + 0.5, y + 0.92, 0, 1, 0.1, 0.1);
+        world.add('rope', x + 0.5, y + 0.92, 2, 1, 0.1, 0.1);
+      }
+    }
+
+    function buildBuoy() {
+      world.add('buoyRed', -14, 0.35, -13, 1, 1, 1);
+      world.add('buoyWhite', -14, 1.0, -13, 1, 0.4, 1);
+      world.add('metalDark', -14, 1.4, -13, 0.2, 0.8, 0.2);
+      world.add('lamp', -14, 1.9, -13, 0.35, 0.35, 0.35);
+    }
+
+    function hullHalfWidth(z) {
+      if (z <= -10) return 1;
+      if (z === -9 || z === -8) return 2;
+      if (z === 7) return 2;
+      if (z >= 8) return 1;
+      return 3;
+    }
+
+    function addMast(z, topY) {
+      for (let y = 3; y <= topY; y++) ship.add('mast', 0, y, z);
+      ship.add('metalDark', 0, topY + 0.4, z, 1.3, 0.3, 1.3);
+    }
+
+    function addYard(z, y, half) {
+      for (let x = -half; x <= half; x++) ship.add('mast', x, y, z);
+    }
+
+    function squareSail(z0, y0, y1, half, color) {
+      for (let y = y0; y <= y1; y++) {
+        let w = half;
+        if (y === y1 && half > 2) w = half - 1;
+
+        for (let x = -w; x <= w; x++) {
+          const billow = Math.round(1.25 * (1 - Math.abs(x) / (half + 0.001)));
+          const edge = y === y0 || y === y1 || Math.abs(x) === w;
+          ship.add(edge ? 'sailShade' : color, x, y, z0 + billow);
+        }
+      }
+    }
+
+    function addJib() {
+      for (let z = -13; z <= -7; z++) {
+        const t = (z + 13) / 6;
+        const bottom = 4 + Math.round(t);
+        const top = 5 + Math.round(8 * t);
+
+        for (let y = bottom; y <= top; y++) {
+          const edge = z === -13 || y === top;
+          ship.add(edge ? 'sailShade' : 'sail', 1, y, z);
+        }
+      }
+    }
+
+    function addFlag() {
+      ship.add('metalDark', 0, 18.2, -1, 0.25, 1.6, 0.25);
+
+      for (let x = 1; x <= 5; x++) {
+        for (let z = -1; z <= 0; z++) {
+          const color = (x + z) % 2 === 0 ? 'flagGold' : 'red';
+          ship.add(color, x, 18.7, z);
+        }
+      }
+    }
+
+    function addRope(x1, y1, z1, x2, y2, z2, color) {
+      const steps = Math.max(
+        Math.abs(x2 - x1),
+        Math.abs(y2 - y1),
+        Math.abs(z2 - z1)
+      );
+
+      for (let i = 1; i < steps; i++) {
+        const t = i / steps;
+        ship.add(
+          color,
+          Math.round(x1 + (x2 - x1) * t),
+          Math.round(y1 + (y2 - y1) * t),
+          Math.round(z1 + (z2 - z1) * t)
+        );
+      }
+    }
+
+    function addRopes() {
+      addRope(0, 17, -1, 0, 4, -10, 'rope');
+      addRope(0, 17, -1, 0, 4, 8, 'rope');
+      addRope(-2, 13, -1, -3, 4, -1, 'rope');
+      addRope(2, 13, -1, 3, 4, -1, 'rope');
+    }
+
+    function buildShip() {
+      // Hull.
+      for (let z = -10; z <= 8; z++) {
+        const hw = hullHalfWidth(z);
+
+        // Dark lower hull.
+        for (let x = -hw + (hw > 1 ? 1 : 0); x <= hw - (hw > 1 ? 1 : 0); x++) {
+          ship.add('hullDark', x, 0.5, z);
+        }
+
+        // Hull sides and deck.
+        for (let x = -hw; x <= hw; x++) {
+          ship.add(Math.abs(x) === hw ? 'hullTrim' : 'hull', x, 1.5, z);
+          ship.add('deck', x, 2.5, z);
+        }
+
+        // Gunwales, with a gap for the gangplank.
+        for (const side of [-1, 1]) {
+          const x = side * hw;
+          if (!(side === 1 && z >= -1 && z <= 3)) {
+            ship.add('hullTrim', x, 3.5, z);
+          }
+        }
+      }
+
+      // Raised bow and stern.
+      for (let z = -11; z <= -10; z++) ship.add('hullTrim', 0, 3.5, z);
+      ship.add('hullTrim', 0, 4.5, -11);
+
+      for (let z = 7; z <= 9; z++) {
+        ship.add('hullTrim', -2, 3.5, z);
+        ship.add('hullTrim', 2, 3.5, z);
+      }
+
+      // Bowsprit.
+      for (let z = -11; z >= -14; z--) ship.add('mast', 0, 4, z);
+
+      // Deck hatch.
+      for (let z = -4; z <= -2; z++) {
+        for (let x = -1; x <= 1; x++) {
+          ship.add('woodDark', x, 3.1, z, 0.95, 0.15, 0.95);
+        }
+      }
+
+      // Stern cabin.
+      for (let y = 4; y <= 5; y++) {
+        for (let z = 6; z <= 8; z++) {
+          for (let x = -2; x <= 2; x++) {
+            if (x === -2 || x === 2 || z === 6 || z === 8 || y === 5) {
+              ship.add('cabin', x, y, z);
+            }
+          }
+        }
+      }
+      for (let x = -3; x <= 3; x++) {
+        for (let z = 5; z <= 9; z++) ship.add('cabinRoof', x, 6, z);
+      }
+      for (let z = 6; z <= 8; z++) ship.add('windowWarm', 2.51, 5, z, 0.08, 0.55, 0.55);
+
+      // Ship wheel.
+      ship.add('woodDark', 0, 4.2, 5, 0.2, 1.2, 1.2);
+      ship.add('woodLight', 0, 4.8, 5, 0.25, 0.25, 1.8);
+
+      // Masts.
+      addMast(-1, 17);
+      addMast(-6, 14);
+
+      // Main sails.
+      addYard(-1, 7, 5);
+      squareSail(-1, 8, 12, 4, 'sail');
+      addYard(-1, 13, 4);
+      squareSail(-1, 14, 16, 3, 'sail');
+      addYard(-1, 17, 3);
+
+      // Fore sails.
+      addYard(-6, 6, 4);
+      squareSail(-6, 7, 11, 3, 'sail');
+      addYard(-6, 12, 3);
+      squareSail(-6, 13, 14, 2, 'sail');
+      addYard(-6, 15, 2);
+
+      // Jib, flag, and rigging.
+      addJib();
+      addFlag();
+      addRopes();
+    }
+
+    function buildBirds() {
+      const data = [
+        [-12, 19, 7],
+        [0, 22, 14],
+        [12, 18, 4]
+      ];
+
+      for (const [x, y, z] of data) {
+        birds.add('white', x - 1, y, z);
+        birds.add('white', x, y + 1, z);
+        birds.add('white', x + 1, y, z);
+        birds.add('white', x, y, z + 1);
+      }
+    }
+
+    buildWater();
+    buildDock();
+    buildProps();
+    buildBuilding(14, -13, 7, 6, 5, 'brick', 'brickDark', 'roof');
+    buildBuilding(15, 6, 5, 4, 4, 'cream', 'creamDark', 'roofDark');
+    buildLighthouse(20, -18);
+    buildGangplank();
+    buildBuoy();
+    buildShip();
+    buildBirds();
+
+    const worldGroup = new THREE.Group();
+    scene.add(worldGroup);
+    world.build(worldGroup);
+
+    const shipGroup = new THREE.Group();
+    shipGroup.position.set(-4, 0, 0);
+    scene.add(shipGroup);
+    ship.build(shipGroup);
+
+    const birdGroup = new THREE.Group();
+    scene.add(birdGroup);
+    birds.build(birdGroup);
+
+    function animate(ms) {
+      const t = ms * 0.001;
+
+      shipGroup.position.y = Math.sin(t * 0.8) * 0.07;
+      shipGroup.rotation.z = Math.sin(t * 0.55) * 0.008;
+      shipGroup.rotation.x = Math.sin(t * 0.37) * 0.004;
+
+      birdGroup.position.y = Math.sin(t * 0.6) * 0.35;
+      birdGroup.rotation.y = Math.sin(t * 0.15) * 0.025;
+
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
+
+    requestAnimationFrame(animate);
+
+    window.addEventListener('resize', function () {
+      const a = window.innerWidth / window.innerHeight;
+      camera.left = -frustumSize * a / 2;
+      camera.right = frustumSize * a / 2;
+      camera.top = frustumSize / 2;
+      camera.bottom = -frustumSize / 2;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  })();
+  </script>
+</body>
+</html>

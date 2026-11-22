@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Voxel Harbor Scene</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #8bd2f0;
+  }
+  canvas {
+    display: block;
+  }
+  #info {
+    position: fixed;
+    left: 18px;
+    bottom: 18px;
+    z-index: 10;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: rgba(15, 25, 40, 0.72);
+    color: #fff;
+    font-family: system-ui, sans-serif;
+    font-size: 13px;
+    pointer-events: none;
+  }
+</style>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="info">Voxel harbor · Drag to orbit · Scroll to zoom · Right-drag to pan</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ------------------------------------------------------------
+// Scene / renderer / camera
+// ------------------------------------------------------------
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x8bd2f0);
+scene.fog = new THREE.Fog(0x8bd2f0, 42, 95);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.08;
+document.body.appendChild(renderer.domElement);
+
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 220);
+camera.position.set(26, 17, 27);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.target.set(3, 3.5, 0);
+controls.minDistance = 12;
+controls.maxDistance = 80;
+controls.maxPolarAngle = Math.PI * 0.49;
+controls.update();
+
+// ------------------------------------------------------------
+// Lights
+// ------------------------------------------------------------
+
+const hemi = new THREE.HemisphereLight(0xffffff, 0x55779c, 1.15);
+scene.add(hemi);
+
+const sun = new THREE.DirectionalLight(0xffefc6, 2.15);
+sun.position.set(22, 32, 16);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -35;
+sun.shadow.camera.right = 35;
+sun.shadow.camera.top = 35;
+sun.shadow.camera.bottom = -35;
+sun.shadow.camera.near = 1;
+sun.shadow.camera.far = 100;
+scene.add(sun);
+scene.add(sun.target);
+sun.target.position.set(0, 0, 0);
+
+// ------------------------------------------------------------
+// Helpers
+// ------------------------------------------------------------
+
+const colors = {
+  water: 0x2e93c5,
+  waterLight: 0xbcecff,
+  darkWood: 0x5a3828,
+  hull: 0x7a4b2e,
+  rail: 0x9b6338,
+  deck: 0xd8a96e,
+  mast: 0x7a4d2f,
+  yard: 0x503323,
+  sail: 0xf2ead4,
+  sailShade: 0xe1d6bd,
+  red: 0xd44b3a,
+  stone: 0xb8b1a4,
+  stoneAlt: 0xc9c2b2,
+  metal: 0x4c4f56,
+  crane: 0xf0b83b,
+  wall: 0xd7b07c,
+  roof: 0x8c3f36,
+  brick: 0x8b4a3c,
+  cargo: 0xb9794a,
+  cargoDark: 0x6b442c,
+  bollard: 0x30343b
+};
+
+function box(parent, w, h, d, color, x, y, z, opts = {}) {
+  const geo = new THREE.BoxGeometry(w, h, d);
+  const mat = new THREE.MeshStandardMaterial({
+    color,
+    roughness: opts.roughness ?? 0.82,
+    metalness: opts.metalness ?? 0,
+    flatShading: true
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(x, y, z);
+  mesh.castShadow = opts.castShadow ?? true;
+  mesh.receiveShadow = opts.receiveShadow ?? true;
+
+  if (opts.rotation) {
+    mesh.rotation.set(
+      opts.rotation[0] || 0,
+      opts.rotation[1] || 0,
+      opts.rotation[2] || 0
+    );
+  }
+
+  parent.add(mesh);
+
+  if (opts.outline) {
+    const edges = new THREE.EdgesGeometry(geo);
+    const outline = new THREE.LineSegments(
+      edges,
+      new THREE.LineBasicMaterial({
+        color: opts.edgeColor ?? 0x2a2730,
+        transparent: true,
+        opacity: opts.edgeOpacity ?? 0.25
+      })
+    );
+    mesh.add(outline);
+  }
+
+  return mesh;
+}
+
+function line(parent, points, color = 0x2a2730, opacity = 0.7) {
+  const vectors = points.map(p =>
+    Array.isArray(p) ? new THREE.Vector3(p[0], p[1], p[2]) : p
+  );
+  const geo = new THREE.BufferGeometry().setFromPoints(vectors);
+  const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity });
+  const obj = new THREE.Line(geo, mat);
+  parent.add(obj);
+  return obj;
+}
+
+let seed = 1337;
+function rand() {
+  seed = (seed * 16807) % 2147483647;
+  return (seed - 1) / 2147483646;
+}
+
+// ------------------------------------------------------------
+// Water
+// ------------------------------------------------------------
+
+box(scene, 90, 0.4, 60, colors.water, 0, -0.2, 0, {
+  castShadow: false,
+  outline: false,
+  roughness: 0.45,
+  metalness: 0.08
+});
+
+const waves = [];
+for (let i = 0; i < 85; i++) {
+  const wx = rand() * 80 - 40;
+  const wz = rand() * 55 - 27.5;
+
+  // Avoid placing wave cubes underneath the dock.
+  if (wx > 0.4 && wx < 21 && Math.abs(wz) < 13) continue;
+
+  const w = 0.5 + rand() * 1.4;
+  const d = 0.15 + rand() * 0.45;
+  const mesh = box(scene, w, 0.08, d, colors.waterLight, wx, 0.05, wz, {
+    castShadow: false,
+    outline: false,
+    roughness: 0.35
+  });
+  mesh.material.transparent = true;
+  mesh.material.opacity = 0.72;
+  waves.push({ mesh, baseY: mesh.position.y, phase: rand() * Math.PI * 2 });
+}
+
+// ------------------------------------------------------------
+// Ship
+// ------------------------------------------------------------
+
+const ship = new THREE.Group();
+ship.position.set(-2.2, 0, 0);
+scene.add(ship);
+
+function hullFactor(z) {
+  if (z <= -7) return 0.36;
+  if (z <= -6) return 0.54;
+  if (z <= -5) return 0.74;
+  if (z <= -4) return 0.92;
+  if (z >= 7) return 0.72;
+  if (z >= 6) return 0.88;
+  return 1;
+}
+
+// Stepped voxel hull
+for (let z = -7.5; z <= 7.5; z += 1) {
+  const f = hullFactor(z);
+  box(ship, 5.1 * f, 0.55, 1.02, colors.darkWood, 0, 0.55, z, {
+    outline: true,
+    edgeColor: 0x2d1d22,
+    edgeOpacity: 0.35
+  });
+  box(ship, 6.0 * f, 0.55, 1.02, colors.hull, 0, 1.15, z, {
+    outline: true,
+    edgeColor: 0x38231c,
+    edgeOpacity: 0.3
+  });
+  box(ship, 6.25 * f, 0.25, 1.02, colors.rail, 0, 1.65, z, {
+    outline: true,
+    edgeColor: 0x3a251d,
+    edgeOpacity: 0.3
+  });
+}
+
+// Deck
+box(ship, 5.4, 0.16, 14.8, colors.deck, 0, 1.86, 0, {
+  outline: true,
+  edgeColor: 0x5a3d28
+});
+
+// Rail posts
+for (let z = -6; z <= 6; z += 2) {
+  const f = hullFactor(z);
+  for (const side of [-1, 1]) {
+    box(ship, 0.18, 0.55, 0.18, colors.rail, side * 3.05 * f, 2.05, z, {
+      outline: true
+    });
+  }
+}
+
+// Stern cabin
+box(ship, 4.0, 1.35, 3.0, 0xe4c78f, 0, 2.62, 5.2, { outline: true });
+box(ship, 4.4, 0.25, 3.35, colors.roof, 0, 3.4, 5.2, { outline: true });
+box(ship, 0.08, 0.45, 0.55, 0x2f6f8e, 2.06, 2.75, 4.45, { outline: false });
+box(ship, 0.08, 0.45, 0.55, 0x2f6f8e, 2.06, 2.75, 5.55, { outline: false });
+box(ship, 0.08, 0.35, 0.45, 0x2f6f8e, 2.06, 2.55, 6.15, { outline: false });
+
+// Bowsprit
+box(ship, 0.18, 0.18, 3.6, colors.mast, 0, 2.65, -8.6, {
+  outline: true,
+  rotation: [-0.12, 0, 0]
+});
+
+function addMast(z, height, tiers) {
+  const topY = 2.0 + height;
+
+  box(ship, 0.28, height, 0.28, colors.mast, 0, 2.0 + height / 2, z, {
+    outline: true
+  });
+
+  for (const t of tiers) {
+    const sailTopY = topY - t.drop;
+    const sailCenterY = sailTopY - t.h / 2 - 0.15;
+    const yardY = sailTopY + 0.05;
+
+    box(ship, t.width + 0.55, 0.16, 0.18, colors.yard, 0, yardY, z, {
+      outline: true
+    });
+
+    const panels = 3;
+    const gap = 0.12;
+    const panelWidth = (t.width - gap * (panels - 1)) / panels;
+
+    for (let i = 0; i < panels; i++) {
+      const px = -t.width / 2 + panelWidth / 2 + i * (panelWidth + gap);
+      box(
+        ship,
+        panelWidth,
+        t.h,
+        0.12,
+        i === 1 ? colors.sail : colors.sailShade,
+        px,
+        sailCenterY,
+        z + 0.02,
+        { outline: true, edgeColor: 0x9c9380, edgeOpacity: 0.2 }
+      );
+    }
+
+    if (t.stripe) {
+      box(ship, t.width, 0.22, 0.1, colors.red, 0, sailCenterY, z + 0.09, {
+        outline: false
+      });
+    }
+  }
+
+  return topY;
+}
+
+const mainTiers = [
+  { drop: 0.8, h: 2.1, width: 5.6, stripe: true },
+  { drop: 3.1, h: 1.9, width: 5.2 },
+  { drop: 5.3, h: 1.6, width: 4.7 }
+];
+
+const foreTiers = [
+  { drop: 0.7, h: 1.8, width: 4.6 },
+  { drop: 3.0, h: 1.6, width: 4.0 }
+];
+
+const aftTiers = [
+  { drop: 0.6, h: 1.4, width: 3.5 }
+];
+
+const foreTop = addMast(-4.0, 6.4, foreTiers);
+const mainTop = addMast(0.0, 8.2, mainTiers);
+const aftTop = addMast(3.0, 5.3, aftTiers);
+
+// Flag
+box(ship, 1.0, 0.42, 0.06, colors.red, 0.55, mainTop + 0.28, 0, {
+  outline: true
+});
+box(ship, 0.82, 0.12, 0.08, 0xffffff, 0.48, mainTop + 0.28, 0.02, {
+  outline: false
+});
+
+// Rigging
+line(ship, [[0, mainTop, 0], [0, 2.2, -8.0]]);
+line(ship, [[0, mainTop, 0], [0, 2.2, 7.6]]);
+line(ship, [[0, mainTop, 0], [3.0, 2.2, 0]]);
+line(ship, [[0, mainTop, 0], [-3.0, 2.2, 0]]);
+line(ship, [[0, foreTop, -4.0], [0, mainTop, 0]]);
+line(ship, [[0, aftTop, 3.0], [0, mainTop, 0]]);
+line(ship, [[0, 2.65, -10.1], [0, mainTop, 0]], 0x2a2730, 0.5);
+
+// Anchor-ish detail
+box(ship, 0.65, 0.65, 0.16, colors.bollard, 2.5, 1.65, -6.3, {
+  outline: true
+});
+
+// ------------------------------------------------------------
+// Harbor dock
+// ------------------------------------------------------------
+
+box(scene, 18.8, 1.1, 24, colors.stone, 10.8, 0.55, 0, {
+  outline: true,
+  edgeColor: 0x5e5c56,
+  edgeOpacity: 0.25
+});
+
+// Stone tile top
+for (let x = 2.4; x <= 19.6; x += 2) {
+  for (let z = -11; z <= 11; z += 2) {
+    const c = ((Math.round(x) + Math.round(z)) % 2 === 0)
+      ? colors.stone
+      : colors.stoneAlt;
+    box(scene, 1.9, 0.08, 1.9, c, x, 1.14, z, {
+      castShadow: false,
+      outline: false
+    });
+  }
+}
+
+// Dock edge blocks
+for (let z = -11; z <= 11; z += 2) {
+  box(scene, 0.55, 0.35, 1.9, 0x8f8a80, 1.35, 1.2, z, {
+    outline: true,
+    edgeColor: 0x5e5c56
+  });
+}
+
+// Bollards
+for (const z of [-9, -5, -1, 3, 7, 10]) {
+  box(scene, 0.5, 0.6, 0.5, colors.bollard, 1.85, 1.45, z, {
+    outline: true,
+    edgeColor: 0x11151c
+  });
+}
+
+// Gangplank from ship to dock
+box(scene, 1.7, 0.16, 1.05, colors.deck, 1.15, 1.58, 2.0, {
+  outline: true,
+  rotation: [0, 0, -0.72]
+});
+box(scene, 0.1, 0.55, 0.1, colors.rail, 0.62, 2.12, 1.48, { outline: true });
+box(scene, 0.1, 0.55, 0.1, colors.rail, 0.62, 2.12, 2.52, { outline: true });
+box(scene, 0.1, 0.55, 0.1, colors.rail, 1.72, 1.48, 1.48, { outline: true });
+box(scene, 0.1, 0.55, 0.1, colors.rail, 1.72, 1.48, 2.52, { outline: true });
+
+// ------------------------------------------------------------
+// Cargo crates
+// ------------------------------------------------------------
+
+function crateStack(parent, x, z, layers, color) {
+  for (let i = 0; i < layers; i++) {
+    const size = 1.1 - i * 0.04;
+    const y = 1.1 + 0.45 + i * 0.92;
+    box(parent, size, 0.9, size, color, x, y, z, {
+      outline: true,
+      edgeColor: colors.cargoDark,
+      edgeOpacity: 0.45
+    });
+    box(parent, size * 0.9, 0.08, 0.06, colors.cargoDark, x, y, z + size / 2 + 0.04, {
+      outline: false
+    });
+    box(parent, 0.06, 0.08, size * 0.9, colors.cargoDark, x + size / 2 + 0.04, y, z, {
+      outline: false
+    });
+  }
+}
+
+crateStack(scene, 5.2, -6.0, 3, colors.cargo);
+crateStack(scene, 11.5, 3.0, 2, 0xa86d46);
+crateStack(scene, 15.5, 7.5, 4, colors.cargo);
+crateStack(scene, 7.0, 10.0, 2, 0xc08a56);
+
+// ------------------------------------------------------------
+// Warehouse
+// ------------------------------------------------------------
+
+const warehouse = new THREE.Group();
+warehouse.position.set(14, 0, -8.5);
+scene.add(warehouse);
+
+box(warehouse, 8, 4.2, 6, colors.wall, 0, 3.25, 0, {
+  outline: true,
+  edgeColor: 0x6b4b38
+});
+box(warehouse, 8.5, 0.35, 6.5, colors.roof, 0, 5.55, 0, {
+  outline: true,
+  edgeColor: 0x552b26
+});
+
+// Door and windows facing the ship-side of the dock
+box(warehouse, 0.08, 2.0, 1.5, colors.darkWood, -4.05, 2.15, 0, {
+  outline: true
+});
+box(warehouse, 0.08, 0.55, 0.7, 0x2f6f8e, -4.05, 3.55, -1.8, {
+  outline: true
+});
+box(warehouse, 0.08, 0.55, 0.7, 0x2f6f8e, -4.05, 3.55, 1.8, {
+  outline: true
+});
+box(warehouse, 0.08, 0.08, 1.2, colors.darkWood, -4.07, 1.15, 0, {
+  outline: false
+});
+
+// Warehouse sign
+box(warehouse, 3.0, 0.65, 0.16, 0x315b74, -4.1, 4.45, 0, {
+  outline: true
+});
+
+// Chimney
+box(warehouse, 0.75, 1.4, 0.75, colors.brick, 2.4, 5.9, -1.7, {
+  outline: true
+});
+
+const smoke = [];
+for (let i = 0; i < 6; i++) {
+  const m = box(
+    warehouse,
+    0.45 + i * 0.13,
+    0.45 + i * 0.08,
+    0.45 + i * 0.08,
+    0xe9e6df,
+    2.4 + Math.sin(i) * 0.25,
+    6.8 + i * 0.55,
+    -1.7,
+    { castShadow: false, outline: false }
+  );
+  m.material.transparent = true;
+  m.material.opacity = 0.55 - i * 0.05;
+  smoke.push({
+    mesh: m,
+    baseY: m.position.y,
+    baseX: m.position.x,
+    phase: i * 0.8
+  });
+}
+
+// ------------------------------------------------------------
+// Dock crane
+// ------------------------------------------------------------
+
+const crane = new THREE.Group();
+crane.position.set(8, 0, 8);
+scene.add(crane);
+
+box(crane, 2.4, 0.7, 2.4, colors.metal, 0, 1.45, 0, {
+  outline: true,
+  edgeColor: 0x22252b
+});
+
+for (let y = 2.0; y <= 7.0; y += 1.0) {
+  box(crane, 1.25, 0.9, 1.25, colors.crane, 0, y, 0, {
+    outline: true,
+    edgeColor: 0x3c3425
+  });
+}
+
+box(crane, 2.0, 1.0, 1.8, 0xc99b33, 0, 7.65, 0, {
+  outline: true
+});
+box(crane, 8.2, 0.32, 0.35, colors.crane, -4.1, 8.05, 0, {
+  outline: true,
+  edgeColor: 0x3c3425
+});
+box(crane, 3.0, 0.32, 0.35, colors.crane, 1.5, 8.05, 0, {
+  outline: true,
+  edgeColor: 0x3c3425
+});
+line(crane, [[-6.1, 7.9, 0], [-6.1, 3.5, 0]], 0x30343b, 0.9);
+box(crane, 0.55, 0.45, 0.35, colors.metal, -6.1, 3.28, 0, {
+  outline: true
+});
+
+// ------------------------------------------------------------
+// Lighthouse
+// ------------------------------------------------------------
+
+const lighthouse = new THREE.Group();
+lighthouse.position.set(20.5, 0, 12.5);
+scene.add(lighthouse);
+
+box(lighthouse, 5.0, 0.8, 5.0, colors.stone, 0, 1.5, 0, {
+  outline: true
+});
+
+for (let i = 0; i < 7; i++) {
+  const w = 3.6 - i * 0.25;
+  const band = (i % 2 === 0) ? 0xffffff : colors.red;
+  box(lighthouse, w, 0.8, w, band, 0, 2.3 + i * 0.8, 0, {
+    outline: true,
+    edgeColor: 0x333333,
+    edgeOpacity: 0.18
+  });
+}
+
+box(lighthouse, 2.2, 1.2, 2.2, 0xffd36a, 0, 8.05, 0, {
+  outline: true,
+  edgeColor: 0x7a6030
+});
+box(lighthouse, 2.7, 0.45, 2.7, colors.roof, 0, 8.85, 0, {
+  outline: true
+});
+
+const lamp = new THREE.PointLight(0xffd36a, 1.4, 20);
+lamp.position.set(0, 8.05, 0);
+lighthouse.add(lamp);
+
+// ------------------------------------------------------------
+// Voxel clouds
+// ------------------------------------------------------------
+
+function addCloud(cx, cy, cz, scale) {
+  const g = new THREE.Group();
+  g.position.set(cx, cy, cz);
+  scene.add(g);
+
+  box(g, 3.2 * scale, 1.0 * scale, 1.4 * scale, 0xffffff, 0, 0, 0, {
+    castShadow: false,
+    outline: false
+  });
+  box(g, 2.2 * scale, 0.9 * scale, 1.2 * scale, 0xffffff, 1.3 * scale, 0.25 * scale, 0, {
+    castShadow: false,
+    outline: false
+  });
+  box(g, 1.8 * scale, 0.8 * scale, 1.1 * scale, 0xffffff, -1.2 * scale, 0.2 * scale, 0, {
+    castShadow: false,
+    outline: false
+  });
+  box(g, 1.7 * scale, 0.8 * scale, 1.0 * scale, 0xffffff, 0, 0.75 * scale, 0, {
+    castShadow: false,
+    outline: false
+  });
+}
+
+for (let i = 0; i < 7; i++) {
+  addCloud(
+    rand() * 70 - 35,
+    17 + rand() * 8,
+    rand() * 60 - 30,
+    0.8 + rand() * 0.8
+  );
+}
+
+// ------------------------------------------------------------
+// Animation
+// ------------------------------------------------------------
+
+function animate(t) {
+  const time = t * 0.001;
+
+  // Ship gently bobbing at the pier.
+  ship.position.y = Math.sin(time * 0.8) * 0.08;
+  ship.rotation.z = Math.sin(time * 0.55) * 0.012;
+  ship.rotation.x = Math.cos(time * 0.45) * 0.008;
+
+  // Water voxels bob and shimmer.
+  for (const w of waves) {
+    w.mesh.position.y = w.baseY + Math.sin(time * 1.7 + w.phase) * 0.055;
+    w.mesh.material.opacity = 0.62 + Math.sin(time * 1.3 + w.phase) * 0.12;
+  }
+
+  // Smoke drifts.
+  for (const s of smoke) {
+    s.mesh.position.y = s.baseY + Math.sin(time * 0.6 + s.phase) * 0.25;
+    s.mesh.position.x = s.baseX + Math.sin(time * 0.35 + s.phase) * 0.22;
+  }
+
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>

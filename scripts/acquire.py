@@ -97,6 +97,7 @@ def model_items(models):
             items.append({'item': 'models', 'what': f'{fam} {model}', 'state': 'ok'})
             continue
         items.append({'item': 'models', 'what': f'{fam} {model}', 'state': 'missing', 'bytes': sum(f['bytes'] for f in left),
+                      '_files': left,
                       'source': 'huggingface.co (pinned by Strata setup.py)', 'fix': 'python3 -I scripts/acquire.py fetch models'})
     return items
 
@@ -159,8 +160,11 @@ def check(env_id, div):
         items.append(harness_item(div))
     items += tool_items(div)
     free = shutil.disk_usage(overnight.models_root()).free
+    # per disk: a model folder may link to another one (Hy4-Flash's on rtx5090-128g)
+    disks = overnight.missing_by_disk([f for i in items for f in i.pop('_files', [])])
     out = {'at': now(), 'env': env_id, 'division': div, 'ok': all(i['state'] == 'ok' for i in items),
-           'free_bytes': free, 'items': items}
+           'free_bytes': free, 'disks': [{'folder': str(d), 'missing_bytes': b, 'free_bytes': fr} for d, (b, fr) in disks.items()],
+           'items': items}
     (ROOT / 'run-status').mkdir(exist_ok=True)
     (ROOT / 'run-status/acquire.json').write_text(json.dumps(out, ensure_ascii=False, indent=2) + '\n')
     return out
@@ -176,9 +180,16 @@ def show(out):
             line += f' — {i.get("detail") + "; " if i.get("detail") else ""}{i.get("fix", "")}'
         print(line)
     left = sum(i.get('bytes') or 0 for i in out['items'] if i['state'] == 'missing')
-    if left:
+    disks = out.get('disks') or []
+    if left and not disks:
         print(f'  to download: {gb(left)}; free on the models disk: {gb(out["free_bytes"])}'
               + (' (NOT ENOUGH)' if left + 10e9 > out['free_bytes'] else ''))
+    for d in disks:
+        print(f'  to download into {d["folder"]}: {gb(d["missing_bytes"])}; free there: {gb(d["free_bytes"])}'
+              + (' (NOT ENOUGH)' if d['missing_bytes'] + 10e9 > d['free_bytes'] else ''))
+    rest = left - sum(d['missing_bytes'] for d in disks)
+    if disks and rest > 0:
+        print(f'  other downloads: {gb(rest)}; free on the models disk: {gb(out["free_bytes"])}')
 
 
 def ask(question, yes):

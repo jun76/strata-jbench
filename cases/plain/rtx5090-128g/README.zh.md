@@ -18,21 +18,21 @@
 | 主板 | MSI Z790 GAMING PLUS WIFI (MS-7E06) |
 | 模型存放 | Fanxiang S880E 2TB (NVMe) |
 | OS | Ubuntu 26.10 (Linux 7.3.0-10-generic) |
-| Strata | strata 0.2.12 (build 0.1.58) |
+| Strata | strata 0.2.18 (build 0.1.64) |
 
 未使用 Strata 桌面应用。用 CLI <code>strata launch --no-tui</code> 在专用端口（18600）启动引擎，由 <code>scripts/bench_runner.py</code> 直接调用其 OpenAI 兼容的 HTTP API（<code>POST /v1/chat/completions</code>，流式）进行测量。只有 Tier 2 是对同一引擎运行 Strata 自带的基准测试 <code>strata bench run --suite standard-v1</code>。
 
-环境 <code>rtx5090-128g</code> · RUN_ID 2026-11-09-harbor 的记录（machine.json）
+环境 <code>rtx5090-128g</code> · RUN_ID 2026-11-22-hy4 的记录（machine.json）
 
 ## 概要
 
-- 用例: 1,803
-- 正式测量请求: 5,973
-- 引擎启动: 168
-- 预估: 32 小时
+- 用例: 1,950
+- 正式测量请求: 6,468
+- 引擎启动: 177
+- 预估: 34 小时
 - 基准模型: qwen IQ3_S （env.json 的 ref，否则为 Strata 针对此 RAM + VRAM 推荐的模型）
-- 完成: 1,218
-- 失败: 0
+- 完成: 1,358
+- 失败: 7
 
 
 ## 各 Tier 明细
@@ -40,11 +40,11 @@
 | Tier | 内容 | 模型 | 用例 | 请求 | 预估 h | 完成 |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
 | [0](tier-0.zh.md) | 验证测量工具（基准模型 × 启动 3 次、用 Gyro-S 对照作者的数值、确认编程成果的展开） | 2 | 25 | 183 | 0.5 | 25 |
-| [1](tier-1.zh.md) | 所有模型的基础速度（decode 5 种 × temperature 3 档，prefill 4K / 32K / 128K）；支持 DFlash2 的模型的 decode 也用 DFlash2 测量 | 25 | 720 | 2,160 | 3.3 | 489 |
-| [2](tier-2.zh.md) | 官方 standard-v1（thinking xhigh，temperature 1.0），整个套件 3 次 | 25 | 375 | 1,125 | 4.0 | 270 |
-| [3](tier-3.zh.md) | 推理 effort none / high × 4 题，编程（帆船）仅 high（所有模型） | 25 | 220 | 660 | 7.5 | 164 |
-| [4a](tier-4a.zh.md) | 预留上下文的代价（128K / 256K / 1M 下相同的 4K 输入） | 25 | 75 | 225 | 1.8 | 54 |
-| [4b](tier-4b.zh.md) | 训练长度内的长文本（32K / 128K / 256K；基准模型、各系列最大的模型、最小的模型） | 6 | 72 | 216 | 2.0 | 48 |
+| [1](tier-1.zh.md) | 所有模型的基础速度（decode 5 种 × temperature 3 档，prefill 4K / 32K / 128K）；支持 DFlash2 的模型的 decode 也用 DFlash2 测量 | 28 | 774 | 2,322 | 3.5 | 543 |
+| [2](tier-2.zh.md) | 官方 standard-v1（thinking xhigh，temperature 1.0），整个套件 3 次 | 28 | 420 | 1,260 | 4.4 | 315 |
+| [3](tier-3.zh.md) | 推理 effort none / high × 4 题，编程（帆船）仅 high（所有模型） | 28 | 247 | 741 | 8.5 | 191 |
+| [4a](tier-4a.zh.md) | 预留上下文的代价（128K / 256K / 1M 下相同的 4K 输入） | 28 | 84 | 252 | 2.0 | 60 |
+| [4b](tier-4b.zh.md) | 训练长度内的长文本（32K / 128K / 256K；基准模型、各系列最大的模型、最小的模型） | 7 | 84 | 252 | 2.3 | 56 |
 | [4c](tier-4c.zh.md) | 扩展范围的长文本（512K / 1M；基准模型、最小与最大的模型） | 3 | 24 | 72 | 7.7 | 8 |
 | [4d](tier-4d.zh.md) | YaRN 的影响（基准模型，相同输入只改设置） | 1 | 16 | 48 | 1.1 | 16 |
 | [5](tier-5.zh.md) | 每次只改一个启动选项（基准模型、最大与最小的模型；含自动 tune） | 3 | 276 | 828 | 4.0 | 144 |
@@ -79,6 +79,9 @@
 | nvfp4 | NVFP4 | 128.0 | 原始权重量化（GPTQ） | [Maximilian228/Qwen3.8-Flash-Next-NVFP4-GPTQ-Strata @ `640a1db`](https://huggingface.co/Maximilian228/Qwen3.8-Flash-Next-NVFP4-GPTQ-Strata/tree/640a1db97446ddd5e89d2b70ecd0297987192c93) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json), [2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
 | nvfp4 | NVFP4-NVIDIA | 128.0 | 原始权重量化（RTN） | [Maximilian228/Qwen3.8-Flash-Next-NVIDIA-NVFP4-Strata @ `cca8f7f`](https://huggingface.co/Maximilian228/Qwen3.8-Flash-Next-NVIDIA-NVFP4-Strata/tree/cca8f7fee5ce0af932097340a75e06df25c4e57d) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
 | nvfp4 | NVFP4-QAD | 102.3 | 针对 FP4 重新训练的版本 | [nvidia/Qwen3.8-Flash-Next-FP4-Local @ `b9ce18a`](https://huggingface.co/nvidia/Qwen3.8-Flash-Next-FP4-Local/tree/b9ce18a6887e18c089fdea8509a33e63429a3300) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
+| hy4-flash | SQ-64 | 62.0 | Strata 的量化（另一模型 Hy4-Flash，面向 64 GB 内存） | [strata-engine/Hy4-Flash-Strata @ `995bac2`](https://huggingface.co/strata-engine/Hy4-Flash-Strata/tree/995bac227ab7e0d221772be641e2b5954a9fac06) ([2026-11-22-hy4](../../../published/plain/rtx5090-128g/2026-11-22-hy4/models.json)) |
+| hy4-flash | SQ-96 | 89.6 | Strata 的量化（另一模型 Hy4-Flash，面向 96 GB 内存） | [strata-engine/Hy4-Flash-Strata @ `995bac2`](https://huggingface.co/strata-engine/Hy4-Flash-Strata/tree/995bac227ab7e0d221772be641e2b5954a9fac06) ([2026-11-22-hy4](../../../published/plain/rtx5090-128g/2026-11-22-hy4/models.json)) |
+| hy4-flash | SQ-128 | 113.7 | Strata 的量化（另一模型 Hy4-Flash，面向 128 GB 内存，最接近原始权重） | [strata-engine/Hy4-Flash-Strata @ `995bac2`](https://huggingface.co/strata-engine/Hy4-Flash-Strata/tree/995bac227ab7e0d221772be641e2b5954a9fac06) ([2026-11-22-hy4](../../../published/plain/rtx5090-128g/2026-11-22-hy4/models.json)) |
 
 
 ## 所有用例的共同条件

@@ -57,6 +57,12 @@ MODELS = [
     ('nvfp4', 'NVFP4', 128.0, '元重みの量子化 (GPTQ)'),
     ('nvfp4', 'NVFP4-NVIDIA', 128.0, '元重みの量子化 (RTN)'),
     ('nvfp4', 'NVFP4-QAD', 102.3, 'FP4 向け再学習版'),
+    # Tencent Hy4-Flash (220B-A12B, Strata 0.2.18 on): another model with its own engine (strata-hy4) and its built-in
+    # drafter (DFly2), Strata's own .strata builds. The size is the build's file (Strata's hy4_fit footprint is within
+    # 0.6 GB of it); the Engram shard every build shares (67.6 GB) is a lookup table read as needed, not counted here.
+    ('hy4-flash', 'SQ-64', 62.0, 'Strata の量子化 (別モデル Hy4-Flash、64 GB RAM 向け)'),
+    ('hy4-flash', 'SQ-96', 89.6, 'Strata の量子化 (別モデル Hy4-Flash、96 GB RAM 向け)'),
+    ('hy4-flash', 'SQ-128', 113.7, 'Strata の量子化 (別モデル Hy4-Flash、128 GB RAM 向け、元重みに最も近い)'),
 ]
 # Unsloth re-published its repository on 2026-11-04 as Dynamic v3.1 under the same names. Of the sets pinned before
 # (38bb39ee), UD-IQ4_XS and UD-Q4_K_XL were replaced on the Hub then (Strata keeps the old UD-Q4_K_XL, and calls the new
@@ -91,6 +97,18 @@ K = 1024
 CTX_LABEL = {32 * K: '32K', 64 * K: '64K', 128 * K: '128K', 200 * K: '200K', 256 * K: '256K',
              384 * K: '384K', 512 * K: '512K', 768 * K: '768K', 1024 * K: '1M'}
 TRAINED = 256 * K
+# The trained length where a family's differs from Qwen3.8-Flash-Next's 256K: Hy4-Flash reads 1M without YaRN.
+TRAINED_OF = {'hy4-flash': 1024 * K}
+# Families with a drafter of their own instead of the MTP layer the runner pins (bench_runner.launch_args): Hy4-Flash
+# starts with DFly2, built into its builds (Strata's default for it); Tier 5's "--drafting off" still turns it off.
+OWN_DRAFTER = {'hy4-flash': 'DFly2'}
+# Families whose engine reports no draft counts in the response's timings (strata-hy4 0.1.64 sends draft_n 0 while
+# DFly2 runs; its log has only tree statistics), so no acceptance rate is measured for them.
+NO_DRAFT_COUNTS = {'hy4-flash'}
+
+
+def drafter_measures(fam):
+    return 'decode tok/s' if fam in NO_DRAFT_COUNTS else 'decode tok/s, MTP 採用率'
 
 DECODE = [('decode-prose-ja', '日本語の説明文'), ('decode-prose-en', '英語の説明文'),
           ('decode-json', '構造化出力 (JSON)'), ('decode-code', 'Python 実装'),
@@ -189,8 +207,9 @@ ASSUME = {
 }
 
 
-def yarn(ctx):
-    return f'{ctx / TRAINED:g}' if ctx > TRAINED else ''
+def yarn(ctx, fam=None):
+    trained = TRAINED_OF.get(fam, TRAINED)
+    return f'{ctx / trained:g}' if ctx > trained else ''
 
 
 def base(tier, step, fam, model, **kw):
@@ -201,7 +220,7 @@ def base(tier, step, fam, model, **kw):
     row.update(kw)
     row['context_label'] = CTX_LABEL.get(row['context'], str(row['context']))
     if 'yarn' not in kw:
-        row['yarn'] = yarn(row['context'])
+        row['yarn'] = yarn(row['context'], fam)
     row['id'] = '-'.join(str(x) for x in [f"T{step}", fam, model, row.pop('_key')])
     return row
 
@@ -237,7 +256,7 @@ def tier1_cases(tier, step, fam, model, **kw):
         for t in TEMPS:
             rows.append(base(tier, step, fam, model, _key=f'{fx}-t{t:g}', fixture=fx, content=content,
                              input_tokens='短文', output_cap=512, temperature=t,
-                             measures='decode tok/s, MTP 採用率', **kw))
+                             measures=drafter_measures(fam), **kw))
     for fx, n in PREFILL:
         rows.append(base(tier, step, fam, model, _key=fx, fixture=fx, content=PREFILL_CONTENT,
                          input_tokens=n, output_cap=128, measures='prefill tok/s, TTFT, 長文後の decode', **kw))
@@ -341,7 +360,7 @@ def build(cfg):
                                     config=f'{var}={level}', launch_opts=vram_reserve_mib(opts, cfg), fixture=fx,
                                     content=PREFILL_CONTENT if is_prefill else dict(DECODE)[fx],
                                     input_tokens=n, output_cap=128 if is_prefill else 512, concurrency=conc,
-                                    measures='prefill tok/s, TTFT' if is_prefill else 'decode tok/s, MTP 採用率',
+                                    measures='prefill tok/s, TTFT' if is_prefill else drafter_measures(fam),
                                     note=note))
         return out
 

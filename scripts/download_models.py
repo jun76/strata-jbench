@@ -36,7 +36,13 @@ ORDER = [('qwen', 'Q2_0'), ('gyro', 'Gyro-S'), ('unsloth', 'UD-IQ4_XS'),
          ('swift', 'IQ2_XS'), ('swift', 'IQ3_XXS'), ('swift', 'IQ3_S'),
          ('nvfp4', 'NVFP4'), ('nvfp4', 'NVFP4-NVIDIA'), ('nvfp4', 'NVFP4-QAD'),
          ('unsloth', 'UD-IQ1_M'), ('unsloth', 'UD-Q2_0'), ('unsloth', 'UD-IQ2_XS'), ('unsloth', 'UD-Q2_K_XL'),
-         ('unsloth', 'UD-IQ3_XXS'), ('unsloth', 'UD-Q3_K_XL'), ('unsloth', 'UD-IQ4_XS-v31')]
+         ('unsloth', 'UD-IQ3_XXS'), ('unsloth', 'UD-Q3_K_XL'), ('unsloth', 'UD-IQ4_XS-v31'),
+         ('hy4-flash', 'SQ-64'), ('hy4-flash', 'SQ-96'), ('hy4-flash', 'SQ-128')]
+# Hy4-Flash (Strata 0.2.18 on): not in setup.py's file pins but in strata_control/hy4_family.py (FILES: bytes and SHA-256),
+# fetched from huggingface.co/strata-engine/Hy4-Flash-Strata, which Strata names at main (terminal/data/hy4-sources.json).
+# The commit is pinned here so that models.json can say which upload was measured: main on 2026-11-22.
+HY4_REPO = 'strata-engine/Hy4-Flash-Strata'
+HY4_REVISION = '995bac227ab7e0d221772be641e2b5954a9fac06'
 
 
 def build_manifest(s, source, models, chosen=None):
@@ -59,7 +65,16 @@ def build_manifest(s, source, models, chosen=None):
                       'path': str(destination.relative_to(models)), 'bytes': pin[0], 'sha256': pin[1]})
 
     for family, model in choices:
-        if family == 'nvfp4':
+        if family == 'hy4-flash':
+            # The build, the Engram shard every build shares and the Vision shard (Strata's default set: files_of), in
+            # <models>/hy4-flash, the folder Strata reads them from (setup.py hy4_folder).
+            h = s['hy4_family']
+            for name in h.files_of(model, vision=True):
+                size, sha = h.FILES[name]
+                files.append({'family': family, 'model': model,
+                              'url': f'https://huggingface.co/{HY4_REPO}/resolve/{HY4_REVISION}/{name}',
+                              'path': f'{h.FAMILY}/{name}', 'bytes': size, 'sha256': sha})
+        elif family == 'nvfp4':
             for role, repo, revision, filename, size, sha in s['ready_files'](model):
                 add(f'https://huggingface.co/{repo}/resolve/{revision}/{filename}',
                     models / repo.replace('/', '--') / filename, family, model)
@@ -82,7 +97,7 @@ def build_manifest(s, source, models, chosen=None):
             ['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip(),
             'source_setup_sha256': hashlib.sha256((source / 'setup.py').read_bytes()).hexdigest(),
             'models_root': str(models), 'choices': choices, 'files': list(unique.values()),
-            'scope': f'{len(choices)} of the {len(ORDER)} Qwen3.8-Flash-Next variants the benchmark knows (the environment\'s env.json "models"). '
+            'scope': f'{len(choices)} of the {len(ORDER)} models the benchmark knows (Qwen3.8-Flash-Next variants and Hy4-Flash) (the environment\'s env.json "models"). '
                      'Excludes Qwen3.6, Orca, DeepSeek. QAD checkpoint download only; conversion separate.'}
 
 
@@ -97,6 +112,8 @@ def main():
     # prepare: the models to list (default: every model of ORDER); scripts/setup_acquire.py passes the environment's
     parser.add_argument('--choose', action='append', default=None, metavar='FAMILY:MODEL')
     args = parser.parse_args()
+    if (args.source / 'terminal' / 'setup.py').exists():   # Strata 0.2.18 on keeps setup.py in terminal/
+        args.source = args.source / 'terminal'
     args.state.mkdir(parents=True, exist_ok=True)
     lock = (args.state / 'queue.lock').open('w')
     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -150,11 +167,13 @@ def main():
             return
         s['acquisition'].require(what)
         repo, rev, name = '/'.join(parts[:2]), parts[3], '/'.join(parts[4:])
-        staging = args.models / '.hf-staging' / repo.replace('/', '--')
+        # staging on the destination's own disk, so the move is a rename (a model folder may link to another disk)
+        same = os.stat(dst.parent).st_dev == os.stat(args.models).st_dev
+        staging = (args.models if same else dst.parent.resolve()) / '.hf-staging' / repo.replace('/', '--')
         print(f'{now()} hf download {repo}@{rev[:12]} {name} ({what})', flush=True)
         subprocess.run([sys.executable, '-m', 'huggingface_hub.cli.hf', 'download', repo, name, '--revision', rev,
                         '--local-dir', str(staging)], check=True, env=dict(os.environ, HF_XET_HIGH_PERFORMANCE='1'))
-        os.replace(staging / name, dst)
+        shutil.move(staging / name, dst)   # a rename on the same disk; a copy where a model folder links to another
     manifest_path = args.state / 'manifest.json'
     if args.action == 'prepare':
         manifest = build_manifest(s, args.source, args.models, args.choose)
@@ -203,9 +222,10 @@ def main():
                     part = dst.with_name(dst.name + '.part')
                     allocated = part.stat().st_blocks * 512 if part.exists() else 0
                     # the hf CLI's partial file (hf_download's staging folder; one file is fetched at a time, named by hash)
-                    allocated += sum(p.stat().st_blocks * 512 for p in (args.models / '.hf-staging').glob('**/*.incomplete'))
+                    allocated += sum(p.stat().st_blocks * 512 for d in {args.models, dst.parent.resolve()}
+                                     for p in (d / '.hf-staging').glob('**/*.incomplete'))
                     remaining = 0 if dst.exists() and s['done'](dst) else max(0, f['bytes'] - allocated)
-                    if shutil.disk_usage(args.models).free < remaining + 10_000_000_000:  # 10 GB headroom (preflight.py checks the same)
+                    if shutil.disk_usage(dst.parent).free < remaining + 10_000_000_000:  # 10 GB headroom (preflight.py checks the same)
                         status['state'] = 'paused_low_disk'
                         save()
                         return

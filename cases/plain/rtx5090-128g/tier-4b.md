@@ -4,7 +4,7 @@
 
 # Tier 4b: 学習範囲の長文（32K / 128K / 256K。基準モデル、系列ごとに最大のモデル、最小のモデル）
 
-GeForce RTX 5090 · 128 GB RAM · 72 ケース / 216 リクエスト。ほかのパラメータ（入力の内容、見るもの、備考、seed、timeout、起動セッション）は [tier-4b.csv](tier-4b.csv)。
+GeForce RTX 5090 · 128 GB RAM · 84 ケース / 252 リクエスト。ほかのパラメータ（入力の内容、見るもの、備考、seed、timeout、起動セッション）は [tier-4b.csv](tier-4b.csv)。
 
 | 状態 | case id | model | context | 設定 | 起動オプションの差分 | fixture | effort | temp | 並列 | 入力 token | 出力 cap | 回数 | 結果 | エビデンス |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -56,6 +56,18 @@ GeForce RTX 5090 · 128 GB RAM · 72 ケース / 216 リクエスト。ほかの
 | done | `T4b-nvfp4-NVFP4-long-256K-q-d50` | nvfp4 NVFP4 | 256K | baseline |  | long-256K | none | 0.7 | 1 | 262,144 | 512 | 3 | prefill 2638.5 / decode 156.2 / TTFT ms 5934.0 / 採用率 0.6 / 正答 3/3 | [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/cases/T4b-nvfp4-NVFP4-long-256K-q-d50/) |
 | done | `T4b-nvfp4-NVFP4-long-256K-q-d90` | nvfp4 NVFP4 | 256K | baseline |  | long-256K | none | 0.7 | 1 | 262,144 | 512 | 3 | prefill 2637.8 / decode 139.4 / TTFT ms 5935.9 / 採用率 0.593 / 正答 0/3 | [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/cases/T4b-nvfp4-NVFP4-long-256K-q-d90/) |
 | done | `T4b-nvfp4-NVFP4-long-256K-q-multi` | nvfp4 NVFP4 | 256K | baseline |  | long-256K | none | 0.7 | 1 | 262,144 | 512 | 3 | prefill 2638.4 / decode 193.7 / TTFT ms 5959.8 / 採用率 0.753 / 正答 2/3 | [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/cases/T4b-nvfp4-NVFP4-long-256K-q-multi/) |
+| done | `T4b-hy4-flash-SQ-128-long-32K-q-d10` | hy4-flash SQ-128 | 256K | baseline |  | long-32K | none | 0.7 | 1 | 32,768 | 512 | 3 | prefill 898.9 / decode 49.7 / TTFT ms 40407.8 / 正答 3/3 | [2026-11-22-hy4](../../../published/plain/rtx5090-128g/2026-11-22-hy4/cases/T4b-hy4-flash-SQ-128-long-32K-q-d10/) |
+| done | `T4b-hy4-flash-SQ-128-long-32K-q-d50` | hy4-flash SQ-128 | 256K | baseline |  | long-32K | none | 0.7 | 1 | 32,768 | 512 | 3 | prefill 900.6 / decode 50.2 / TTFT ms 40331.5 / 正答 3/3 | [2026-11-22-hy4](../../../published/plain/rtx5090-128g/2026-11-22-hy4/cases/T4b-hy4-flash-SQ-128-long-32K-q-d50/) |
+| done | `T4b-hy4-flash-SQ-128-long-32K-q-d90` | hy4-flash SQ-128 | 256K | baseline |  | long-32K | none | 0.7 | 1 | 32,768 | 512 | 3 | prefill 901.9 / decode 47.1 / TTFT ms 40277.2 / 正答 0/3 | [2026-11-22-hy4](../../../published/plain/rtx5090-128g/2026-11-22-hy4/cases/T4b-hy4-flash-SQ-128-long-32K-q-d90/) |
+| done | `T4b-hy4-flash-SQ-128-long-32K-q-multi` | hy4-flash SQ-128 | 256K | baseline |  | long-32K | none | 0.7 | 1 | 32,768 | 512 | 3 | prefill 902.0 / decode 15.3 / TTFT ms 40288.0 / 正答 3/3 | [2026-11-22-hy4](../../../published/plain/rtx5090-128g/2026-11-22-hy4/cases/T4b-hy4-flash-SQ-128-long-32K-q-multi/) |
+| done | `T4b-hy4-flash-SQ-128-long-128K-q-d10` | hy4-flash SQ-128 | 256K | baseline |  | long-128K | none | 0.7 | 1 | 131,072 | 512 | 3 | prefill 858.1 / decode 43.8 / TTFT ms 169978.3 / 正答 3/3 | [2026-11-22-hy4](../../../published/plain/rtx5090-128g/2026-11-22-hy4/cases/T4b-hy4-flash-SQ-128-long-128K-q-d10/) |
+| done | `T4b-hy4-flash-SQ-128-long-128K-q-d50` | hy4-flash SQ-128 | 256K | baseline |  | long-128K | none | 0.7 | 1 | 131,072 | 512 | 3 | prefill 861.9 / decode 28.8 / TTFT ms 169229.1 / 正答 3/3 | [2026-11-22-hy4](../../../published/plain/rtx5090-128g/2026-11-22-hy4/cases/T4b-hy4-flash-SQ-128-long-128K-q-d50/) |
+| done | `T4b-hy4-flash-SQ-128-long-128K-q-d90` | hy4-flash SQ-128 | 256K | baseline |  | long-128K | none | 0.7 | 1 | 131,072 | 512 | 3 | prefill 858.1 / decode 46.3 / TTFT ms 169976.3 / 正答 3/3 | [2026-11-22-hy4](../../../published/plain/rtx5090-128g/2026-11-22-hy4/cases/T4b-hy4-flash-SQ-128-long-128K-q-d90/) |
+| done | `T4b-hy4-flash-SQ-128-long-128K-q-multi` | hy4-flash SQ-128 | 256K | baseline |  | long-128K | none | 0.7 | 1 | 131,072 | 512 | 3 | prefill 862.7 / decode 28.1 / TTFT ms 169078.1 / 正答 3/3 | [2026-11-22-hy4](../../../published/plain/rtx5090-128g/2026-11-22-hy4/cases/T4b-hy4-flash-SQ-128-long-128K-q-multi/) |
+| failed | `T4b-hy4-flash-SQ-128-long-256K-q-d10` | hy4-flash SQ-128 | 256K | baseline |  | long-256K | none | 0.7 | 1 | 262,144 | 512 | 3 |  | [2026-11-22-hy4](../../../published/plain/rtx5090-128g/2026-11-22-hy4/cases/T4b-hy4-flash-SQ-128-long-256K-q-d10/) |
+| failed | `T4b-hy4-flash-SQ-128-long-256K-q-d50` | hy4-flash SQ-128 | 256K | baseline |  | long-256K | none | 0.7 | 1 | 262,144 | 512 | 3 |  | [2026-11-22-hy4](../../../published/plain/rtx5090-128g/2026-11-22-hy4/cases/T4b-hy4-flash-SQ-128-long-256K-q-d50/) |
+| failed | `T4b-hy4-flash-SQ-128-long-256K-q-d90` | hy4-flash SQ-128 | 256K | baseline |  | long-256K | none | 0.7 | 1 | 262,144 | 512 | 3 |  | [2026-11-22-hy4](../../../published/plain/rtx5090-128g/2026-11-22-hy4/cases/T4b-hy4-flash-SQ-128-long-256K-q-d90/) |
+| failed | `T4b-hy4-flash-SQ-128-long-256K-q-multi` | hy4-flash SQ-128 | 256K | baseline |  | long-256K | none | 0.7 | 1 | 262,144 | 512 | 3 |  | [2026-11-22-hy4](../../../published/plain/rtx5090-128g/2026-11-22-hy4/cases/T4b-hy4-flash-SQ-128-long-256K-q-multi/) |
 | planned | `T4b-gyro-Gyro-S-long-32K-q-d10` | gyro Gyro-S | 256K | baseline |  | long-32K | none | 0.7 | 1 | 32,768 | 512 | 3 |  |  |
 | planned | `T4b-gyro-Gyro-S-long-32K-q-d50` | gyro Gyro-S | 256K | baseline |  | long-32K | none | 0.7 | 1 | 32,768 | 512 | 3 |  |  |
 | planned | `T4b-gyro-Gyro-S-long-32K-q-d90` | gyro Gyro-S | 256K | baseline |  | long-32K | none | 0.7 | 1 | 32,768 | 512 | 3 |  |  |

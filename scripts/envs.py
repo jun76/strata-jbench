@@ -276,7 +276,13 @@ def label_of(hw, ram):
 # divisions' "ref", the pages' "reference"): env.json "ref" ("family model"), else the model Strata itself recommends for
 # that much RAM + VRAM. Strata's memory tiers are read from its source checkout's setup.py (MEMORY_TIERS, the floors in GB
 # of RAM + VRAM less TIER_SYSTEM_RESERVE_GB); below the lowest tier its older rule picks Gyro-S.
-STRATA_SOURCE = Path(os.environ.get('STRATA_SOURCE') or Path.home() / 'Strata')
+def source_root(path):
+    """The folder of Strata's source checkout that holds setup.py: the checkout itself, or its terminal/ (0.2.18 on)."""
+    path = Path(path).expanduser()
+    return path / 'terminal' if (path / 'terminal' / 'setup.py').exists() else path
+
+
+STRATA_SOURCE = source_root(os.environ.get('STRATA_SOURCE') or Path.home() / 'Strata')
 REF_BELOW_TIERS = 'gyro Gyro-S'
 
 

@@ -575,6 +575,9 @@ def lscpu_pcores():
     return ','.join(str(c) for c in firsts if c != 0)
 
 
+OWN_DRAFTER = {'hy4-flash'}   # build_cases.OWN_DRAFTER's families (also skipped by preflight's MTP check)
+
+
 def launch_args(row):
     opts = row['launch_opts']
     if opts.startswith('configs/'):
@@ -591,7 +594,9 @@ def launch_args(row):
     # its args; every later launch of that model then ran without the draft layer (qwen IQ3_S in 2026-11-03-main).
     # --mtp on makes such a setup write it back on; a launch that runs no setup cannot, so preflight checks the installed
     # configs and start_session checks that the layer loaded.
-    if '--drafting' not in opts:
+    # A family with a drafter of its own (Hy4-Flash: DFly2, built into its builds) has no MTP layer: it starts with its
+    # own, Strata's default for it (build_cases.OWN_DRAFTER), and only Tier 5's --drafting off changes that.
+    if '--drafting' not in opts and row['family'] not in OWN_DRAFTER:
         args += ['--drafting', 'mtp', '--mtp', 'on']
     return args + shlex.split(opts)
 
@@ -606,8 +611,12 @@ def not_applied(args, log):
     a = dict(zip(args, args[1:]))   # each flag with the word after it
     want.append(('--max-context', a.get('--context')))
     if a.get('--drafting') == 'off':
-        if '--mtp' in eng:
-            return ['--drafting off, but the engine has --mtp']
+        if '--mtp' in eng or '--draft' in eng:
+            return ['--drafting off, but the engine has a drafter (--mtp / --draft)']
+    elif a.get('--family') in OWN_DRAFTER:
+        # its own drafter: serve adds --draft dfly2 only when the engine says it has one (serve/hy4_kind.py), else starts
+        # without it with one log line; a case meant to measure the drafter must not run without
+        want.append(('--draft', 'dfly2'))
     if a.get('--kv'):
         want.append(('--kv', a['--kv']))
     if a.get('--parallel', '1') != '1':
@@ -740,7 +749,7 @@ def start_session(row, session_dir, run_dir):
         text = Path(m.group(1)).read_text(errors='replace')
         info['engine_log_offset'] = max(0, text.rfind('engine started'))
         # MTP asked for but not loaded: the engine serves (with suffix drafts only), so only its log tells
-        if args[args.index('--drafting') + 1] == 'mtp' and 'draft layer loaded' not in text[info['engine_log_offset']:]:
+        if '--drafting' in args and args[args.index('--drafting') + 1] == 'mtp' and 'draft layer loaded' not in text[info['engine_log_offset']:]:
             info['error'] = 'MTP asked for (--drafting mtp) but the engine log has no "strata mtp: draft layer loaded"'
             info['mtp_missing'] = True
             (session_dir / 'engine.log').write_text(text[text.rfind('\n', 0, info['engine_log_offset']) + 1:])

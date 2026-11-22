@@ -47,11 +47,17 @@ def acquire_checks():
     have = {f['sha256'] for f in m['files'] if (root / f['path']).is_file() and (root / (f['path'] + '.done')).is_file()}
     left = sum({f['sha256']: f['bytes'] for f in m['files'] if f['sha256'] not in have
                 and not (f['model'] == 'NVFP4-QAD' and overnight.qad_prepared())}.values())
-    free = shutil.disk_usage(root).free
     has_qad = any(f['model'] == 'NVFP4-QAD' for f in m['files'])
     qad_extra = 0 if overnight.qad_prepared() or not has_qad else 115e9
+    # per disk: a model folder may link to another one (Hy4-Flash's on rtx5090-128g); the QAD prepare is on the models disk
+    disks = overnight.missing_by_disk([f for f in m['files'] if f['sha256'] not in have
+                                       and not (f['model'] == 'NVFP4-QAD' and overnight.qad_prepared())])
+    root_dev = os.stat(root).st_dev
+    disks.setdefault(root.resolve(), (0, shutil.disk_usage(root).free))
+    short = [f'{d}: free {fr / 1e9:.0f} GB, need {(b + (qad_extra if os.stat(d).st_dev == root_dev else 0)) / 1e9:.0f} GB + 10'
+             for d, (b, fr) in disks.items() if fr <= b + (qad_extra if os.stat(d).st_dev == root_dev else 0) + 10e9]
     check('disk: free space covers the remaining downloads + QAD prepare + 10 GB (the downloader stops below that)',
-          free > left + qad_extra + 10e9, f'free {free / 1e9:.0f} GB, need {(left + qad_extra) / 1e9:.0f} GB + 10')
+          not short, '; '.join(short) or f'{left / 1e9:.0f} GB to fetch')
     rc, out = run([str(overnight.DL_PYTHON), '-c', 'import sys; print(sys.version)'])
     check('downloader python runs (python3 -I scripts/setup_acquire.py)', rc == 0, out)
     if has_qad and not overnight.qad_prepared():
@@ -104,6 +110,8 @@ def bench_checks(steps, env_id):
     install = Path.home() / '.local/share/strata/install'
     off = []
     for fam, model in models:
+        if fam in ('hy4-flash',):   # its own drafter (DFly2), no MTP layer (build_cases.OWN_DRAFTER)
+            continue
         conf = install / f'strata-{model.lower() if fam == "qwen" else f"{fam}-{model.lower()}"}.json'
         try:
             if json.loads(conf.read_text()).get('mtp') is False:

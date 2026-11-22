@@ -18,6 +18,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 TOKENIZER = Path.home() / '.local/share/strata/Strata-data/packs/iq3_s/tokenizer'
 SOURCE = Path.home() / 'Strata'   # the pinned source checkout (has tools/build_standard_corpus.py)
+if (SOURCE / 'terminal' / 'setup.py').exists():   # Strata 0.2.18 on keeps it in terminal/
+    SOURCE = SOURCE / 'terminal'
 sys.path[:0] = [str(SOURCE), str(SOURCE / 'tools')]
 
 import build_standard_corpus as SC  # noqa: E402  (standard-v1's record format and counter)

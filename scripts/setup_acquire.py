@@ -128,6 +128,8 @@ def main():
     global NO_FETCH
     NO_FETCH = a.no_fetch
     source = a.source.expanduser().resolve()
+    if (source / 'terminal' / 'setup.py').exists():   # Strata 0.2.18 on keeps setup.py and tools/ in terminal/
+        source = source / 'terminal'
     check_source(source)
 
     make_venv(overnight.DL_PYTHON.parents[1], [ROOT / 'scripts/requirements-acquire.txt'],

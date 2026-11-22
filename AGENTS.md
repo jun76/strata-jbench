@@ -439,4 +439,13 @@ policy, report the cause and a proposal, and stop.
   reason). `scripts/setup_acquire.py` makes `.venv-qad` (Strata's `requirements.txt` and `requirements-nvfp4-local.txt`)
   and `work/qad-root/` (a copy of the source's tools with a link to the install's llama.cpp), and `scripts/overnight.py`
   runs the conversion from there. `scripts/bench.py start` runs it while `downloads/READY` is missing.
+- Hy4-Flash (`hy4-flash`, since 0.2.18) is another model with its own engine program (`strata-hy4`, a component) and its
+  own files (`<models>/hy4-flash/`: one build, the Engram shard every build shares, the Vision shard; pinned by
+  `strata_control/hy4_family.py`, listed in `downloads/manifest.json` by `scripts/download_models.py`). Its drafter is
+  DFly2, built in: the runner launches it without `--drafting mtp --mtp on` and fails a case whose engine line lacks
+  `--draft dfly2`. Its responses carry no draft counts (`draft_n` 0), so Hy4 has no acceptance rate. `strata install`
+  puts the files in Strata's saved data folder (`data_dir` in `~/.config/strata/settings.json`; on `rtx5090-128g`
+  `/mnt/data/strata/Strata-data`), and fetches them again if they are anywhere else; the folder in the models root
+  links there.
+- Since 0.2.18 Strata's source keeps `setup.py`, `tools/` and the requirements in `terminal/`; the scripts read either layout.
 - Q2_0's first launch builds a pack for AVX-512 (about 40 GB). The first launch's time is not part of the measurements.

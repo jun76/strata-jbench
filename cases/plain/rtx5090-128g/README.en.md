@@ -18,21 +18,21 @@ One table of cases per Tier (a row per case). Every parameter and result: the CS
 | Motherboard | MSI Z790 GAMING PLUS WIFI (MS-7E06) |
 | Model storage | Fanxiang S880E 2TB (NVMe) |
 | OS | Ubuntu 26.10 (Linux 7.3.0-10-generic) |
-| Strata | strata 0.2.12 (build 0.1.58) |
+| Strata | strata 0.2.18 (build 0.1.64) |
 
 The Strata desktop app is not used. The CLI (<code>strata launch --no-tui</code>) starts the engine on a dedicated port (18600), and <code>scripts/bench_runner.py</code> calls its OpenAI-compatible HTTP API (<code>POST /v1/chat/completions</code>, streaming) directly. Only Tier 2 runs Strata's bundled benchmark, <code>strata bench run --suite standard-v1</code>, against the same engine.
 
-environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-09-harbor (machine.json)
+environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-22-hy4 (machine.json)
 
 ## Overview
 
-- cases: 1,803
-- measured requests: 5,973
-- engine launches: 168
-- estimate: 32 h
+- cases: 1,950
+- measured requests: 6,468
+- engine launches: 177
+- estimate: 34 h
 - reference model: qwen IQ3_S (env.json "ref", else the model Strata recommends for this RAM + VRAM)
-- done: 1,218
-- failed: 0
+- done: 1,358
+- failed: 7
 
 
 ## By Tier
@@ -40,11 +40,11 @@ environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-09-harbo
 | Tier | what | models | cases | requests | est. h | done |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
 | [0](tier-0.en.md) | validating the harness (the reference model × 3 launches, Gyro-S against the author's figures, unpacking the coding result) | 2 | 25 | 183 | 0.5 | 25 |
-| [1](tier-1.en.md) | base speed of every model (5 decode kinds × 3 temperatures, prefill 4K / 32K / 128K); decode also with DFlash2 on the models that have it | 25 | 720 | 2,160 | 3.3 | 489 |
-| [2](tier-2.en.md) | the official standard-v1 (thinking xhigh, temperature 1.0), the whole suite 3 times | 25 | 375 | 1,125 | 4.0 | 270 |
-| [3](tier-3.en.md) | reasoning effort none / high × 4 tasks, the coding task (sailing ship) at high only (every model) | 25 | 220 | 660 | 7.5 | 164 |
-| [4a](tier-4a.en.md) | the cost of reserving context (the same 4K input at 128K / 256K / 1M) | 25 | 75 | 225 | 1.8 | 54 |
-| [4b](tier-4b.en.md) | long inputs within the trained length (32K / 128K / 256K; the reference model, the largest of each family, the smallest) | 6 | 72 | 216 | 2.0 | 48 |
+| [1](tier-1.en.md) | base speed of every model (5 decode kinds × 3 temperatures, prefill 4K / 32K / 128K); decode also with DFlash2 on the models that have it | 28 | 774 | 2,322 | 3.5 | 543 |
+| [2](tier-2.en.md) | the official standard-v1 (thinking xhigh, temperature 1.0), the whole suite 3 times | 28 | 420 | 1,260 | 4.4 | 315 |
+| [3](tier-3.en.md) | reasoning effort none / high × 4 tasks, the coding task (sailing ship) at high only (every model) | 28 | 247 | 741 | 8.5 | 191 |
+| [4a](tier-4a.en.md) | the cost of reserving context (the same 4K input at 128K / 256K / 1M) | 28 | 84 | 252 | 2.0 | 60 |
+| [4b](tier-4b.en.md) | long inputs within the trained length (32K / 128K / 256K; the reference model, the largest of each family, the smallest) | 7 | 84 | 252 | 2.3 | 56 |
 | [4c](tier-4c.en.md) | long inputs in the extended range (512K / 1M; the reference model, the smallest and the largest) | 3 | 24 | 72 | 7.7 | 8 |
 | [4d](tier-4d.en.md) | the effect of YaRN (the reference model, same input, only the setting changes) | 1 | 16 | 48 | 1.1 | 16 |
 | [5](tier-5.en.md) | changing one launch option at a time (the reference model, the largest and the smallest; auto tune included) | 3 | 276 | 828 | 4.0 | 144 |
@@ -79,6 +79,9 @@ environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-09-harbo
 | nvfp4 | NVFP4 | 128.0 | quantized from the original weights (GPTQ) | [Maximilian228/Qwen3.8-Flash-Next-NVFP4-GPTQ-Strata @ `640a1db`](https://huggingface.co/Maximilian228/Qwen3.8-Flash-Next-NVFP4-GPTQ-Strata/tree/640a1db97446ddd5e89d2b70ecd0297987192c93) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-04-long](../../../published/plain/rtx5090-128g/2026-11-04-long/models.json), [2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
 | nvfp4 | NVFP4-NVIDIA | 128.0 | quantized from the original weights (RTN) | [Maximilian228/Qwen3.8-Flash-Next-NVIDIA-NVFP4-Strata @ `cca8f7f`](https://huggingface.co/Maximilian228/Qwen3.8-Flash-Next-NVIDIA-NVFP4-Strata/tree/cca8f7fee5ce0af932097340a75e06df25c4e57d) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
 | nvfp4 | NVFP4-QAD | 102.3 | retrained for FP4 | [nvidia/Qwen3.8-Flash-Next-FP4-Local @ `b9ce18a`](https://huggingface.co/nvidia/Qwen3.8-Flash-Next-FP4-Local/tree/b9ce18a6887e18c089fdea8509a33e63429a3300) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json), [2026-11-09-harbor](../../../published/plain/rtx5090-128g/2026-11-09-harbor/models.json)) |
+| hy4-flash | SQ-64 | 62.0 | Strata's quantization (another model, Hy4-Flash; for 64 GB of RAM) | [strata-engine/Hy4-Flash-Strata @ `995bac2`](https://huggingface.co/strata-engine/Hy4-Flash-Strata/tree/995bac227ab7e0d221772be641e2b5954a9fac06) ([2026-11-22-hy4](../../../published/plain/rtx5090-128g/2026-11-22-hy4/models.json)) |
+| hy4-flash | SQ-96 | 89.6 | Strata's quantization (another model, Hy4-Flash; for 96 GB of RAM) | [strata-engine/Hy4-Flash-Strata @ `995bac2`](https://huggingface.co/strata-engine/Hy4-Flash-Strata/tree/995bac227ab7e0d221772be641e2b5954a9fac06) ([2026-11-22-hy4](../../../published/plain/rtx5090-128g/2026-11-22-hy4/models.json)) |
+| hy4-flash | SQ-128 | 113.7 | Strata's quantization (another model, Hy4-Flash; for 128 GB of RAM, the closest to the original weights) | [strata-engine/Hy4-Flash-Strata @ `995bac2`](https://huggingface.co/strata-engine/Hy4-Flash-Strata/tree/995bac227ab7e0d221772be641e2b5954a9fac06) ([2026-11-22-hy4](../../../published/plain/rtx5090-128g/2026-11-22-hy4/models.json)) |
 
 
 ## Conditions shared by every case

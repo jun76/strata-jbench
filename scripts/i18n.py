@@ -36,6 +36,13 @@ TR = {
     'expert 半減の剪定版': ('pruned to half the experts', 'expert 减半的剪枝版'),
     'fine-tune（思考が短い）': ('fine-tune (shorter thinking)', 'fine-tune（思考较短）'),
     'FP4 向け再学習版': ('retrained for FP4', '针对 FP4 重新训练的版本'),
+    'Strata の量子化 (別モデル Hy4-Flash、64 GB RAM 向け)': ("Strata's quantization (another model, Hy4-Flash; for 64 GB of RAM)",
+                                                         'Strata 的量化（另一模型 Hy4-Flash，面向 64 GB 内存）'),
+    'Strata の量子化 (別モデル Hy4-Flash、96 GB RAM 向け)': ("Strata's quantization (another model, Hy4-Flash; for 96 GB of RAM)",
+                                                         'Strata 的量化（另一模型 Hy4-Flash，面向 96 GB 内存）'),
+    'Strata の量子化 (別モデル Hy4-Flash、128 GB RAM 向け、元重みに最も近い)': (
+        "Strata's quantization (another model, Hy4-Flash; for 128 GB of RAM, the closest to the original weights)",
+        'Strata 的量化（另一模型 Hy4-Flash，面向 128 GB 内存，最接近原始权重）'),
     # input contents
     '日本語の説明文': ('Japanese explanatory prose', '日语说明文'),
     '英語の説明文': ('English explanatory prose', '英语说明文'),
