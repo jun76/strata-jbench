@@ -45,6 +45,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import agent_proxy  # noqa: E402
+import catalog  # noqa: E402
 import config  # noqa: E402
 import engines  # noqa: E402
 from engines import strata_cli  # noqa: E402
@@ -985,6 +986,12 @@ def main():
     engine_id = a.engine or settings.get('engine') or engines.DEFAULT
     rows = [r for r in rows if r['step'] in steps and (not models or (r['family'], r['model']) in models)
             and (not ids or r['id'] in ids) and r.get('engine', engines.DEFAULT) == engine_id]
+    if os.environ.get('BENCH_CONFIG'):
+        # under the supervisor: the run's own settings narrow the cases further (a preset, tasks); by hand, the
+        # arguments alone choose
+        picked = catalog.chosen_ids(rows, settings.get('tasks'), settings.get('preset'))
+        if picked is not None:
+            rows = [r for r in rows if r['id'] in picked]
     ENGINE = engines.get(engine_id, host=HOST, port=PORT, gpu=GPU, launch_timeout=LAUNCH_TIMEOUT, run_dir=run_dir,
                          p_cores=P_CORES, track=a.track or settings.get('track'), dry=a.dry_run,
                          **{k: settings.get(k) for k in ('engine_url', 'engine_note', 'engine_path')})

@@ -117,6 +117,51 @@ def selects(only, row):
     return all(row.get(k) in v for k, v in (only or {}).items())
 
 
+def headline_rows(headline, rows, found=None):
+    """The cases a headline number is read from, per model: {(family, model): [rows]}. "where" fixes the condition;
+    "prefer" lists alternatives in order where models differ in what they have (the drafter the engine picks by
+    itself, thinking on where the model thinks): per model, the first alternative that has a case wins."""
+    ts = found or tasks()
+    per = {}
+    for r in rows:
+        if task_of(r, ts) == headline['task'] and all(r.get(k) == v for k, v in headline['where'].items()):
+            per.setdefault((r['family'], r['model']), []).append(r)
+    out = {}
+    for key, mine in per.items():
+        for alt in headline.get('prefer') or [{}]:
+            hit = [r for r in mine if all(r.get(k) == v for k, v in alt.items())]
+            if hit:
+                out[key] = hit
+                break
+    return out
+
+
+def chosen_ids(rows, task_ids=None, preset_id=None):
+    """The case ids the tasks or the preset pick out of rows (bench.json "tasks" / "preset"). None when neither is
+    given (no narrowing)."""
+    if not task_ids and not preset_id:
+        return None
+    ts = tasks()
+    hs = {h['id']: h for h in headlines()}
+    by_task = {t['id']: t for t in ts}
+    wanted = [{'task': t} for t in task_ids or []]
+    if preset_id:
+        found = [p for p in presets() if p['id'] == preset_id]
+        if not found:
+            raise SystemExit(f'no preset {preset_id!r} in catalog/tasks.json (there: {", ".join(p["id"] for p in presets())})')
+        wanted += found[0]['tasks']
+    ids = set()
+    for w in wanted:
+        if w['task'] not in by_task:
+            raise SystemExit(f'no task {w["task"]!r} in catalog/tasks.json (there: {", ".join(by_task)})')
+        mine = [r for r in rows if task_of(r, ts) == w['task']]
+        if w.get('headline_only'):
+            h = hs[by_task[w['task']]['headline']]
+            mine = [r for group in headline_rows(h, mine, ts).values() for r in group]
+        ids |= {r['id'] for r in mine if selects(w.get('only'), r)}
+    return ids
+
+
 def task_problems():
     out = []
     ts, ms, hs = tasks(), {m['id'] for m in metrics()}, {h['id']: h for h in headlines()}
@@ -155,16 +200,12 @@ def plan_problems():
             out.append(f'plan {where}: {len(stray)} case(s) in no task or in two, e.g. {stray[0]}')
         for h in hs:
             mine = [r for r in rows if task_of(r, ts) == h['task']]
-            per = {}
-            for r in mine:
-                if all(r.get(k) == v for k, v in h['where'].items()):
-                    per.setdefault((r['family'], r['model']), []).append(r['id'])
-            if h['id'] in ('JB-decode', 'JB-ttft-32k', 'JB-page'):   # one case per model; the others combine several
-                many = {k: v for k, v in per.items() if len(v) != 1}
-                none = {(r['family'], r['model']) for r in mine} - set(per)
-                if many or none:
-                    out.append(f'plan {where}: headline {h["id"]} picks {len(many)} model(s) with several cases and '
-                               f'{len(none)} with none ({sorted(none)[:3]})')
+            per = headline_rows(h, rows, ts)
+            none = {(r['family'], r['model']) for r in mine} - set(per)
+            many = {k for k, v in per.items() if len(v) != 1} if h['id'] in ('JB-decode', 'JB-ttft-32k', 'JB-page') else set()
+            if many or none:   # one case per model for these; the others combine several
+                out.append(f'plan {where}: headline {h["id"]} picks {len(many)} model(s) with several cases and '
+                           f'{len(none)} with none ({sorted(none)[:3]})')
     return out
 
 

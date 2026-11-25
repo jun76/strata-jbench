@@ -8,6 +8,7 @@ is for its GPU memory and RAM (for the estimate only) and whether the DFlash2 ca
 
 scripts/build_cases.py writes the plan and the case lists from these rows; the runner reads the plan it wrote.
 """
+import hashlib
 import os
 import re
 import argparse
@@ -427,10 +428,13 @@ def harness_build(division):
 def finish(rows, cfg):
     ids = [r['id'] for r in rows]
     assert len(ids) == len(set(ids)), 'duplicate case id'
+    tasks = catalog.tasks()
     for r in rows:
         r['env'] = cfg['id']
         r['size_class'] = size_class(SIZE[(r['family'], r['model'])], cfg)
         r['session'] = session_of(r)
+        r['task'] = catalog.task_of(r, tasks)
+        r['cond'] = condition(r)
     # the runner sends up to 3 seeds of a case on every start of its session, and a session starts as often as its
     # case with the most restarts asks (Tier 0: a 1-restart case beside 3-restart ones is measured 3 times)
     starts = {}
@@ -444,6 +448,28 @@ def finish(rows, cfg):
         r['requests'] = n
         r['est_s'] = round(request_seconds(r) * n)
     return rows
+
+
+_FIXTURE_SHA = None
+
+
+def condition(r):
+    """The hash of what a case asks, apart from which model it asks: the engine, the task and its version, the fixture
+    (its SHA-256 in prompts/MANIFEST.json) and which question of it, the context, the launch options, thinking, the sampling temperature, the
+    output cap, the concurrency, the seeds and the number of starts. Cases with the same hash are the same ruler,
+    whatever the environment and the run; a prompt, a cap or an option changed gives another hash."""
+    global _FIXTURE_SHA
+    if _FIXTURE_SHA is None:
+        try:
+            _FIXTURE_SHA = json.loads((ROOT / 'prompts' / 'MANIFEST.json').read_text()).get('fixtures', {})
+        except (OSError, ValueError):
+            _FIXTURE_SHA = {}
+    versions = {t['id']: t.get('version', 1) for t in catalog.tasks()}
+    what = [r.get('engine', engines.DEFAULT), r.get('task'), versions.get(r.get('task'), 1), r['fixture'],
+            _FIXTURE_SHA.get(r['fixture'], ''), r['content'], r['input_tokens'], r['context'], r['launch_opts'], r['config'],
+            r['effort'], r['temperature'],
+            r['output_cap'], r['concurrency'], r['seeds'], r['restarts'], r['timeout_s']]
+    return hashlib.sha256(json.dumps(what, ensure_ascii=False).encode()).hexdigest()[:10]
 
 
 def session_of(r):

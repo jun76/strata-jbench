@@ -45,6 +45,13 @@ PARAMS = {
                     'started). Kept as said in the run\'s engine.json; jbench cannot check it.'),
     'env': (None, str,
             'The environment (envs/<env>/env.json). null: the one this hardware matches; a name must match it too.'),
+    'preset': (None, str,
+               'A bundle of tasks (catalog/tasks.json "presets"): quick (the two headline speed numbers, minutes), '
+               'standard (speed, thinking and answering, a page from one request), full (every task). null: none.'),
+    'tasks': (None, list,
+              'The tasks to run, by name (catalog/tasks.json; python3 -I scripts/catalog.py lists them), e.g. '
+              '["speed-decode", "think-qa"]. Added to "preset" when both are given. null: none. With neither a preset '
+              'nor tasks, "tiers" chooses.'),
     'tiers': (None, list,
               'The Tiers to run, in this order, e.g. ["1", "3"]. null: every Tier of the division (plain 0 1 2 3 4a '
               '4b 4c 4d 5, a harness division G). Tier 0 checks the instruments: worth running once per environment.'),
@@ -145,8 +152,12 @@ def select(rows, cfg):
         # attach only: jbench cannot start the engine again, so the cases of one start at the usual context, whatever
         # engine the build is listed under (the user says which model is loaded: "models")
         mine = lambda r: r['step'] in e['steps'] and not r['launch_opts'] and r['context'] == 131072 and r['restarts'] == 1  # noqa: E731
+    import catalog
     out = [r for r in rows if (not tiers or r['step'] in tiers) and (not models or f'{r["family"]} {r["model"]}' in models)
            and (not cases or r['id'] in cases) and mine(r)]
+    picked = catalog.chosen_ids(out, cfg.get('tasks'), cfg.get('preset'))
+    if picked is not None:
+        out = [r for r in out if r['id'] in picked]
     if tiers:
         out.sort(key=lambda r: tiers.index(r['step']))
     return out

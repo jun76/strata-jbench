@@ -125,12 +125,42 @@ def cmd_plan(a):
         sel = [r for r in todo if r['step'] == step]
         print(f'{step:>5} {len(sel):>6} {len({(r["family"], r["model"]) for r in sel}):>6} '
               f'{sum(r.get("requests") or 0 for r in sel):>8} {e["total_h"]:>6.1f}')
+    by_task = {}
+    for r in todo:
+        by_task.setdefault(r.get('task') or '?', []).append(r)
+    if len(by_task) > 1 or cfg.get('preset') or cfg.get('tasks'):
+        print('by task (requests only, without the engine launches):')
+        for t, sel in by_task.items():
+            print(f'  {t:<18} {len(sel):>5} cases {sum(r.get("requests") or 0 for r in sel):>6} requests '
+                  f'{sum(r.get("est_s") or 0 for r in sel) / 3600:>5.1f} h')
     print(f'{"all":>5} {len(todo):>6} {len({(r["family"], r["model"]) for r in todo}):>6} '
           f'{sum(r.get("requests") or 0 for r in todo):>8} {sum(e["total_h"] for e in est.values()):>6.1f}'
           '   (hours: requests and engine launches, as the case lists estimate them)')
     for w in warn:
         print(f'note: {w}')
     return 0 if rows else 1
+
+
+def cmd_recipe(a):
+    """The recipe of bench.json as it is (the text to keep with results), or --apply: a pasted recipe written into
+    bench.json (its engine, track, division, preset, tasks, tiers and models; the run's name and the watch settings
+    stay as they are)."""
+    import recipe
+    if not a.apply:
+        print(recipe.text(config.load()), end='')
+        return 0
+    src = sys.stdin.read() if a.apply == '-' else Path(a.apply).read_text()
+    new = recipe.parse(src)
+    own = config.read(config.PATH)
+    for k, v in new.items():
+        if v == config.defaults().get(k):
+            own.pop(k, None)
+        else:
+            own[k] = v
+    config.PATH.write_text(json.dumps(own, ensure_ascii=False, indent=1) + '\n')
+    print(f'{config.PATH.relative_to(ROOT)}: {json.dumps(own, ensure_ascii=False)}')
+    print(recipe.text(config.load()), end='')
+    return 0
 
 
 def cmd_start(a):
@@ -153,7 +183,7 @@ def cmd_start(a):
     for w in warn:
         print(f'note: {w}')
     if not rows:
-        raise SystemExit('nothing chosen: no case of the plan matches bench.json "tiers", "models" and "cases" (scripts/bench.py plan)')
+        raise SystemExit('nothing chosen: no case of the plan matches bench.json "engine", "preset", "tasks", "tiers", "models" and "cases" (scripts/bench.py plan)')
     if subprocess.run(PY + ['scripts/acquire.py', 'check'], cwd=ROOT).returncode != 0:
         if not cfg['fetch']:
             print('not started: something the run needs is missing (above). Choose what to do with it (AGENTS.md 2.0a);')
@@ -165,6 +195,8 @@ def cmd_start(a):
     # the settings this start runs with, the defaults filled in (published with the run, like env.json)
     resolved = {**cfg, 'env': env_id, 'division': div}
     (run_dir / 'bench.json').write_text(json.dumps(resolved, ensure_ascii=False, indent=2) + '\n')
+    import recipe
+    (run_dir / 'recipe.txt').write_text(recipe.text(resolved))     # what this start measures, as one text (its id says the ruler)
     with (run_dir / 'bench-starts.jsonl').open('a') as f:
         f.write(json.dumps({'at': datetime.now().astimezone().isoformat(timespec='seconds'), **resolved}, ensure_ascii=False) + '\n')
     STATUS.mkdir(exist_ok=True)
@@ -242,8 +274,10 @@ def main():
         sub.add_parser(name).add_argument('--json', action='store_true')
     for name in ('plan', 'start', 'stop'):
         sub.add_parser(name)
+    sub.add_parser('recipe').add_argument('--apply', metavar='FILE', help='write this recipe into bench.json (- for stdin)')
     a = ap.parse_args()
-    return {'config': cmd_config, 'plan': cmd_plan, 'start': cmd_start, 'status': cmd_status, 'stop': cmd_stop}[a.cmd](a)
+    return {'config': cmd_config, 'plan': cmd_plan, 'start': cmd_start, 'status': cmd_status, 'stop': cmd_stop,
+            'recipe': cmd_recipe}[a.cmd](a)
 
 
 if __name__ == '__main__':

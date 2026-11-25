@@ -54,6 +54,18 @@ folder (`bench.json`, the defaults filled in; `bench-starts.jsonl`, one line per
 results comparable is not a setting: the cases are the plan (`scripts/case_plan.py`, over the catalog in `catalog/`), and the hardware and the
 measurer's choices per environment are its env.json.
 
+**Tasks, presets and the recipe:** the Tiers have names by what they answer: the tasks of `catalog/tasks.json`
+(`speed-decode`, `speed-prefill`, `official-standard`, `think-qa`, `code-oneshot`, `context-reserve`, `long-read`,
+`yarn-check`, `launch-options`, `selfcheck`, `agent-oneshot`), each tied to its cases, and the presets that bundle them
+(`quick`: the two headline speed numbers; `standard`; `full`). bench.json's `preset` and `tasks` choose by them
+(`tiers` still does when neither is set). The metrics and the headline numbers (one fixed condition each: JB-decode,
+JB-ttft-32k, JB-answer, JB-page, JB-agent) are `catalog/metrics.json`. What a configuration measures is one text, the
+recipe (`python3 -I scripts/bench.py recipe`; `--apply FILE` writes a pasted one into bench.json; kept in the run as
+`recipe.txt`): its id is a hash of the engine, the track, the division and the tasks with their versions, not of the
+models. Every case also carries the hash of its own conditions (`cond`, `case_plan.condition`: the fixture's SHA-256,
+the context, the options, thinking, the temperature, the cap, the seeds), and only cases with the same hash are the
+same ruler across environments. A task's `version` in `catalog/tasks.json` is raised when what it asks changes.
+
 **Working and published:** measurements are written to `results/` (not in Git), and only the RUN_IDs made final are
 moved to `published/` (in Git) by `scripts/publish.py`. What is committed is built from `published/` alone: the case
 lists (`cases/`, `build_cases.py --published`) and, per published run, the charts as they were when it was published
