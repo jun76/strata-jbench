@@ -146,7 +146,8 @@ def cmd_start(a):
     if cur.get('run_dir') and supervisor_pid(ROOT / cur['run_dir']):
         raise SystemExit(f'another run is running: {cur["run_dir"]} (scripts/bench.py stop first)')
     fetch = ['--no-fetch'] if not cfg['fetch'] else []
-    if subprocess.run(PY + ['scripts/setup_acquire.py'] + fetch, cwd=ROOT).returncode != 0:
+    # the venvs, the download list and the NVFP4-QAD converter are Strata's; another engine needs none of them
+    if cfg['engine'] == 'strata' and subprocess.run(PY + ['scripts/setup_acquire.py'] + fetch, cwd=ROOT).returncode != 0:
         return 1
     plan, rows, warn = chosen(cfg, env_id)
     for w in warn:
@@ -218,7 +219,13 @@ def cmd_stop(a):
                 pass
     if pid and alive(pid):
         os.kill(pid, signal.SIGKILL)
-    subprocess.run(['strata', 'launch', '--stop'], capture_output=True, cwd='/tmp')
+    import engines
+    rc = config.load(run_dir / 'bench.json') if (run_dir / 'bench.json').exists() else config.load()
+    try:
+        engines.get(rc.get('engine') or engines.DEFAULT, run_dir=run_dir, track=rc.get('track'), dry=True,
+                    **{k: rc.get(k) for k in ('engine_url', 'engine_path', 'engine_note')}).stop()
+    except (SystemExit, OSError, RuntimeError, subprocess.SubprocessError) as e:
+        print(f'the engine could not be stopped: {e}')
     q = run_dir / 'queue.log'
     last = q.read_text(errors='replace').strip().splitlines()[-1:] if q.exists() else []
     if last and not any(w in last[0] for w in ('queue stopped', 'queue finished')):

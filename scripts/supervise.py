@@ -104,10 +104,20 @@ def notify(text):
         log(f'notify: {text}' + (f' (notify-send exit {r.returncode}: {r.stderr.strip()})' if r.returncode else ''))
 
 
+def stop_engine(run_dir, cfg):
+    """Stop the engine this run's adapter started (Strata: strata launch --stop; another engine: its own way)."""
+    import engines
+    try:
+        engines.get(cfg.get('engine') or engines.DEFAULT, run_dir=run_dir, track=cfg.get('track'), dry=True,
+                    **{k: cfg.get(k) for k in ('engine_url', 'engine_path', 'engine_note')}).stop()
+    except (SystemExit, OSError, RuntimeError, subprocess.SubprocessError) as e:
+        print(f'the engine could not be stopped: {e}', file=sys.stderr)
+
+
 def on_term(signum, frame):
     for name in list(CHILDREN):
         stop_child(name, grace=30)
-    subprocess.run(['strata', 'launch', '--stop'], capture_output=True, cwd='/tmp')
+    stop_engine(RUN_DIR, STATE.get('cfg') or {})
     log('queue stopped')
     health()
     sys.exit(143)
@@ -126,7 +136,8 @@ def overnight_alive():
 
 def wait_on_disk(cfg):
     """Step 1: until acquire.py check passes; False when something is missing and nothing is fetching it."""
-    if cfg['fetch'] and not (ROOT / 'downloads/READY').exists() and not overnight_alive():
+    # scripts/overnight.py fetches Strata's models; another engine's are fetched before the run (acquire.py fetch)
+    if cfg['fetch'] and (cfg.get('engine') or 'strata') == 'strata' and not (ROOT / 'downloads/READY').exists() and not overnight_alive():
         if run(PY + ['scripts/acquire.py', 'check']) != 0:
             log('fetching the models (scripts/overnight.py, downloads/overnight.log)')
             spawn('acquire', [str(ROOT / '.venv-hf/bin/python'), '-u', 'scripts/overnight.py'],
@@ -172,7 +183,7 @@ def run_tier(step, cfg, models, ids):
                     break
         if stuck:
             stop_child('runner')
-            subprocess.run(['strata', 'launch', '--stop'], capture_output=True, cwd='/tmp')
+            stop_engine(RUN_DIR, cfg)
             stucks += 1
             if stucks > cfg['stuck_restarts']:
                 log(f'steps {step}: the runner was stuck {stucks} time(s); giving up on this Tier')
@@ -196,7 +207,8 @@ def main():
     STATE.update(cfg=cfg, env=RUN_DIR.parent.name, started_at=stamp())
     # every script below reads the run's own settings, not bench.json as it may be edited meanwhile
     os.environ.update(BENCH_CONFIG=str(RUN_DIR / 'bench.json'), BENCH_DIVISION=RUN_DIR.parent.parent.name,
-                      BENCH_ENV=STATE['env'], RUN_ID=RUN_DIR.name, BENCH_LAUNCH_TIMEOUT=str(cfg['launch_timeout_s']))
+                      BENCH_ENV=STATE['env'], RUN_ID=RUN_DIR.name, BENCH_LAUNCH_TIMEOUT=str(cfg['launch_timeout_s']),
+                      BENCH_ENGINE_HOME=str(RUN_DIR))   # an engine with a settings folder per run keeps it here
     signal.signal(signal.SIGTERM, on_term)
     signal.signal(signal.SIGHUP, signal.SIG_IGN)
     (RUN_DIR / 'queue.pid').write_text(f'{os.getpid()}\n')
@@ -210,11 +222,12 @@ def main():
     plan = [json.loads(x) for x in (envs.plan_dir(STATE['env']) / 'cases.jsonl').read_text().splitlines() if x.strip()]
     rows = config.select(plan, cfg)
     tiers = list(dict.fromkeys(r['step'] for r in rows))
-    log('run configs')
-    if run(PY + ['scripts/install_configs.py', '--env', STATE['env']]) != 0:
-        log('run configs failed; not starting')
-        health()
-        return 1
+    if (cfg.get('engine') or 'strata') == 'strata':     # Strata's run configs for models just fetched
+        log('run configs')
+        if run(PY + ['scripts/install_configs.py', '--env', STATE['env']]) != 0:
+            log('run configs failed; not starting')
+            health()
+            return 1
     log('preflight')
     if run(PY + ['scripts/preflight.py', '--phase', 'bench', '--steps', ','.join(tiers)] + ([] if cfg['smoke'] else ['--no-smoke'])) != 0:
         log('preflight failed; not starting (see run-status/preflight.json)')

@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from i18n import one, tr, untranslated  # noqa: E402
 import envs  # noqa: E402
 import catalog  # noqa: E402
+import engines  # noqa: E402
 import machine_info  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,6 +42,10 @@ def display_model(family, model):
 
 # A build that is not a quantization of the original weights (a fine-tune, a pruned version): "derivative" in the catalog
 DERIVATIVE = {k for k, e in _BUILD.items() if e.get('derivative')}
+# The engines that run a build (catalog "engines"; Strata where it says nothing), and the engine a plan is being built
+# for: a build in another engine's format is that engine's alone (Sync-Strata's Sync-XS / S / M).
+ENGINES_OF = {k: e.get('engines') or [engines.DEFAULT] for k, e in _BUILD.items()}
+ENGINE = engines.DEFAULT
 # The environment's reference model and the representatives of Tiers 4b, 4c and 5: set per environment by use_env, from
 # env.json "ref" or Strata's own pick for its RAM + VRAM (envs.ref), and from roles (representatives()), never from a
 # lineup named here, so that any card and any set of models gets a plan.
@@ -227,10 +232,34 @@ def tier1_cases(tier, step, fam, model, **kw):
 
 
 def build(cfg):
-    use_env(cfg)
+    """Every case of the environment: each engine jbench starts itself (catalog/engines/, "managed") gets the cases of
+    its own builds, limited to what the engine's entry allows ("steps", "max_context"); a row's "engine" says whose it
+    is. An attach-only engine has no rows of its own: it borrows the plain ones (config.select)."""
+    global ENGINE
     division = envs.load_division(envs.division())
+    rows = []
+    for e in engines.entries():
+        if not e['managed'] or (division.get('harness') and e['id'] != engines.DEFAULT):
+            continue
+        ENGINE = e['id']
+        part = _engine_rows(cfg, division)
+        if e['id'] != engines.DEFAULT:
+            # another engine takes none of Strata's launch options (the DFlash2 launches, Tier 5's variants)
+            part = [r for r in part if not r['launch_opts']]
+        part = [r for r in part if (not e.get('steps') or r['step'] in e['steps'])
+                and (not e.get('max_context') or r['context'] <= e['max_context'])]
+        for r in part:
+            r['engine'] = e['id']
+        rows += part
+    ENGINE = engines.DEFAULT
+    use_env(cfg)
+    return finish(rows, cfg)
+
+
+def _engine_rows(cfg, division):
+    use_env(cfg)
     if division.get('harness'):
-        return finish(harness_build(division), cfg)
+        return harness_build(division)
     names = {(f, m) for f, m, *_ in env_models()}
     rows = []
     # Tier 0: instrument check on the reference model across 3 engine restarts, plus the author's protocol on Gyro-S.
@@ -345,7 +374,7 @@ def build(cfg):
 
     rows += tier5(TIER5)
     rows = [r for r in rows if (r['family'], r['model']) in names]   # Tiers 0, 4 and 5 name their models directly
-    return finish(rows, cfg)
+    return rows
 
 
 
@@ -465,7 +494,9 @@ def use_env(cfg):
     ASSUME_ENV = {**ASSUME, **(cfg.get('assume') or {})}
     models = env_models()
     want = tuple((envs.ref(cfg) or '').split()) or None
-    if want not in {(f, m) for f, m, *_ in models}:
+    if ENGINE != engines.DEFAULT:
+        want = None      # the reference is Strata's recommendation: another engine has none
+    elif want not in {(f, m) for f, m, *_ in models}:
         print(f'{cfg["id"]}: the reference model {" ".join(want) if want else "(none: no Strata source to ask)"} is not '
               'among the models this environment measures; Tiers 0 and 4d are left out until env.json "ref" names one of them',
               file=sys.stderr)
@@ -475,9 +506,10 @@ def use_env(cfg):
 
 
 def env_models():
-    """The models this environment runs: every model, or the ones env.json lists."""
+    """The models this environment runs on the engine being planned: every build the catalog has for that engine, or
+    the ones of them env.json lists."""
     keep = ENV.get('models') if ENV else None
-    return [m for m in MODELS if not keep or f'{m[0]} {m[1]}' in keep]
+    return [m for m in MODELS if ENGINE in ENGINES_OF[(m[0], m[1])] and (not keep or f'{m[0]} {m[1]}' in keep)]
 
 
 def result_ids(env_id, published_only=False):

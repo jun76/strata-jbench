@@ -53,6 +53,11 @@ def load(path):
 
 
 def acquire_state():
+    if (config.load().get('engine') or 'strata') != 'strata':
+        # another engine: nothing of Strata's downloads applies; what the run needs is scripts/acquire.py check's word
+        st = load(OUT / 'acquire.json')
+        return {'phase': 'acquire', 'state': 'DONE' if st.get('ok') else 'NOT_STARTED',
+                'detail': 'what the run needs is on disk' if st.get('ok') else 'python3 -I scripts/acquire.py check'}
     st = load(DL / 'overnight-state.json')
     if (DL / 'READY').exists():
         return {'phase': 'acquire', 'state': 'DONE', 'detail': 'all models on disk'}

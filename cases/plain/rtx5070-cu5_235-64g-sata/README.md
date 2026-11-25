@@ -18,7 +18,7 @@ Tier ごとにケースの表がある（1行が1ケース）。全パラメー�
 | マザーボード | ASUSTeK COMPUTER INC. PRIME Z890-P WIFI |
 | モデルの置き場所 | <strong>SanDisk SD9SB8W1 (SATA SSD)</strong> · SATA SSD 接続（読み込みは最大 0.55 GB/s ほどで、NVMe の数分の一）。RAM + VRAM に収まらない重みを読み直すモデルは、この速さで遅くなる |
 | OS | Ubuntu 26.04.1 LTS (Linux 7.0.0-42-generic) |
-| Strata | strata 0.2.11 (build 0.1.57) |
+| 推論エンジン | strata 0.2.11 (build 0.1.57) · Sync-Strata 0.1.1 |
 
 Strata のデスクトップアプリは使っていない。CLI の <code>strata launch --no-tui</code> でエンジンを専用ポート（18600）に起動し、OpenAI 互換の HTTP API（<code>POST /v1/chat/completions</code>、ストリーミング）を <code>scripts/bench_runner.py</code> から直接呼んで測る。Tier 2 だけは Strata 同梱のベンチ <code>strata bench run --suite standard-v1</code> を同じエンジンに向けて実行する。
 
@@ -26,12 +26,12 @@ Strata のデスクトップアプリは使っていない。CLI の <code>strat
 
 ## 概要
 
-- ケース: 1,034
-- 本計測リクエスト: 3,414
-- エンジン起動: 118
-- 見積もり: 39 時間
+- ケース: 1,088
+- 本計測リクエスト: 3,576
+- エンジン起動: 121
+- 見積もり: 40 時間
 - 基準モデル: qwen IQ3_S （env.json の ref、なければ Strata がこの RAM + VRAM に勧めるモデル）
-- 完了: 1,018
+- 完了: 1,072
 - 失敗: 16
 
 
@@ -40,7 +40,7 @@ Strata のデスクトップアプリは使っていない。CLI の <code>strat
 | Tier | 内容 | モデル | ケース | リクエスト | 見積 h | 完了 |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
 | [0](tier-0.md) | 計測器の検証（基準モデル × 起動3回、Gyro-S で作者の値と照合、コーディングの成果物の展開確認） | 2 | 25 | 183 | 1.2 | 25 |
-| [1](tier-1.md) | 全モデルの基礎速度（decode 5種 × temperature 3水準、prefill 4K / 32K / 128K）。decode は DFlash2 対応のモデルで DFlash2 でも測る | 11 | 348 | 1,044 | 2.7 | 348 |
+| [1](tier-1.md) | 全モデルの基礎速度（decode 5種 × temperature 3水準、prefill 4K / 32K / 128K）。decode は DFlash2 対応のモデルで DFlash2 でも測る | 14 | 402 | 1,206 | 2.9 | 402 |
 | [2](tier-2.md) | 公式 standard-v1（thinking xhigh、temperature 1.0）をスイートごと3回 | 11 | 165 | 495 | 2.3 | 165 |
 | [3](tier-3.md) | 推論エフォート none / high × 4問、コーディング（帆船）は high のみ（全モデル） | 11 | 99 | 297 | 8.3 | 99 |
 | [4a](tier-4a.md) | 容量の確保コスト（128K / 256K / 1M に同じ 4K 入力） | 11 | 33 | 99 | 1.1 | 33 |
@@ -65,6 +65,9 @@ Strata のデスクトップアプリは使っていない。CLI の <code>strat
 | unsloth | UD-Q2_0 (v3.1) | 70.5 | 元重みの量子化 (Unsloth v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `d962011`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json), [2026-11-09-harbor-gyro-long-t5](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-09-harbor-gyro-long-t5/models.json)) |
 | unsloth | UD-IQ2_XS (v3.1) | 75.8 | 元重みの量子化 (Unsloth v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `d962011`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json), [2026-11-09-harbor-gyro-long-t5](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-09-harbor-gyro-long-t5/models.json)) |
 | unsloth | UD-Q2_K_XL (v3.1) | 79.6 | 元重みの量子化 (Unsloth v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `d962011`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json), [2026-11-09-harbor-gyro-long-t5](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-09-harbor-gyro-long-t5/models.json)) |
+| sync | Sync-XS | 24.1 | Sync-Strata の量子化 (RAM 24 GB 以下向け) | 記録なし (2026-11-19-sync-r10) |
+| sync | Sync-S | 28.1 | Sync-Strata の量子化 (RAM 32 GB 向け) | 記録なし (2026-11-19-sync-r10) |
+| sync | Sync-M | 34.6 | Sync-Strata の量子化 (RAM 48 GB 以上向け) | 記録なし (2026-11-19-sync-r10) |
 
 
 ## 全ケース共通の条件

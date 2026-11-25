@@ -18,7 +18,7 @@ Tier ごとにケースの表がある（1行が1ケース）。全パラメー�
 | マザーボード | MSI Z790 GAMING PLUS WIFI (MS-7E06) |
 | モデルの置き場所 | Fanxiang S880E 2TB (NVMe) |
 | OS | Ubuntu 26.10 (Linux 7.3.0-10-generic) |
-| Strata | strata 0.2.18 (build 0.1.64) |
+| 推論エンジン | strata 0.2.18 (build 0.1.64) |
 
 Strata のデスクトップアプリは使っていない。CLI の <code>strata launch --no-tui</code> でエンジンを専用ポート（18600）に起動し、OpenAI 互換の HTTP API（<code>POST /v1/chat/completions</code>、ストリーミング）を <code>scripts/bench_runner.py</code> から直接呼んで測る。Tier 2 だけは Strata 同梱のベンチ <code>strata bench run --suite standard-v1</code> を同じエンジンに向けて実行する。
 

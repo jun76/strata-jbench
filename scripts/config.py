@@ -10,7 +10,10 @@ model, power limits) are its env.json (envs/README.md).
 """
 import json
 import os
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 ROOT = Path(__file__).resolve().parents[1]
 PATH = ROOT / 'bench.json'
@@ -24,6 +27,22 @@ PARAMS = {
     'division': ('plain', str,
                  'How the models are driven (divisions/README.md): plain (the engine API directly) or a harness '
                  'division (dsh, strata, opencode, hermes, pi). Only a division whose status is active can be measured.'),
+    'engine': ('strata', str,
+               'What is measured (catalog/engines/): strata (Strata itself), a derived engine with an adapter '
+               '(sync-strata), or endpoint (attach to a URL the user started; nothing about its launch is checked). '
+               'A run measures one engine; its models are the catalog\'s builds for that engine.'),
+    'track': ('exact', str,
+              'How the engine is set. exact: every approximation that changes the output is off (the engine\'s entry in '
+              'catalog/engines/ says which; Sync-Strata: tail skip R10). default: the engine as it comes. custom: anything '
+              'else (an attached endpoint is always custom). Results of different tracks are never mixed.'),
+    'engine_path': (None, str,
+                    'Where the engine is, when it is not the one jbench fetched into tools/engines/<engine>/<version>/ '
+                    '(tools/provision.json records it; python3 -I scripts/provision.py).'),
+    'engine_url': (None, str,
+                   'engine "endpoint" only: the URL of the running engine, e.g. "http://127.0.0.1:8080".'),
+    'engine_note': (None, str,
+                    'engine "endpoint" only: what the user says is running there (the engine, its version, how it was '
+                    'started). Kept as said in the run\'s engine.json; jbench cannot check it.'),
     'env': (None, str,
             'The environment (envs/<env>/env.json). null: the one this hardware matches; a name must match it too.'),
     'tiers': (None, list,
@@ -118,8 +137,16 @@ def select(rows, cfg):
     tiers = cfg.get('tiers')
     models = set(cfg.get('models') or [])
     cases = set(cfg.get('cases') or [])
+    import engines
+    e = engines.entry(cfg.get('engine') or engines.DEFAULT)
+    if e['managed']:
+        mine = lambda r: r.get('engine', engines.DEFAULT) == e['id']  # noqa: E731
+    else:
+        # attach only: jbench cannot start the engine again, so the cases of one start at the usual context, whatever
+        # engine the build is listed under (the user says which model is loaded: "models")
+        mine = lambda r: r['step'] in e['steps'] and not r['launch_opts'] and r['context'] == 131072 and r['restarts'] == 1  # noqa: E731
     out = [r for r in rows if (not tiers or r['step'] in tiers) and (not models or f'{r["family"]} {r["model"]}' in models)
-           and (not cases or r['id'] in cases)]
+           and (not cases or r['id'] in cases) and mine(r)]
     if tiers:
         out.sort(key=lambda r: tiers.index(r['step']))
     return out

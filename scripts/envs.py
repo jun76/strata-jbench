@@ -218,14 +218,27 @@ def published_dir(env_id, run_id, div=None):
     return PUBLISHED / division(div) / env_id / run_id
 
 
+def comparable(run):
+    """Whether a run's results go on the shared pages: measured by an engine jbench started itself, on the exact track
+    (engine.json; a run from before engines were recorded is Strata, exact). An attach-only run and the default and
+    custom tracks are results of their own, never mixed in under the same case ids."""
+    try:
+        e = json.loads((run / 'engine.json').read_text())
+    except (OSError, ValueError):
+        return True
+    return bool(e.get('managed', True)) and e.get('track', 'exact') == 'exact'
+
+
 def run_dirs(env_id, published_only=False, div=None):
     """Every run of the environment the pages may show, sorted by run id: published/ and (unless published_only)
-    results/, test- runs left out. A run id in both is read from published/. With UNTIL set, only published runs that
+    results/, test- runs and runs that are not comparable() left out. A run id in both is read from published/. With UNTIL set, only published runs that
     finished by then."""
     found = {}
     for root in ([WORK] if not published_only else []) + [PUBLISHED]:
         for d in (root / division(div) / env_id).glob('*/'):
             if d.is_dir() and not d.name.startswith('test-'):
+                if not comparable(d):
+                    continue
                 if UNTIL is not None and (root != PUBLISHED or not finished(d) or finished_ts(d) > UNTIL):
                     continue
                 found[d.name] = d

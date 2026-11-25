@@ -18,7 +18,7 @@
 | 主板 | MSI Z790 GAMING PLUS WIFI (MS-7E06) |
 | 模型存放 | Fanxiang S880E 2TB (NVMe) |
 | OS | Ubuntu 26.10 (Linux 7.3.0-10-generic) |
-| Strata | strata 0.2.18 (build 0.1.64) |
+| 推理引擎 | strata 0.2.18 (build 0.1.64) |
 
 未使用 Strata 桌面应用。用 CLI <code>strata launch --no-tui</code> 在专用端口（18600）启动引擎，由 <code>scripts/bench_runner.py</code> 直接调用其 OpenAI 兼容的 HTTP API（<code>POST /v1/chat/completions</code>，流式）进行测量。只有 Tier 2 是对同一引擎运行 Strata 自带的基准测试 <code>strata bench run --suite standard-v1</code>。
 

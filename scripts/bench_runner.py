@@ -45,11 +45,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import agent_proxy  # noqa: E402
-import catalog  # noqa: E402
+import config  # noqa: E402
+import engines  # noqa: E402
+from engines import strata_cli  # noqa: E402
+import provision  # noqa: E402
 import envs  # noqa: E402
 import harnesses  # noqa: E402
 import machine_info  # noqa: E402
-import model_files  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 PROMPTS = ROOT / 'prompts'
@@ -138,7 +140,7 @@ def request_body(row, seed, nonce, doc_nonce=None):
     effort = row['effort']
     cap = int(row['output_cap'])
     body = {
-        'model': 'strata', 'stream': True, 'stream_options': {'include_usage': True},
+        'model': ENGINE.api_model if ENGINE else 'strata', 'stream': True, 'stream_options': {'include_usage': True},
         'messages': [{'role': 'user', 'content': user_text(row, nonce, doc_nonce)}],
         'max_tokens': cap, 'temperature': row['temperature'], 'seed': seed,
         **(AUTHOR_SAMPLING if row['config'] == 'author-protocol' else SAMPLING),
@@ -155,8 +157,12 @@ def request_body(row, seed, nonce, doc_nonce=None):
 
 # ------------------------------------------------------------------ HTTP
 
+def engine_address():
+    return (ENGINE.host, ENGINE.port) if ENGINE else (HOST, PORT)
+
+
 def get_json(path, timeout=10):
-    conn = http.client.HTTPConnection(HOST, PORT, timeout=timeout)
+    conn = http.client.HTTPConnection(*engine_address(), timeout=timeout)
     try:
         conn.request('GET', path)
         r = conn.getresponse()
@@ -173,7 +179,7 @@ def stream_chat(body, timeout, raw_path):
     content, reasoning = [], []
     t_first = t_answer = None
     raw_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = http.client.HTTPConnection(HOST, PORT, timeout=timeout)
+    conn = http.client.HTTPConnection(*engine_address(), timeout=timeout)
     t0 = time.monotonic()
     out['started_at'] = now()
     try:
@@ -242,8 +248,7 @@ class Telemetry:
         self.thread = threading.Thread(target=self.loop, daemon=True)
 
     def engine_pid(self):
-        out = subprocess.run(['pgrep', '-f', f'strata --serve'], capture_output=True, text=True).stdout.split()
-        return int(out[0]) if out else None
+        return ENGINE.pid() if ENGINE else None
 
     def loop(self):
         pid = self.engine_pid()
@@ -587,128 +592,7 @@ def lscpu_pcores():
     return ','.join(str(c) for c in firsts if c != 0)
 
 
-# Families whose builds carry their own drafter (catalog "drafter": {"builtin": ...}; also skipped by preflight's MTP
-# check), with the --draft value serve gives their engine (serve/hy4_kind.py, serve/inkling_kind.py)
-OWN_DRAFTER = {f: b['drafter']['builtin'] for f, b in catalog.by_family().items() if 'builtin' in b['drafter']}
-
-
-def launch_args(row):
-    opts = row['launch_opts']
-    if opts.startswith('configs/'):
-        opts = ''
-    if '<P コアの論理 CPU>' in opts:
-        opts = opts.replace('<P コアの論理 CPU>', P_CORES)
-    args = ['strata', 'launch', '--family', row['family'], '--model', row['model'], '--context', str(row['context']),
-            '--vision', 'off', '--parallel', '1', '--tune', 'skip', '--access', 'local', '--port', str(PORT),
-            '--no-tui', '--restart', '--gpu', str(GPU)]
-    # The drafter is pinned to MTP: since 0.2.10, Auto picks DFlash2 for some families and MTP for others, which would
-    # mix two drafters across the models. Tier 5 changes it with its own --drafting.
-    # --mtp on as well: when a launch runs setup (a changed choice), --drafting off makes it pass --mtp off, which saves
-    # "mtp": false in the model's installed config (~/.local/share/strata/install/strata-<tag>.json) and drops --mtp from
-    # its args; every later launch of that model then ran without the draft layer (qwen IQ3_S in 2026-11-03-main).
-    # --mtp on makes such a setup write it back on; a launch that runs no setup cannot, so preflight checks the installed
-    # configs and start_session checks that the layer loaded.
-    # A family with a drafter of its own (Hy4-Flash: DFly2, Inkling-2-Mini: DSpark, built into its builds) has no MTP layer: it starts with its
-    # own, Strata's default for it (case_plan.OWN_DRAFTER), and only Tier 5's --drafting off changes that.
-    if '--drafting' not in opts and row['family'] not in OWN_DRAFTER:
-        args += ['--drafting', 'mtp', '--mtp', 'on']
-    return args + shlex.split(opts)
-
-
-def not_applied(args, log):
-    """The launch choices the engine's own command line ("engine started: … --serve …" in its log) does not show:
-    an unknown --set name only warns, so a setting that never reached the engine would measure the default (AGENTS.md 5)."""
-    m = re.search(r'engine started: .*?--serve (.*)', log)
-    eng = m.group(1).split() if m else []
-    has = lambda flag, value=None: flag in eng and (value is None or (eng.index(flag) + 1 < len(eng) and eng[eng.index(flag) + 1] == value))  # noqa: E731
-    want = []
-    a = dict(zip(args, args[1:]))   # each flag with the word after it
-    want.append(('--max-context', a.get('--context')))
-    if a.get('--drafting') == 'off':
-        if '--mtp' in eng or '--draft' in eng:
-            return ['--drafting off, but the engine has a drafter (--mtp / --draft)']
-    elif a.get('--family') in OWN_DRAFTER:
-        # its own drafter: serve adds --draft <it> only when the engine says it has one (serve/hy4_kind.py,
-        # serve/inkling_kind.py), else starts without it with one log line; a case meant to measure the drafter must not
-        # run without
-        want.append(('--draft', OWN_DRAFTER[a['--family']]))
-    if a.get('--kv'):
-        want.append(('--kv', a['--kv']))
-    if a.get('--parallel', '1') != '1':
-        want.append(('--batch', a['--parallel']))
-    if a.get('--pool-cores'):
-        want.append(('--pool-cores', a['--pool-cores']))
-    if a.get('--vision') == 'gpu':
-        want.append(('--vision', None))
-    extra = []
-    for i, x in enumerate(args):
-        if x == '--set' and i + 1 < len(args) and '=' in args[i + 1]:
-            k, v = args[i + 1].split('=', 1)
-            if (k, v) == ('rope-scaling', 'none'):
-                # launch drops its own --rope-scaling yarn and passes nothing (none is the engine's default): the engine
-                # line must have no other scaling, and the engine says so in its log
-                if (has('--rope-scaling') and not has('--rope-scaling', 'none')) or 'no rope scaling is active' not in log:
-                    extra.append('--rope-scaling none')
-                continue
-            want.append(('--' + k, v))
-    if not eng:
-        return ['no "engine started" line in the engine log']
-    return [f'{f} {v}' if v is not None else f for f, v in want if not has(f, v)] + extra
-
-
-def save_tune_presets(session_dir, since):
-    """A tune launch (--tune quick / thorough) saves what it found as a Strata preset, active for those choices (the
-    desktop app's too). Keep every preset made since this launch began in the session folder: configs/tuned/ is built from
-    it (scripts/tuned_configs.py), and the list says which presets the bench added."""
-    r = subprocess.run(['strata', 'presets', 'list', '--output', 'json'], capture_output=True, text=True, timeout=120)
-    try:
-        made = [x for x in json.loads(r.stdout).get('presets', [])
-                if datetime.fromisoformat(x['created']).timestamp() >= since - 5]
-    except (ValueError, KeyError, TypeError):
-        made = []
-    full = []
-    for x in made:
-        q = subprocess.run(['strata', 'presets', 'show', x['id']], capture_output=True, text=True, timeout=120)
-        try:
-            full.append({**json.loads(q.stdout), 'active': x.get('active')})
-        except ValueError:
-            full.append(x)
-    (session_dir / 'tune-presets.json').write_text(json.dumps(full, ensure_ascii=False, indent=2) + '\n')
-    return [x['name'] for x in made]
-
-
-def stop_engine(session_dir):
-    r = subprocess.run(['strata', 'launch', '--stop'], capture_output=True, text=True, timeout=300)
-    if session_dir:
-        (session_dir / 'stop.txt').write_text(r.stdout + r.stderr)
-    for _ in range(60):
-        if not subprocess.run(['pgrep', '-f', 'strata --serve'], capture_output=True).stdout:
-            return
-        time.sleep(2)
-
-
-def kill_session(sid):
-    """SIGTERM, then SIGKILL after 15 s, every process of session sid (found by /proc, not by name)."""
-    def members():
-        found = []
-        for stat in Path('/proc').glob('[0-9]*/stat'):
-            try:
-                fields = stat.read_text().rsplit(')', 1)[1].split()
-            except OSError:
-                continue
-            if int(fields[3]) == sid:                     # after "(comm)": state ppid pgrp session
-                found.append(int(stat.parent.name))
-        return found
-    for sig in (15, 9):
-        for pid in members():
-            try:
-                os.kill(pid, sig)
-            except OSError:
-                pass
-        for _ in range(15):
-            if not members():
-                return
-            time.sleep(1)
+ENGINE = None     # the run's engine adapter (scripts/engines/; bench.json "engine"), set in main
 
 
 def gpu_used_mib():
@@ -718,70 +602,42 @@ def gpu_used_mib():
 
 
 def start_session(row, session_dir, run_dir):
+    """One engine start for this row's model, context and launch options, through the run's engine adapter: start, the
+    engine's own account of itself (/settings, /config, /props, where it has them), then what the adapter can confirm
+    of what was asked. Returns (telemetry, record), telemetry None when the session cannot be used."""
     session_dir.mkdir(parents=True, exist_ok=True)
-    stop_engine(None)
+
+    def save(info):
+        (session_dir / 'session.json').write_text(json.dumps(info, ensure_ascii=False, indent=2) + '\n')
+
+    ENGINE.stop()
     used = gpu_used_mib()
     if used and used > 4000:
         log(run_dir, f'GPU already holds {used} MiB before launch; another engine may be running')
         (session_dir / 'gpu-busy.txt').write_text(f'{used}\n')
-    args = launch_args(row)
-    t0 = time.time()
-    # its own session, so that a launch given up on can be killed with everything it started: the tuner
-    # (strata.py tune) outlives the CLI and goes on starting engines, which the next session would launch beside
-    p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
-    try:
-        stdout, stderr = p.communicate(timeout=LAUNCH_TIMEOUT)
-    except subprocess.TimeoutExpired:
-        kill_session(p.pid)
-        stdout, stderr = p.communicate()
-        (session_dir / 'launch.txt').write_text(shlex.join(args) + '\n\n' + stdout + stderr
-                                                + f'\n[launch timed out after {LAUNCH_TIMEOUT} s]\n')
-        info = {'argv': args, 'rc': None, 'launch_s': round(time.time() - t0, 1), 'started_at': now(),
-                'error': f'launch timed out after {LAUNCH_TIMEOUT} s'}
-        (session_dir / 'session.json').write_text(json.dumps(info, ensure_ascii=False, indent=2) + '\n')
-        stop_engine(session_dir)
-        return None, info
-    r = subprocess.CompletedProcess(args, p.returncode, stdout, stderr)
-    took = time.time() - t0
-    (session_dir / 'launch.txt').write_text(shlex.join(args) + '\n\n' + r.stdout + r.stderr)
-    info = {'argv': args, 'rc': r.returncode, 'launch_s': round(took, 1), 'started_at': now()}
-    if r.returncode != 0 or 'Ready:' not in r.stdout:
-        info['error'] = (r.stdout + r.stderr)[-800:]
-        (session_dir / 'session.json').write_text(json.dumps(info, ensure_ascii=False, indent=2) + '\n')
+    started = now()
+    info = ENGINE.start(row, session_dir)
+    info.update(engine=ENGINE.id, track=ENGINE.track, started_at=started)
+    if info.get('error'):
+        save(info)
+        if info.get('rc') is None:
+            ENGINE.stop(session_dir)
         return None, info
     for name, path in [('settings', '/settings'), ('config', '/config'), ('props', '/props')]:
         status, data = get_json(path)
         if name == 'props' and isinstance(data, dict):
-            data.pop('chat_template', None)
-            info['chat_template_sha256'] = hashlib.sha256(get_json('/props')[1].get('chat_template', '').encode()).hexdigest()
+            info['chat_template_sha256'] = hashlib.sha256((data.pop('chat_template', None) or '').encode()).hexdigest()
         (session_dir / f'{name}.json').write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
     st = json.loads((session_dir / 'settings.json').read_text())
     info['shared_settings_empty'] = isinstance(st, dict) and not st.get('defaults')
-    m = re.search(r'Engine log\s+(\S+)', r.stdout)
-    if m and Path(m.group(1)).exists():
-        info['engine_log'] = m.group(1)
-        # the log is appended to across starts: keep this start's part only (from its last "engine started" line)
-        text = Path(m.group(1)).read_text(errors='replace')
-        info['engine_log_offset'] = max(0, text.rfind('engine started'))
-        # MTP asked for but not loaded: the engine serves (with suffix drafts only), so only its log tells
-        if '--drafting' in args and args[args.index('--drafting') + 1] == 'mtp' and 'draft layer loaded' not in text[info['engine_log_offset']:]:
-            info['error'] = 'MTP asked for (--drafting mtp) but the engine log has no "strata mtp: draft layer loaded"'
-            info['mtp_missing'] = True
-            (session_dir / 'engine.log').write_text(text[text.rfind('\n', 0, info['engine_log_offset']) + 1:])
-            (session_dir / 'session.json').write_text(json.dumps(info, ensure_ascii=False, indent=2) + '\n')
-            stop_engine(session_dir)
-            return None, info
-        missing = not_applied(args, text[info['engine_log_offset']:])
-        if missing:
-            info['error'] = 'launch choices not in the engine command line: ' + ', '.join(missing)
-            info['setting_missing'] = missing
-            (session_dir / 'engine.log').write_text(text[text.rfind('\n', 0, info['engine_log_offset']) + 1:])
-            (session_dir / 'session.json').write_text(json.dumps(info, ensure_ascii=False, indent=2) + '\n')
-            stop_engine(session_dir)
-            return None, info
+    if not ENGINE.verify(row, info, session_dir):
+        ENGINE.collect_log(info, session_dir)
+        save(info)
+        ENGINE.stop(session_dir)
+        return None, info
     tel = Telemetry(session_dir / 'telemetry.csv')
     tel.thread.start()
-    (session_dir / 'session.json').write_text(json.dumps(info, ensure_ascii=False, indent=2) + '\n')
+    save(info)
     return tel, info
 
 
@@ -789,17 +645,14 @@ def end_session(tel, info, session_dir):
     if tel:
         tel.stop.set()
         tel.thread.join(5)
-    if info.get('engine_log'):
-        text = Path(info['engine_log']).read_text(errors='replace')
-        start = text.rfind('\n', 0, info.get('engine_log_offset', 0)) + 1
-        (session_dir / 'engine.log').write_text(text[start:])
-    stop_engine(session_dir)
+    ENGINE.collect_log(info, session_dir)
+    ENGINE.stop(session_dir)
     info['ended_at'] = now()
     (session_dir / 'session.json').write_text(json.dumps(info, ensure_ascii=False, indent=2) + '\n')
 
 
 def warmup(session_dir):
-    body = {'model': 'strata', 'stream': True, 'stream_options': {'include_usage': True}, 'max_tokens': 128,
+    body = {'model': ENGINE.api_model if ENGINE else 'strata', 'stream': True, 'stream_options': {'include_usage': True}, 'max_tokens': 128,
             'temperature': 0.7, 'seed': 1, 'reasoning_effort': 'none', 'chat_template_kwargs': {'enable_thinking': False},
             'messages': [{'role': 'user', 'content': f'[warmup {time.time_ns()}]\nExplain briefly what a hash table is.'}],
             **SAMPLING}
@@ -919,7 +772,7 @@ def run_harness_case(row, case_dir, tel, restart, h, proxy):
             stdout, stderr = p.communicate(input=prompt if h.stdin else None, timeout=row['timeout_s'])
         except subprocess.TimeoutExpired:
             timed_out = True
-            kill_session(p.pid)
+            strata_cli.kill_session(p.pid)
             stdout, stderr = p.communicate()
         wall = time.time() - t0
         reqs = [r for r in proxy.end() if 'sent' in r]
@@ -1096,7 +949,7 @@ def run_standard(rows, run_dir, dry):
 # ------------------------------------------------------------------ main
 
 def main():
-    global P_CORES, GPU
+    global P_CORES, GPU, ENGINE
     ap = argparse.ArgumentParser()
     ap.add_argument('--run-id', required=True)
     ap.add_argument('--steps', default='0,1')
@@ -1104,6 +957,8 @@ def main():
     ap.add_argument('--ids', default='', help='only these case ids (comma separated)')
     ap.add_argument('--dry-run', action='store_true')
     ap.add_argument('--env', default='', help='the environment (default: the one this hardware matches)')
+    ap.add_argument('--engine', default='', help='the engine (catalog/engines/; default: bench.json "engine", else strata)')
+    ap.add_argument('--track', default='', help='exact, default or custom (default: bench.json "track", else exact)')
     a = ap.parse_args()
     P_CORES = lscpu_pcores()
     env_id = a.env if a.dry_run and a.env else envs.current(a.env)
@@ -1126,17 +981,26 @@ def main():
     models = {tuple(m.split(':')) for m in a.models.split(',') if m}
     ids = set(filter(None, a.ids.split(',')))
     rows = [json.loads(l) for l in (envs.plan_dir(env_id) / 'cases.jsonl').read_text().splitlines()]
+    settings = config.load()
+    engine_id = a.engine or settings.get('engine') or engines.DEFAULT
     rows = [r for r in rows if r['step'] in steps and (not models or (r['family'], r['model']) in models)
-            and (not ids or r['id'] in ids)]
+            and (not ids or r['id'] in ids) and r.get('engine', engines.DEFAULT) == engine_id]
+    ENGINE = engines.get(engine_id, host=HOST, port=PORT, gpu=GPU, launch_timeout=LAUNCH_TIMEOUT, run_dir=run_dir,
+                         p_cores=P_CORES, track=a.track or settings.get('track'), dry=a.dry_run,
+                         **{k: settings.get(k) for k in ('engine_url', 'engine_note', 'engine_path')})
     if not (run_dir / 'machine.json').exists():
-        (run_dir / 'machine.json').write_text(json.dumps(
-            {**machine_info.collect(P_CORES, cfg.get('memory'), GPU), 'env_id': env_id, 'created_at': now()},
-            indent=2, ensure_ascii=False) + '\n')
+        machine = {**machine_info.collect(P_CORES, cfg.get('memory'), GPU), 'env_id': env_id, 'created_at': now()}
+        if ENGINE.id != engines.DEFAULT and not a.dry_run:   # the "Test system" box names the engine measured
+            machine['env']['strata'] = f'{ENGINE.info["label"]} {ENGINE.probe().get("version") or ""}'.strip()
+        (run_dir / 'machine.json').write_text(json.dumps(machine, indent=2, ensure_ascii=False) + '\n')
     # the env.json this start measured with (envs/ is outside Git): published with the run, and the pages read it
     if (envs.ENVS / env_id / 'env.json').exists():
         shutil.copyfile(envs.ENVS / env_id / 'env.json', run_dir / 'env.json')
-    log(run_dir, f'start env={env_id} division={div} steps={steps} cases={len(rows)} dry={a.dry_run}')
-    log(run_dir, f'models.json: {model_files.record(run_dir)}')
+    log(run_dir, f'start env={env_id} division={div} engine={ENGINE.id} track={ENGINE.track} steps={steps} cases={len(rows)} dry={a.dry_run}')
+    # what this start measured: the engine, its version and track (engine.json; Strata: models.json too), and where the
+    # engine, the harness and the models on this PC came from (provision.json)
+    log(run_dir, ENGINE.record(run_dir, rows) if not a.dry_run else f'[dry] engine {ENGINE.id} track {ENGINE.track}')
+    provision.copy_to(run_dir)
     if harness:
         # the harness this start drove (published with the run, beside models.json)
         hinfo = {'division': div, 'harness': harness, 'pin': harnesses.load_pin(div),
@@ -1144,7 +1008,7 @@ def main():
         (run_dir / 'harness.json').write_text(json.dumps(hinfo, ensure_ascii=False, indent=2).replace(str(Path.home()), '~') + '\n')
         log(run_dir, f'harness: {harness} {hinfo["found"].get("version")} ({hinfo["found"].get("where") or hinfo["found"].get("reason")})')
         if h and not a.dry_run:
-            proxy = agent_proxy.Proxy().start()
+            proxy = agent_proxy.Proxy(upstream=engine_address()).start()
 
     for step in steps:
         step_rows = [r for r in rows if r['step'] == step]
@@ -1192,9 +1056,9 @@ def main():
                                    [{'case': r['id'], 'restart': restart, 'error': error, 'flags': []}])
                     break
                 log(run_dir, f'session {name}: launched in {info["launch_s"]}s')
-                if '--tune' in todo[0]['launch_opts'] and 'skip' not in todo[0]['launch_opts']:
-                    made = save_tune_presets(session_dir, time.time() - info['launch_s'])
-                    log(run_dir, f'session {name}: the tuner saved preset(s) {made}')
+                kept = ENGINE.after_launch(todo[0], info, session_dir)
+                if kept:
+                    log(run_dir, f'session {name}: {kept}')
                 if not warmup(session_dir):
                     log(run_dir, f'session {name}: warm-up failed')
                 order = list(todo)

@@ -18,7 +18,7 @@ One table of cases per Tier (a row per case). Every parameter and result: the CS
 | Motherboard | ASUSTeK COMPUTER INC. PRIME Z890-P WIFI |
 | Model storage | <strong>SanDisk SD9SB8W1 (SATA SSD)</strong> · attached over SATA SSD (reads top out near 0.55 GB/s, a fraction of NVMe): a model whose weights do not fit in RAM + VRAM is slowed by it |
 | OS | Ubuntu 26.04.1 LTS (Linux 7.0.0-42-generic) |
-| Strata | strata 0.2.11 (build 0.1.57) |
+| Inference engine | strata 0.2.11 (build 0.1.57) · Sync-Strata 0.1.1 |
 
 The Strata desktop app is not used. The CLI (<code>strata launch --no-tui</code>) starts the engine on a dedicated port (18600), and <code>scripts/bench_runner.py</code> calls its OpenAI-compatible HTTP API (<code>POST /v1/chat/completions</code>, streaming) directly. Only Tier 2 runs Strata's bundled benchmark, <code>strata bench run --suite standard-v1</code>, against the same engine.
 
@@ -26,12 +26,12 @@ environment <code>rtx5070-cu5_235-64g-sata</code> · as recorded for RUN_ID 2026
 
 ## Overview
 
-- cases: 1,034
-- measured requests: 3,414
-- engine launches: 118
-- estimate: 39 h
+- cases: 1,088
+- measured requests: 3,576
+- engine launches: 121
+- estimate: 40 h
 - reference model: qwen IQ3_S (env.json "ref", else the model Strata recommends for this RAM + VRAM)
-- done: 1,018
+- done: 1,072
 - failed: 16
 
 
@@ -40,7 +40,7 @@ environment <code>rtx5070-cu5_235-64g-sata</code> · as recorded for RUN_ID 2026
 | Tier | what | models | cases | requests | est. h | done |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
 | [0](tier-0.en.md) | validating the harness (the reference model × 3 launches, Gyro-S against the author's figures, unpacking the coding result) | 2 | 25 | 183 | 1.2 | 25 |
-| [1](tier-1.en.md) | base speed of every model (5 decode kinds × 3 temperatures, prefill 4K / 32K / 128K); decode also with DFlash2 on the models that have it | 11 | 348 | 1,044 | 2.7 | 348 |
+| [1](tier-1.en.md) | base speed of every model (5 decode kinds × 3 temperatures, prefill 4K / 32K / 128K); decode also with DFlash2 on the models that have it | 14 | 402 | 1,206 | 2.9 | 402 |
 | [2](tier-2.en.md) | the official standard-v1 (thinking xhigh, temperature 1.0), the whole suite 3 times | 11 | 165 | 495 | 2.3 | 165 |
 | [3](tier-3.en.md) | reasoning effort none / high × 4 tasks, the coding task (sailing ship) at high only (every model) | 11 | 99 | 297 | 8.3 | 99 |
 | [4a](tier-4a.en.md) | the cost of reserving context (the same 4K input at 128K / 256K / 1M) | 11 | 33 | 99 | 1.1 | 33 |
@@ -65,6 +65,9 @@ environment <code>rtx5070-cu5_235-64g-sata</code> · as recorded for RUN_ID 2026
 | unsloth | UD-Q2_0 (v3.1) | 70.5 | quantized from the original weights (Unsloth v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `d962011`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json), [2026-11-09-harbor-gyro-long-t5](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-09-harbor-gyro-long-t5/models.json)) |
 | unsloth | UD-IQ2_XS (v3.1) | 75.8 | quantized from the original weights (Unsloth v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `d962011`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json), [2026-11-09-harbor-gyro-long-t5](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-09-harbor-gyro-long-t5/models.json)) |
 | unsloth | UD-Q2_K_XL (v3.1) | 79.6 | quantized from the original weights (Unsloth v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `d962011`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/d96201194f103c906994f283f504209dc8d2a10c) ([2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/models.json), [2026-11-09-harbor-gyro-long-t5](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-09-harbor-gyro-long-t5/models.json)) |
+| sync | Sync-XS | 24.1 | Sync-Strata's quantization (for 24 GB of RAM or less) | not recorded (2026-11-19-sync-r10) |
+| sync | Sync-S | 28.1 | Sync-Strata's quantization (for 32 GB of RAM) | not recorded (2026-11-19-sync-r10) |
+| sync | Sync-M | 34.6 | Sync-Strata's quantization (for 48 GB of RAM or more) | not recorded (2026-11-19-sync-r10) |
 
 
 ## Conditions shared by every case

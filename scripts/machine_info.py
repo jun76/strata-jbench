@@ -134,18 +134,34 @@ def collect(p_cores=None, memory=None, gpu_index=0):
 
 
 def latest_env(root, env_id, published_only=False):
-    """The env of the environment's newest run that has one (test- runs left out), else None."""
+    """The env of the environment's newest run that has one (test- runs left out), else None. The box names the
+    engines measured there: Strata's line is the newest Strata run's, and each other engine's newest run adds its own
+    (engine.json says which engine a run measured)."""
     sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import engines
     import envs
+    found, others = None, {}
     for d in reversed(envs.run_dirs(env_id, published_only)):
         p = d / 'machine.json'
         try:
             env = json.loads(p.read_text()).get('env')
         except (OSError, ValueError):
             env = None
-        if env:
-            return env, p.parent.name
-    return None, None
+        if not env:
+            continue
+        engine_id = engines.of_run(d)[0]
+        if engine_id != engines.DEFAULT:
+            others.setdefault(engine_id, env.get('strata'))
+        elif not found:
+            found = (env, p.parent.name)
+        if not found and not others.get(engine_id):
+            continue
+    if not found:
+        return None, None
+    env, run_id = found
+    if others:
+        env = {**env, 'strata': ' · '.join([env.get('strata') or '?'] + [v for v in others.values() if v])}
+    return env, run_id
 
 
 def env_for(root, cfg, published_only=False):
@@ -265,7 +281,7 @@ def env_rows(env, run_id, cfg, L):
         (L('マザーボード', 'Motherboard', '主板'), e(board)),
         (L('モデルの置き場所', 'Model storage', '模型存放'), drive_text(env, e, L)),
         ('OS', f'{e(env.get("os"))} (Linux {e(env.get("kernel"))})'),
-        ('Strata', e(env.get('strata'))),
+        (L('推論エンジン', 'Inference engine', '推理引擎'), e(env.get('strata'))),
     ]
     src = (L(f'RUN_ID {run_id} の記録（machine.json）', f'as recorded for RUN_ID {run_id} (machine.json)', f'RUN_ID {run_id} 的记录（machine.json）')
            if run_id else L('まだ計測の記録が無いので、env.json とこの PC の現在の構成から', 'no run recorded yet: from env.json and this PC now',

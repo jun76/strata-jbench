@@ -12,7 +12,10 @@ fixed condition each). A task is tied to the plan's cases by "match" (the step a
 (every case belongs to exactly one task).
 """
 import json
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 ROOT = Path(__file__).resolve().parents[1]
 MODELS_DIR = ROOT / 'catalog' / 'models'
@@ -22,7 +25,7 @@ LANGS = ('ja', 'en', 'zh')
 
 BASE_KEYS = {'base', 'order', 'label', 'tokenizer', 'trained_context', 'max_context', 'thinking', 'lineup', 'drafter',
              'builds'}
-BUILD_KEYS = {'family', 'model', 'size_gb', 'role', 'derivative', 'display'}
+BUILD_KEYS = {'family', 'model', 'size_gb', 'role', 'derivative', 'display', 'engines'}
 
 
 def bases():
@@ -179,7 +182,12 @@ def main():
         print(f'task {t["id"]}: {t["label"]["en"]} ({", ".join(t["metrics"])})' + (f' -> {t["headline"]}' if t.get('headline') else ''))
     for p in presets():
         print(f'preset {p["id"]}: {", ".join(x["task"] + ("*" if x.get("only") else "") for x in p["tasks"])}')
-    bad = problems(found) + task_problems() + plan_problems()
+    import engines
+    for e in engines.entries():
+        print(f'engine {e["id"]}: {e["label"]} ({e["adapter"]}, {"managed" if e["managed"] else "attach only"}, tracks {", ".join(e["tracks"])})')
+    known = set(engines.ids())
+    stray = [f'{b["base"]} {x["family"]} {x["model"]}: no engine {g!r} in catalog/engines/' for b in found for x in b.get('builds', []) for g in x.get('engines', []) if g not in known]
+    bad = problems(found) + stray + engines.problems() + task_problems() + plan_problems()
     for line in bad:
         print('NG ' + line)
     raise SystemExit(1 if bad else 0)

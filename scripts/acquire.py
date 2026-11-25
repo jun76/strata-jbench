@@ -36,6 +36,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 import config  # noqa: E402
+import engines  # noqa: E402
 import envs  # noqa: E402
 import harnesses  # noqa: E402
 import install_configs  # noqa: E402
@@ -153,16 +154,26 @@ def tool_items(div):
 
 def check(env_id, div):
     models, dflash = needed(env_id, div)
-    items = model_items(models)
-    if dflash:
-        items.append(dflash2_item(dflash))
+    settings = config.load()
+    engine_id = settings.get('engine') or engines.DEFAULT
+    if engine_id == engines.DEFAULT:
+        items = model_items(models)
+        if dflash:
+            items.append(dflash2_item(dflash))
+    else:
+        # another engine: its adapter says what is missing (the engine itself, its models)
+        eng = engines.get(engine_id, track=settings.get('track'), dry=True, run_dir=ROOT / 'run-status',
+                          **{k: settings.get(k) for k in ('engine_url', 'engine_path', 'engine_note')})
+        p = eng.probe()
+        items = eng.needs(models) or [{'item': f'engine:{engine_id}', 'what': f'{eng.info["label"]} {p.get("version") or ""}'.strip(),
+                                       'state': 'ok' if p['ok'] else 'missing', 'detail': p.get('reason', ''), 'fix': ''}]
     if envs.load_division(div).get('harness'):
         items.append(harness_item(div))
     items += tool_items(div)
     free = shutil.disk_usage(overnight.models_root()).free
     # per disk: a model folder may link to another one (Hy4-Flash's on rtx5090-128g)
     disks = overnight.missing_by_disk([f for i in items for f in i.pop('_files', [])])
-    out = {'at': now(), 'env': env_id, 'division': div, 'ok': all(i['state'] == 'ok' for i in items),
+    out = {'at': now(), 'env': env_id, 'division': div, 'engine': engine_id, 'ok': all(i['state'] == 'ok' for i in items),
            'free_bytes': free, 'disks': [{'folder': str(d), 'missing_bytes': b, 'free_bytes': fr} for d, (b, fr) in disks.items()],
            'items': items}
     (ROOT / 'run-status').mkdir(exist_ok=True)
@@ -171,7 +182,7 @@ def check(env_id, div):
 
 
 def show(out):
-    print(f'division {out["division"]}, environment {out["env"]}: '
+    print(f'division {out["division"]}, environment {out["env"]}, engine {out.get("engine", "strata")}: '
           + ('everything is here' if out['ok'] else 'something is missing'))
     for i in out['items']:
         size = f' ({gb(i["bytes"])})' if i.get('bytes') and i["state"] != "ok" else ''
@@ -233,6 +244,25 @@ def fetch(out, wanted, yes, skip_models=False):
                 if dflash2_item([(fam, model)])['state'] == 'missing':   # one fetch may have brought another model's too
                     rc |= subprocess.run(['strata', 'drafting', 'fetch', *drafting_args(fam, model), '--mode', 'dflash2'],
                                          cwd='/tmp').returncode
+    for it in missing:
+        if not it['item'].startswith('engine:') or it['item'] not in todo:
+            continue
+        eng = engines.get(it['item'].split(':', 1)[1], dry=True, run_dir=ROOT / 'run-status')
+        if not hasattr(eng, 'fetch'):
+            print(f'{it["item"]}: jbench has no way to fetch this engine; put it in place and name it (bench.json "engine_path")')
+            rc |= 1
+            continue
+        import provision
+        models_dir = provision.engine(eng.id).get('models_dir') or provision.models(eng.id).get('path')
+        if not models_dir:
+            print(f'{it["item"]}: no models folder recorded for it yet (python3 -I scripts/provision.py set-models {eng.id} --path DIR)')
+            rc |= 1
+            continue
+        plan = eng.fetch_plan(models_dir)
+        print(f'  {plan["what"]}\n  from {plan["url"]}\n  {gb(plan["bytes"])}, SHA-256 {plan["sha256"]}\n  into {plan["into"]}\n'
+              f'  then its own installer: {plan["then"]}')
+        if ask('download it, check the SHA-256 and run its installer into that folder (nothing outside it is changed)?', yes):
+            print(json.dumps(eng.fetch(models_dir), ensure_ascii=False, indent=1))
     for it in missing:
         if not it['item'].startswith('harness:') or it['item'] not in todo:
             continue

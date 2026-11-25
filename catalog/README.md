@@ -46,6 +46,24 @@ Notes on particular builds (kept here, JSON has no comments):
 Where a property belongs to the pair of an engine and a model rather than to the model (the drafter, today), it will
 move to the engine's entry when engines get a catalog of their own.
 
+## engines/<engine>.json
+
+One file per engine a run can measure (bench.json "engine").
+
+| Key | What it is |
+| --- | --- |
+| `id`, `order`, `label`, `source` | The id (the file's name), its place on the pages, its name, where it comes from |
+| `adapter` | The module in `scripts/engines/` that drives it: `strata_cli` (Strata's CLI), `sync_cli` (Sync-Strata's launcher), `openai_endpoint` (attach to a running URL) |
+| `managed` | `true`: jbench starts and stops it and checks what it asked for. `false`: attach only; the results say so and are never mixed with the others |
+| `steps` | The Tiers it is asked (`null`: all). Another engine than Strata gets none of Strata's launch options (the DFlash2 launches, Tier 5) |
+| `max_context` | The longest context it takes (`null`: no limit of its own) |
+| `tracks` | How it can be set, with each track's settings: `exact` (approximations that change the output off), `default` (as it comes), `custom` |
+| `approximations` | The options that trade quality for speed, with their `exact` and `default` values, for readers |
+| `pin` | The release jbench fetches for itself: version, archive (URL, bytes, SHA-256), the installer's arguments |
+| `about` | One paragraph for readers, in Japanese, English and Chinese |
+
+A build names the engines that run it with `"engines": [...]` in `models/<base>.json` (Strata where it says nothing).
+
 ## tasks.json
 
 `tasks`: what a run can do, by name. A task is tied to the plan's cases by `match` (`step`: the Tiers it covers;

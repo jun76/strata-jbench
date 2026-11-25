@@ -18,7 +18,7 @@ One table of cases per Tier (a row per case). Every parameter and result: the CS
 | Motherboard | MSI Z790 GAMING PLUS WIFI (MS-7E06) |
 | Model storage | Fanxiang S880E 2TB (NVMe) |
 | OS | Ubuntu 26.10 (Linux 7.3.0-10-generic) |
-| Strata | strata 0.2.18 (build 0.1.64) |
+| Inference engine | strata 0.2.18 (build 0.1.64) |
 
 The Strata desktop app is not used. The CLI (<code>strata launch --no-tui</code>) starts the engine on a dedicated port (18600), and <code>scripts/bench_runner.py</code> calls its OpenAI-compatible HTTP API (<code>POST /v1/chat/completions</code>, streaming) directly. Only Tier 2 runs Strata's bundled benchmark, <code>strata bench run --suite standard-v1</code>, against the same engine.
 

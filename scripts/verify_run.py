@@ -83,17 +83,35 @@ def timing(run_dir):
 
 
 def settings(run_dir):
-    br = runner()
-    missing = []
+    """What each session asked of the engine against what the engine says it runs, as the run's engine adapter checks
+    it (Strata: the engine's command line in its log; Sync-Strata: its resolved config). An attach-only run has
+    nothing to check, and says so."""
+    import engines
+    engine_id, track = engines.of_run(run_dir)
+    eng = engines.get(engine_id, run_dir=run_dir, track=track, dry=True)
+    if not eng.info['managed']:
+        return {'missing': [], 'ok': True, 'not_checked': 'attach only: jbench did not start the engine'}
+    missing, skipped = [], 0
     for s in sorted(run_dir.glob('sessions/*/start-*/session.json')) + sorted(run_dir.glob('sessions/S2-*/session.json')):
         info = json.loads(s.read_text())
         log = s.with_name('engine.log')
         if not info.get('argv') or info.get('rc') != 0 or not log.exists():
             continue
-        m = br.not_applied(info['argv'], log.read_text(errors='replace'))
+        text = log.read_text(errors='replace')
+        try:
+            if hasattr(eng, 'not_applied'):
+                m = eng.not_applied(info['argv'], text)
+            else:
+                cfg = json.loads(s.with_name('sync-config.json').read_text())
+                m = eng.config_errors(cfg, info['requested_model'], info['requested_context'])
+                if 'draft layer loaded' not in text:
+                    m.append('MTP not loaded')
+        except (OSError, ValueError, KeyError, StopIteration):
+            skipped += 1      # the engine's own files are not on this PC (a run measured elsewhere)
+            continue
         if m:
             missing.append({'session': str(s.parent.relative_to(run_dir)), 'missing': m})
-    return {'missing': missing, 'ok': not missing}
+    return {'missing': missing, 'ok': not missing, **({'not_checked_sessions': skipped} if skipped else {})}
 
 
 def tune_presets(run_dir):

@@ -32,6 +32,20 @@ harness's pinned version, its models and its status are in its division.json; on
 (`scripts/strata_agent.mjs` on the extracted app in `tools/harness/strata/<version>/`). Plans, results and case lists are kept in a folder per division, and each
 division has its own pages (`preview/RESULTS-<division>.html`, `snapshots/<division>/...`).
 
+**Engine:** what is measured. `catalog/engines/<engine>.json` is one engine and names its adapter
+(`scripts/engines/<adapter>.py`); bench.json's `engine` picks it (`strata` by default) and a run measures one engine,
+recorded in the run's `engine.json`. `strata` is Strata itself (`strata launch`); `sync-strata` is a derived engine
+with an adapter of its own (its launcher, a settings folder per run, its own builds Sync-XS / S / M); `endpoint`
+attaches to a URL the user started (bench.json `engine_url`, `engine_note`): jbench starts and stops nothing, so
+nothing about the launch is checked and the results say "attach only". An engine's entry limits what it is asked
+(`steps`, `max_context`), and a build belongs to the engines its catalog entry lists (`catalog/models/`, "engines";
+Strata where it says nothing), so the plan's rows carry the engine they are for. bench.json's `track` says how the
+engine is set: `exact` (every approximation that changes the output off: Sync-Strata's tail skip at R10), `default`
+(the engine as it comes) or `custom`. Only runs on the `exact` track of an engine jbench started itself share the
+pages under the same case ids (`envs.comparable`); the others are results of their own.
+What a run uses on this PC and where it came from (the engine, the harness, the models: fetched by jbench into
+`tools/`, or a place the user named) is `tools/provision.json` (`scripts/provision.py`), copied into the run.
+
 **Settings:** what a run measures and how it is run is `bench.json` at the repository's root (not in Git): the
 RUN_ID, the division, the Tiers, models and cases chosen, whether to fetch what is missing, the watch's interval and
 restarts. It holds only what differs from the defaults; every key, its default and what it does are in
@@ -352,7 +366,10 @@ whether the run succeeded or not; no one is asked first (the user agreed to this
 Even if one of these becomes necessary during a run, do not do it yourself: follow the policy decided in 2.2. With no
 policy, report the cause and a proposal, and stop.
 - Deleting models or results (except the converted QAD source, which `scripts/overnight.py` deletes)
-- Downloading or installing anything: models, the drafter, a harness (`"fetch": true`, `scripts/acquire.py fetch`)
+- Downloading or installing anything: models, the drafter, a harness, an engine (`"fetch": true`, `scripts/acquire.py fetch`).
+  Ask it as a choice of two: fetch it for jbench alone into `tools/` inside the repository (not in Git; the version and
+  SHA-256 are pinned and recorded), or use what is on the PC already at a path the user gives (recorded as the user's).
+  Prefer the first: a run should measure fixed versions. For an engine, show the URL, the size and the SHA-256 first
 - Stopping a Strata engine other than the measuring one, or changing Strata's saved settings or presets
 - Changing the case plan
 - Publishing, such as `git push`
@@ -368,6 +385,8 @@ policy, report the cause and a proposal, and stop.
 | What a run needs on disk | `run-status/acquire.json` (`scripts/acquire.py check`) |
 | Harnesses | the pinned version per division in `divisions/<division>/division.json` "pin"; installed by jbench in `tools/harness/<division>/<version>/` (not in Git), or found at the pinned version in its default place; adapters in `scripts/harnesses.py`; the one a run drove in the run's `harness.json` |
 | A harness case's record | `cases/<case id>/harness/seed-N/` (the harness's events and stderr, its config, the command, `proxy.jsonl`: one line per request with what the harness sent and what was forwarded); the work folder, the harness's folder and the request bodies stay in `raw/` |
+| Engines | `catalog/engines/<engine>.json` (the adapter, what it is asked, its tracks, the pinned release); adapters in `scripts/engines/`; the one a run measured in the run's `engine.json`; engines jbench fetched in `tools/engines/<engine>/<version>/` (not in Git) |
+| What is used on this PC | `tools/provision.json` (`scripts/provision.py`: what, version, SHA-256, where, fetched by jbench or named by the user); the run's copy `provision.json` |
 | Divisions | `divisions/<division>/division.json` (only a division whose `status` is `active` can be measured; see [divisions/README.md](divisions/README.md)) |
 | Environments | `envs/<env>/env.json` (written by hand on each PC, not in Git; fields in [envs/README.md](envs/README.md); matching and templates in `scripts/envs.py`); the copy a run measured with is `results/` or `published/<division>/<env>/<RUN_ID>/env.json` |
 | The plan | `plan/<division>/<env>/cases.jsonl` and `cases.csv` (written per environment by `scripts/build_cases.py`, also by the queue before preflight; the runner reads them; not in Git, and each case's definition is kept in its `summary.json`) |
