@@ -15,6 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import catalog  # noqa: E402
 import model_files  # noqa: E402
+import own_build  # noqa: E402
 from engines import Engine  # noqa: E402
 
 # Families whose builds carry their own drafter (catalog "drafter": {"builtin": ...}; also skipped by preflight's MTP
@@ -65,7 +66,8 @@ class Adapter(Engine):
             opts = ''
         if '<P コアの論理 CPU>' in opts:
             opts = opts.replace('<P コアの論理 CPU>', self.ctx.get('p_cores') or '')
-        args = ['strata', 'launch', '--family', row['family'], '--model', row['model'], '--context', str(row['context']),
+        fam, model = own_build.target(row['family'], row['model'])   # a build with files of jbench's own: the model Strata knows
+        args = ['strata', 'launch', '--family', fam, '--model', model, '--context', str(row['context']),
                 '--vision', 'off', '--parallel', '1', '--tune', 'skip', '--access', 'local', '--port', str(self.port),
                 '--no-tui', '--restart', '--gpu', str(self.gpu)]
         # The drafter is pinned to MTP: since 0.2.10, Auto picks DFlash2 for some families and MTP for others, which would
@@ -128,7 +130,8 @@ class Adapter(Engine):
         t0 = time.time()
         # its own session, so that a launch given up on can be killed with everything it started: the tuner
         # (strata.py tune) outlives the CLI and goes on starting engines, which the next session would launch beside
-        p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
+        p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True,
+                             env=own_build.env(row['family'], row['model']))
         try:
             stdout, stderr = p.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
@@ -156,6 +159,12 @@ class Adapter(Engine):
         args = info['argv']
         text = Path(info['engine_log']).read_text(errors='replace')
         part = text[info['engine_log_offset']:]
+        # a build with files of jbench's own: a launch that ran Strata's setup writes the known model's paths back
+        mine = own_build.model_file(row['family'], row['model']) if own_build.own(row['family'], row['model']) else None
+        if mine and f'--native {mine} ' not in part.split('\n', 1)[0] + ' ':
+            info['error'] = f'the engine was not started on {mine} (python3 -I scripts/own_build.py prepare {row["family"]} {row["model"]})'
+            info['setting_missing'] = ['own file']
+            return False
         # MTP asked for but not loaded: the engine serves (with suffix drafts only), so only its log tells
         if '--drafting' in args and args[args.index('--drafting') + 1] == 'mtp' and 'draft layer loaded' not in part:
             info['error'] = 'MTP asked for (--drafting mtp) but the engine log has no "strata mtp: draft layer loaded"'

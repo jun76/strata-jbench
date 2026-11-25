@@ -64,6 +64,12 @@ One file per engine a run can measure (bench.json "engine").
 
 A build names the engines that run it with `"engines": [...]` in `models/<base>.json` (Strata where it says nothing).
 
+A build with `"own"` is a file Strata's setup does not list, of a model it does (Gyro-S v2: the same name, size and
+tensor types as Gyro-S, other expert weights). jbench keeps the file, a pack built from it and a run config in a
+folder of its own, and starts the model Strata knows (`"as"`) with `STRATA_INSTALL_DIR` pointing there, so Strata's
+saved run configs and the known model's files stay as they are (`scripts/own_build.py`: `prepare`, and the state on
+this PC). `"repo"`, `"revision"`, `"file"` and `"sha256"` say where the file comes from.
+
 ## tasks.json
 
 `tasks`: what a run can do, by name. A task is tied to the plan's cases by `match` (`step`: the Tiers it covers;

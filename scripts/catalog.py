@@ -25,7 +25,7 @@ LANGS = ('ja', 'en', 'zh')
 
 BASE_KEYS = {'base', 'order', 'label', 'tokenizer', 'trained_context', 'max_context', 'thinking', 'lineup', 'drafter',
              'builds'}
-BUILD_KEYS = {'family', 'model', 'size_gb', 'role', 'derivative', 'display', 'engines'}
+BUILD_KEYS = {'family', 'model', 'size_gb', 'role', 'derivative', 'display', 'engines', 'own'}
 
 
 def bases():

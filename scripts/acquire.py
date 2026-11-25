@@ -41,6 +41,7 @@ import envs  # noqa: E402
 import harnesses  # noqa: E402
 import install_configs  # noqa: E402
 import overnight  # noqa: E402
+import own_build  # noqa: E402
 
 
 def now():
@@ -85,6 +86,11 @@ def model_items(models):
     root = overnight.models_root()
     items = []
     for fam, model in models:
+        if own_build.own(fam, model):   # files of jbench's own (catalog "own"): not in Strata's setup, so not in the manifest
+            why = own_build.state(fam, model)
+            items.append({'item': 'models', 'what': f'{fam} {model}', 'state': 'missing' if why else 'ok', 'detail': why,
+                          'fix': why, 'bytes': None, '_files': []})
+            continue
         files = [f for f in m['files'] if (f.get('family'), f['model']) == (fam, model)]
         if not files:
             items.append({'item': 'models', 'what': f'{fam} {model}', 'state': 'not in downloads/manifest.json',

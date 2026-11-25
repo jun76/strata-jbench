@@ -24,6 +24,7 @@ import config  # noqa: E402
 import engines  # noqa: E402
 import envs  # noqa: E402
 import overnight  # noqa: E402  (paths and model completeness of the acquisition phase)
+import own_build  # noqa: E402
 
 results = []
 
@@ -103,9 +104,14 @@ def bench_checks(steps, env_id):
     if engine_id == engines.DEFAULT:
         bad = []
         for fam, model in models:
-            rc, out = run(['strata', 'launch', '--plan', '--family', fam, '--model', model, '--context', '128k',
+            why = own_build.state(fam, model) if own_build.own(fam, model) else None
+            if why:        # a build with files of jbench's own (catalog "own")
+                bad.append(f'{fam}:{model} {why}')
+                continue
+            sfam, smodel = own_build.target(fam, model)
+            rc, out = run(['strata', 'launch', '--plan', '--family', sfam, '--model', smodel, '--context', '128k',
                            '--vision', 'off', '--parallel', '1', '--tune', 'skip', '--port', '18600', '--drafting', 'mtp',
-                           '--gpu', card, '--output', 'json'], timeout=180, cwd='/tmp')
+                           '--gpu', card, '--output', 'json'], timeout=180, cwd='/tmp', env=own_build.env(fam, model))
             try:
                 plan = json.loads(out[out.index('{'):])['plan']
                 if plan['download']['gb']:
@@ -120,7 +126,7 @@ def bench_checks(steps, env_id):
         for fam, model in models:
             if fam in case_plan.OWN_DRAFTER:   # its own drafter (DFly2, DSpark: catalog "drafter"), no MTP layer
                 continue
-            conf = install / f'strata-{model.lower() if fam == "qwen" else f"{fam}-{model.lower()}"}.json'
+            conf = own_build.config_path(fam, model)
             try:
                 if json.loads(conf.read_text()).get('mtp') is False:
                     off.append(f'{fam}:{model} ({conf.name})')
@@ -132,10 +138,11 @@ def bench_checks(steps, env_id):
         dflash = sorted({(r['family'], r['model']) for r in rows if '--drafting dflash2' in r['launch_opts']})
         if dflash:
             fam, model = dflash[0]
-            rc, out = run(['strata', 'launch', '--plan', '--family', fam, '--model', model, '--context', '128k', '--vision', 'off',
+            sfam, smodel = own_build.target(fam, model)
+            rc, out = run(['strata', 'launch', '--plan', '--family', sfam, '--model', smodel, '--context', '128k', '--vision', 'off',
                            '--parallel', '1', '--tune', 'skip', '--port', '18600', '--drafting', 'dflash2', '--gpu', card,
                            '--output', 'json'],
-                          timeout=180, cwd='/tmp')
+                          timeout=180, cwd='/tmp', env=own_build.env(fam, model))
             try:
                 gb = json.loads(out[out.index('{'):])['plan']['download']['gb']
             except (ValueError, KeyError):

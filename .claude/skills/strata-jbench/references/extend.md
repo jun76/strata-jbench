@@ -46,3 +46,12 @@ from it is code, in `scripts/case_plan.py`. `python3 -I scripts/catalog.py` chec
    (`case_plan.measured_rows`); only the plan and the estimate follow `models`. The charts list every model of
    the catalog in every environment, the same set everywhere: which models an environment measures is the
    measurer's choice (a disk too small for some), so a model with no value reads "not measured".
+
+## A new version of a model's file that Strata's setup does not list yet
+Add it as a build of its own with `"own"` (catalog/README.md), never over the file already measured: the name stays
+free for the old results. Fetch the file into a folder of its own at a pinned revision (`hf download`, ask first),
+record the folder (`python3 -I scripts/provision.py set-models <install> --path DIR --sha256 ...`), then
+`python3 -I scripts/own_build.py prepare <family> <model>` builds its pack with Strata's own tool and writes its run
+config under `tools/strata-install/`. Strata's saved run configs are not changed. Add the build to env.json "models",
+rebuild the plan, and run one case under a `test-` RUN_ID: the runner fails a launch whose engine was not started on
+jbench's file. Gyro-S v2 (2026-11-25) is the example.

@@ -19,6 +19,7 @@ TR = {
     '元重みの量子化 (ISTA)、基準モデル': ('quantized from the original weights (ISTA), the reference model',
                                     '原始权重量化（ISTA），基准模型'),
     '元重みの量子化 (trellis)': ('quantized from the original weights (trellis)', '原始权重量化（trellis）'),
+    '元重みの量子化 (trellis、2026-11-24 の版)': ('quantized from the original weights (trellis, the 2026-11-24 version)', '原始权重量化（trellis，2026-11-24 版）'),
     '元重みの量子化 (Unsloth)': ('quantized from the original weights (Unsloth)', '原始权重量化（Unsloth）'),
     '元重みの量子化 (Unsloth)、品質の参照点': ('quantized from the original weights (Unsloth), the quality reference',
                                        '原始权重量化（Unsloth），质量参照点'),

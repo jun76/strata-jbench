@@ -28,13 +28,14 @@ sys.path.insert(0, str(ROOT / 'scripts'))
 import case_plan  # noqa: E402
 import envs  # noqa: E402
 import overnight  # noqa: E402
+import own_build  # noqa: E402
 
 INSTALL = Path.home() / '.local/share/strata/install'
 HELPER_FAMILIES = ('qwen', 'swift', 'coder', 'unsloth', 'gyro')   # the families setup takes --mtp for (Strata's modelstate)
 
 
 def config_path(fam, model):
-    return INSTALL / f'strata-{model.lower() if fam == "qwen" else f"{fam}-{model.lower()}"}.json'
+    return own_build.config_path(fam, model)   # Strata's install folder, or jbench's for a build with files of its own
 
 
 def plan_download_gb(fam, model, card):
@@ -115,6 +116,9 @@ def main():
     case_plan.use_env(cfg)
     failed = []
     for fam, model, *_ in case_plan.env_models():
+        if own_build.own(fam, model):   # its run config is jbench's own (scripts/own_build.py prepare), not setup's
+            print(f'{fam} {model}: {own_build.state(fam, model) or "run config ok (jbench\'s own)"}', flush=True)
+            continue
         if not overnight.model_complete(fam, model):
             print(f'{fam} {model}: files not all on disk yet; skipped', flush=True)
             continue

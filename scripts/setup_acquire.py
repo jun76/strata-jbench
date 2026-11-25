@@ -34,6 +34,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 import overnight  # noqa: E402  (the paths the acquisition runs with)
+import own_build  # noqa: E402
 
 STRATA = Path.home() / '.local/share/strata'
 INSTALL_THIRD_PARTY = STRATA / 'install/third_party'
@@ -116,7 +117,7 @@ def env_choices():
     import case_plan
     import envs
     case_plan.use_env(envs.load(envs.current()))
-    return [(f, m) for f, m, *_ in case_plan.env_models()]
+    return [(f, m) for f, m, *_ in case_plan.env_models() if not own_build.own(f, m)]   # Strata's setup lists these
 
 
 def main():
