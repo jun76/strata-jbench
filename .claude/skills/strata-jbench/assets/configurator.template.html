@@ -155,9 +155,9 @@ const TXT = {
   driver: ['動かし方', 'Driver', '驱动方式'],
   ldriver: ['エンジンの API を直接呼ぶか、エージェントのハーネスに任せるかを選びます。両者の結果は混ぜません。', 'Call the engine\'s API directly, or hand the task to an agent harness. The results are never mixed.', '直接调用引擎 API，或交给智能体 harness。结果不混合。'],
   models: ['モデル', 'Models', '模型'],
-  lmodels: ['測るモデルです。サイズと、この環境のメモリに収まるかの目安を添えています。', 'The models to measure, with their size and whether they fit this environment\'s memory.', '要测量的模型，附大小及是否适合该环境内存。'],
+  lmodels: ['測るモデルです。サイズと、この環境の RAM + VRAM の合計に対する割合を添えています。割合は大きさの目安で、100% を超えても遅くなるとは限りません。実際の速さは計測結果で確かめてください。', 'The models to measure, with their size and its share of this environment\'s RAM + VRAM together. The share only says how large a model is here: past 100% is not necessarily slow. The measured results say how fast it is.', '要测量的模型，附大小及其占该环境 RAM + VRAM 总和的比例。该比例只表示模型在此环境下有多大，超过 100% 也不一定慢，实际速度请看测量结果。'],
   all: ['すべて', 'All', '全选'], none: ['なし', 'None', '清空'],
-  fit: {small: ['収まる', 'fits', '可容纳'], edge: ['ぎりぎり', 'tight', '临界'], large: ['SSD から読む', 'reads from SSD', '需读 SSD']},
+  mem: ['RAM + VRAM の {p}%', '{p}% of RAM + VRAM', 'RAM + VRAM 的 {p}%'],
   notfor: ['このエンジンでは動かない', 'not for this engine', '该引擎不支持'],
   one: ['接続のみのエンジンでは、読み込み済みのモデルを 1 つだけ選びます。', 'Attach only: pick the one model that is loaded.', '仅连接时只选择已加载的那一个模型。'],
   tasks: ['種目', 'Tasks', '项目'],
@@ -326,7 +326,7 @@ function draw() {
   }));
 
   // 4 models
-  const here = modelsHere(), sizeClass = Object.fromEntries(pool().map(r => [r.f + ' ' + r.m, r.sc]));
+  const here = modelsHere(), memGb = ((env().hardware.ram_gib || 0) + (env().hardware.gpu_vram_gib || 0)) * 1.073741824;
   $('model-buttons').replaceChildren(
     el('button', {class: 'btn', onclick: () => { S.models = engine().managed ? new Set(here) : new Set([...here].slice(0, 1)); draw(); }}, t('all')),
     el('button', {class: 'btn', onclick: () => { S.models.clear(); draw(); }}, t('none')),
@@ -341,7 +341,7 @@ function draw() {
           onchange: ev => { if (!engine().managed) S.models.clear(); if (ev.target.checked) S.models.add(k); else S.models.delete(k); draw(); }})),
         el('td', {}, el('label', {for: 'm-' + k}, `${x.family} ${x.display || x.model}`), el('span', {class: 'small'}, (D.i18n_roles?.[x.role]?.[S.lang]) || x.role)),
         el('td', {class: 'num'}, x.size_gb.toFixed(1) + ' GB'),
-        el('td', {}, ok ? el('span', {class: 'tag ' + (sizeClass[k] === 'small' ? 'g' : 'w')}, (TXT.fit[sizeClass[k]] || ['?', '?', '?'])[LANGS.indexOf(S.lang)]) : el('span', {class: 'small'}, t('notfor')))));
+        el('td', {}, ok ? (memGb ? el('span', {class: 'tag'}, t('mem', {p: Math.round(100 * x.size_gb / memGb)})) : '') : el('span', {class: 'small'}, t('notfor')))));
     }
   }
   $('models').replaceChildren(el('div', {class: 'tablewrap'}, el('table', {class: 'models'}, body)));
