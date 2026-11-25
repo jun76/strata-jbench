@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>strata-jbench configurator</title>
+<style>
+:root{--bg:#f7f7f5;--card:#fff;--ink:#1c1e21;--mute:#666b73;--line:#dcdfe3;--acc:#0a8f6c;--acc2:#e6f5f0;--warn:#b45309;--bad:#b42318;--chip:#eef0f2;
+ --c0:#0a8f6c;--c1:#2f6fde;--c2:#c2410c;--c3:#7c3aed;--c4:#0e7490;--c5:#be185d;--c6:#4d7c0f;--c7:#a16207;--c8:#475569;--c9:#b91c1c;--c10:#1d4ed8;--launch:#9aa1ab}
+:root[data-theme="dark"]{--bg:#15171a;--card:#1e2126;--ink:#e8eaed;--mute:#9aa1ab;--line:#33383f;--acc:#3fcfa6;--acc2:#16332c;--warn:#f0b35a;--bad:#f28b82;--chip:#2a2e35;--launch:#5b626c}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15171a;--card:#1e2126;--ink:#e8eaed;--mute:#9aa1ab;--line:#33383f;--acc:#3fcfa6;--acc2:#16332c;--warn:#f0b35a;--bad:#f28b82;--chip:#2a2e35;--launch:#5b626c}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 system-ui,-apple-system,"Hiragino Sans","Noto Sans JP","Noto Sans SC",sans-serif}
+header{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:14px 16px;border-bottom:1px solid var(--line);background:var(--card)}
+header h1{font-size:18px;margin:0;flex:1 1 auto}
+header .sub{color:var(--mute);font-size:13px;flex:1 1 100%}
+button,select{font:inherit;color:inherit}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:transparent;padding:4px 10px;cursor:pointer}
+.seg button.on{background:var(--acc);color:#fff}
+main{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;padding:16px;max-width:1280px;margin:0 auto}
+@media (max-width:980px){main{grid-template-columns:minmax(0,1fr)}aside{position:static!important;max-height:none!important}}
+section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px}
+section>h2{font-size:15px;margin:0 0 4px;display:flex;gap:8px;align-items:baseline}
+section>h2 .n{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--acc);color:#fff;font-size:12px;flex:none}
+.lead{color:var(--mute);font-size:13px;margin:0 0 10px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.card{border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;background:var(--card);color:inherit;font:inherit;text-align:left;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:2px;width:100%}
+.card.on{border-color:var(--acc);background:var(--acc2);box-shadow:inset 0 0 0 1px var(--acc)}
+.card.off{opacity:.5;cursor:not-allowed}
+.card b{display:block}
+.card .q{font-size:13px;margin:2px 0}
+.card small,.small{color:var(--mute);font-size:12.5px}
+.tag{display:inline-block;background:var(--chip);border-radius:999px;padding:0 8px;font-size:12px;margin:2px 4px 0 0;white-space:nowrap}
+.tag.w{color:var(--warn)}.tag.g{color:var(--acc)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:5px 12px;cursor:pointer}
+.btn.on{border-color:var(--acc);background:var(--acc);color:#fff}
+.btn.pri{background:var(--acc);color:#fff;border-color:var(--acc)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{padding:4px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.models td:first-child{width:26px}
+.models tr.base td{background:var(--chip);font-weight:600}
+.models tr.dis{opacity:.45}
+label{cursor:pointer}
+details{margin-top:6px}details summary{cursor:pointer;color:var(--mute);font-size:12.5px}
+pre{white-space:pre-wrap;word-break:break-word;background:var(--chip);border-radius:8px;padding:8px 10px;font:12.5px/1.5 ui-monospace,Menlo,Consolas,monospace;margin:6px 0;max-height:260px;overflow:auto}
+aside{position:sticky;top:12px;align-self:start;max-height:calc(100vh - 24px);overflow:auto}
+.big{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums}
+.bar{display:flex;height:18px;border-radius:6px;overflow:hidden;background:var(--chip);margin:6px 0}
+.bar i{display:block;height:100%}
+.legend div{display:flex;gap:6px;align-items:center;font-size:12.5px}
+.legend span.sw{width:10px;height:10px;border-radius:2px;flex:none}
+.legend span.v{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--mute)}
+.matrix{overflow:auto}
+.matrix td.c{text-align:center;width:26px;padding:2px}
+.matrix td.c i{display:inline-block;width:14px;height:14px;border-radius:3px;background:var(--chip)}
+.matrix td.c i.on{background:var(--acc)}
+.matrix th.v{writing-mode:vertical-rl;font-weight:500;font-size:12px;padding:4px 2px;white-space:nowrap}
+.hl{display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-bottom:1px solid var(--line);font-size:13px}
+.hl .dot{width:10px;height:10px;border-radius:50%;margin-top:6px;flex:none;background:var(--chip)}
+.hl.on .dot{background:var(--acc)}
+.hl code{font-weight:700}
+.note{font-size:12.5px;color:var(--warn);margin:6px 0}
+.empty{color:var(--mute);font-size:13px;padding:8px 0}
+</style>
+</head>
+<body>
+<header>
+  <h1>strata-jbench <span id="t-title"></span></h1>
+  <div class="seg" id="lang"></div>
+  <div class="seg" id="theme"></div>
+  <div class="sub" id="t-sub"></div>
+</header>
+<main>
+<div>
+  <section><h2><span class="n">1</span><span id="h-env"></span></h2><p class="lead" id="l-env"></p>
+    <select id="env" class="btn"></select><div class="small" id="env-info"></div></section>
+  <section><h2><span class="n">2</span><span id="h-engine"></span></h2><p class="lead" id="l-engine"></p>
+    <div class="cards" id="engines"></div><div class="row" id="tracks"></div><div class="small" id="track-info"></div></section>
+  <section><h2><span class="n">3</span><span id="h-driver"></span></h2><p class="lead" id="l-driver"></p>
+    <div class="cards" id="drivers"></div></section>
+  <section><h2><span class="n">4</span><span id="h-models"></span></h2><p class="lead" id="l-models"></p>
+    <div class="row" id="model-buttons"></div><div id="models"></div></section>
+  <section><h2><span class="n">5</span><span id="h-tasks"></span></h2><p class="lead" id="l-tasks"></p>
+    <div class="row" id="presets"></div><div class="cards" id="tasks"></div></section>
+</div>
+<aside>
+  <section><h2 id="h-time"></h2><div class="big" id="total"></div><div class="small" id="total-sub"></div>
+    <div class="bar" id="bar"></div><div class="legend" id="legend"></div><div class="small" id="est-note"></div></section>
+  <section><h2 id="h-head"></h2><div id="headlines"></div></section>
+  <section><h2 id="h-cover"></h2><div class="matrix" id="matrix"></div></section>
+  <section><h2 id="h-recipe"></h2><p class="lead" id="l-recipe"></p><pre id="recipe"></pre>
+    <div class="row"><button class="btn pri" id="copy"></button><button class="btn" id="copy2"></button><span class="small" id="copied"></span></div>
+    <div class="small" id="recipe-note"></div></section>
+</aside>
+</main>
+<script>
+const D = /*JBENCH_DATA*/null;
+const TXT = {
+  title: ['コンフィギュレータ', 'configurator', '配置器'],
+  sub: ['何をどの条件で測るかを選ぶと、カバーされる指標と所要時間の目安が出ます。最後にレシピをコピーして、エージェントに渡してください。',
+        'Choose what to measure and how; the page shows which metrics that covers and about how long it takes. Then copy the recipe and hand it to your agent.',
+        '选择测什么、怎么测，页面会显示覆盖的指标和大致耗时。最后复制配方交给智能体。'],
+  env: ['環境', 'Environment', '环境'],
+  lenv: ['所要時間の目安に使うハードウェア。自分の PC に近いものを選びます。', 'The hardware the time estimate is for. Pick the one closest to your PC.', '用于估算耗时的硬件。请选择最接近你电脑的一项。'],
+  local: ['この PC', 'this PC', '本机'],
+  engine: ['エンジン', 'Engine', '引擎'],
+  lengine: ['測る推論エンジン。1 回の計測は 1 つのエンジンだけを測ります。', 'The inference engine to measure. One run measures one engine.', '要测量的推理引擎。一次测量只测一个引擎。'],
+  managed: ['jbench が起動・停止し、設定が効いたか照合', 'jbench starts and stops it and checks the settings', '由 jbench 启动、停止并核对设置'],
+  attach: ['接続のみ（起動の中身は検証できない）', 'attach only (the launch cannot be checked)', '仅连接（无法核对启动方式）'],
+  track: ['設定の系統', 'Track', '设置类别'],
+  texact: ['exact: 出力を変える近似をすべて切る（エンジン間の比較の既定）', 'exact: every approximation that changes the output is off (the default for comparing engines)', 'exact：关闭所有会改变输出的近似（引擎间比较的默认）'],
+  tdefault: ['default: エンジンの既定のまま', 'default: the engine as it comes', 'default：引擎默认设置'],
+  tcustom: ['custom: 自分で起動した設定（申告として記録）', 'custom: whatever you started (recorded as declared)', 'custom：自行启动的设置（按申报记录）'],
+  driver: ['動かし方', 'Driver', '驱动方式'],
+  ldriver: ['エンジンの API を直接呼ぶか、エージェントのハーネスに任せるか。結果は混ぜません。', 'Call the engine\'s API directly, or hand the task to an agent harness. The results are never mixed.', '直接调用引擎 API，或交给智能体 harness。结果不混合。'],
+  models: ['モデル', 'Models', '模型'],
+  lmodels: ['測るモデル。サイズと、この環境のメモリに収まるかの目安を添えています。', 'The models to measure, with their size and whether they fit this environment\'s memory.', '要测量的模型，附大小及是否适合该环境内存。'],
+  all: ['すべて', 'All', '全选'], none: ['なし', 'None', '清空'],
+  fit: {small: ['収まる', 'fits', '可容纳'], edge: ['境界', 'tight', '临界'], large: ['SSD 読み', 'reads from SSD', '需读 SSD']},
+  notfor: ['このエンジンでは動かない', 'not for this engine', '该引擎不支持'],
+  one: ['接続のみでは、読み込んであるモデルを 1 つだけ選びます。', 'Attach only: pick the one model that is loaded.', '仅连接时只选择已加载的那一个模型。'],
+  tasks: ['種目', 'Tasks', '项目'],
+  ltasks: ['何を走らせるか。カードを開くと、実際に送るプロンプトを読めます。', 'What to run. Open a card to read the prompt that is sent.', '运行什么。展开卡片可阅读实际发送的提示词。'],
+  preset: ['プリセット', 'Preset', '预设'],
+  prompt: ['送るプロンプトを見る', 'Show the prompt sent', '查看发送的提示词'],
+  cut: ['（先頭のみ）', '(the start only)', '（仅开头）'],
+  nocase: ['この選択では作られない（モデル・エンジンが対応しない）', 'no case for this selection (the models or the engine do not take it)', '当前选择下无用例（模型或引擎不支持）'],
+  measured: ['{n} 環境に結果あり', 'results in {n} environment(s)', '{n} 个环境已有结果'],
+  time: ['所要時間の目安', 'Estimated time', '预计耗时'],
+  cases: ['{c} ケース · {r} リクエスト · {m} モデル · 起動 {l} 回', '{c} cases · {r} requests · {m} models · {l} engine starts', '{c} 个用例 · {r} 个请求 · {m} 个模型 · 启动 {l} 次'],
+  starts: ['エンジンの起動', 'engine starts', '引擎启动'],
+  estnote: ['この環境の最初の通し計測に合わせた係数からの見積もり（計測済みのケースも含む）。モデルの取得時間は含みません。',
+            'Estimated from coefficients fitted to this environment\'s first full run (cases already measured are included). Downloading models is not included.',
+            '根据该环境首次完整测量拟合的系数估算（含已测用例）。不含模型下载时间。'],
+  disk: ['モデルのディスク: 合計 {g} GB', 'Models on disk: {g} GB in all', '模型磁盘占用：共 {g} GB'],
+  head: ['見出しの数字', 'Headline numbers', '头条数字'],
+  add: ['「{t}」を足すと取れる', 'add "{t}" to get it', '添加“{t}”即可获得'],
+  cover: ['カバーされる指標', 'Metrics covered', '覆盖的指标'],
+  recipe: ['レシピ', 'Recipe', '配方'],
+  lrecipe: ['この選択を 1 つのテキストにしたもの。エージェントにそのまま貼ってください。', 'This selection as one text. Paste it to your agent as it is.', '把当前选择写成一段文本，直接粘贴给智能体即可。'],
+  copy: ['レシピをコピー', 'Copy the recipe', '复制配方'],
+  copy2: ['依頼文ごとコピー', 'Copy with the request', '连同请求一起复制'],
+  copied: ['コピーしました', 'Copied', '已复制'],
+  ask: ['strata-jbench スキルの手順で、次のレシピを測ってください。始める前に、計画（ケース数と所要時間）と足りないものを見せてください。\n\n',
+        'Following the strata-jbench skill, measure this recipe. Before starting, show me the plan (cases and time) and anything that is missing.\n\n',
+        '请按 strata-jbench 技能的步骤测量以下配方。开始前请先展示计划（用例数与耗时）以及缺少的东西。\n\n'],
+  rnote: ['id はエンジン・設定の系統・動かし方・種目とその版から作った hash で、モデルは含みません。同じ id の結果は同じ物差しです。',
+          'The id is a hash of the engine, the track, the driver and the tasks with their versions; the models are not in it. Results with the same id used the same ruler.',
+          'id 是由引擎、设置类别、驱动方式、项目及其版本生成的 hash，不含模型。相同 id 的结果使用同一把尺子。'],
+  pick: ['モデルと種目を選んでください', 'Pick models and tasks', '请选择模型和项目'],
+  h: ['時間', 'h', '小时'], min: ['分', 'min', '分钟'],
+  gen: ['生成', 'generated', '生成于'], preview: ['確認用（この PC の環境と未公開の結果も含む）', 'preview (this PC\'s environments and unpublished results too)', '预览（含本机环境与未发布结果）'],
+};
+const LANGS = ['ja', 'en', 'zh'], LNAME = {ja: '日本語', en: 'English', zh: '中文'};
+const S = {lang: 'ja', env: 0, engine: 'strata', track: 'exact', driver: 'plain', models: new Set(), tasks: new Map(), preset: null};
+const $ = id => document.getElementById(id);
+const el = (tag, attrs = {}, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) { if (k === 'class') e.className = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else if (v !== false && v != null) e.setAttribute(k, v); } for (const k of kids.flat()) e.append(k?.nodeType ? k : document.createTextNode(k ?? '')); return e; };
+const t = (key, vars = {}) => { let s = (TXT[key] || [key, key, key])[LANGS.indexOf(S.lang)]; for (const [k, v] of Object.entries(vars)) s = s.replace('{' + k + '}', v); return s; };
+const L = o => (o && (o[S.lang] || o.en || o.ja)) || '';
+const COLORS = ['--c0', '--c1', '--c2', '--c3', '--c4', '--c5', '--c6', '--c7', '--c8', '--c9', '--c10'];
+const taskColor = id => `var(${COLORS[D.tasks.findIndex(x => x.id === id) % COLORS.length]})`;
+const env = () => D.envs[S.env];
+const engine = () => D.engines.find(e => e.id === S.engine);
+const division = () => D.divisions.find(d => d.id === S.driver);
+const buildsOf = () => D.bases.flatMap(b => b.builds.map(x => ({...x, base: b})));
+const key = b => b.family + ' ' + b.model;
+
+// rows of the environment this engine and driver can be asked
+function pool() {
+  const e = engine();
+  return env().rows.filter(r => r.d === S.driver && (e.managed ? r.e === e.id : r.a === 1));
+}
+function modelsHere() { return new Set(pool().map(r => r.f + ' ' + r.m)); }
+function chosen() {
+  return pool().filter(r => S.models.has(r.f + ' ' + r.m) && S.tasks.has(r.t) && (S.tasks.get(r.t) === 'all' || r.h.length));
+}
+function fmtTime(sec) {
+  if (sec >= 3600) return (sec / 3600).toFixed(sec >= 36000 ? 0 : 1) + ' ' + t('h');
+  return Math.max(1, Math.round(sec / 60)) + ' ' + t('min');
+}
+
+// --- the recipe and its id (the same canonical JSON and SHA-256 as scripts/recipe.py)
+function pyJson(v) {
+  if (v === null) return 'null';
+  if (v === true) return 'true';
+  if (v === false) return 'false';
+  if (typeof v === 'number') return String(v);
+  if (typeof v === 'string') return JSON.stringify(v);
+  if (Array.isArray(v)) return '[' + v.map(pyJson).join(', ') + ']';
+  return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ': ' + pyJson(v[k])).join(', ') + '}';
+}
+function sha256(str) {
+  const K = [], H = [], isPrime = n => { for (let i = 2; i * i <= n; i++) if (n % i === 0) return false; return true; };
+  for (let n = 2; K.length < 64; n++) if (isPrime(n)) { if (H.length < 8) H.push((Math.sqrt(n) * 2 ** 32) >>> 0); K.push((Math.cbrt(n) * 2 ** 32) >>> 0); }
+  const bytes = Array.from(new TextEncoder().encode(str)), bits = bytes.length * 8;
+  bytes.push(0x80); while (bytes.length % 64 !== 56) bytes.push(0);
+  for (let i = 7; i >= 0; i--) bytes.push(i > 3 ? 0 : (bits >>> (i * 8)) & 255);
+  const rr = (x, n) => (x >>> n) | (x << (32 - n));
+  for (let o = 0; o < bytes.length; o += 64) {
+    const w = [];
+    for (let i = 0; i < 64; i++) w[i] = i < 16 ? (bytes[o + 4 * i] << 24 | bytes[o + 4 * i + 1] << 16 | bytes[o + 4 * i + 2] << 8 | bytes[o + 4 * i + 3]) >>> 0
+      : (w[i - 16] + (rr(w[i - 15], 7) ^ rr(w[i - 15], 18) ^ (w[i - 15] >>> 3)) + w[i - 7] + (rr(w[i - 2], 17) ^ rr(w[i - 2], 19) ^ (w[i - 2] >>> 10))) >>> 0;
+    let [a, b, c, d, e, f, g, h] = H;
+    for (let i = 0; i < 64; i++) {
+      const t1 = (h + (rr(e, 6) ^ rr(e, 11) ^ rr(e, 25)) + ((e & f) ^ (~e & g)) + K[i] + w[i]) >>> 0;
+      const t2 = ((rr(a, 2) ^ rr(a, 13) ^ rr(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) >>> 0;
+      h = g; g = f; f = e; e = (d + t1) >>> 0; d = c; c = b; b = a; a = (t1 + t2) >>> 0;
+    }
+    [a, b, c, d, e, f, g, h].forEach((v, i) => { H[i] = (H[i] + v) >>> 0; });
+  }
+  return H.map(v => v.toString(16).padStart(8, '0')).join('');
+}
+function specs() {
+  if (S.preset) return D.presets.find(p => p.id === S.preset).tasks;
+  return D.tasks.filter(x => S.tasks.has(x.id)).map(x => ({task: x.id}));
+}
+function recipeText() {
+  const versions = Object.fromEntries(D.tasks.map(x => [x.id, x.version || 1]));
+  const sp = specs();
+  const what = {v: 1, engine: S.engine, track: S.track, driver: S.driver, tasks: sp.map(s => ({...s, version: versions[s.task] || 1}))};
+  const here = [...modelsHere()], picked = buildsOf().map(key).filter(k => S.models.has(k) && here.includes(k));
+  const lines = ['jbench-recipe/1', `engine: ${S.engine} (track ${S.track})`, `driver: ${S.driver}`];
+  lines.push(S.preset ? `preset: ${S.preset}` : 'tasks: ' + sp.map(s => s.task).join(', '));
+  lines.push('models: ' + (picked.length === here.length && engine().managed ? 'all' : picked.join(', ')));
+  lines.push('id: r1-' + sha256(pyJson(what)).slice(0, 8));
+  return lines.join('\n');
+}
+
+// --- drawing
+function seg(node, items, current, set) {
+  node.replaceChildren(...items.map(([v, label]) => el('button', {class: v === current ? 'on' : '', onclick: () => { set(v); draw(); }}, label)));
+}
+function fixState() {
+  const e = engine();
+  if (!(S.track in e.tracks)) S.track = e.managed ? 'exact' : 'custom';
+  if (!e.managed && S.track === 'exact') S.track = 'custom';
+  if (S.driver !== 'plain' && S.engine !== 'strata') S.driver = 'plain';
+  const here = modelsHere();
+  for (const m of [...S.models]) if (!here.has(m)) S.models.delete(m);
+  if (!e.managed && S.models.size > 1) S.models = new Set([[...S.models][0]]);
+  const tasksHere = new Set(pool().map(r => r.t));
+  for (const k of [...S.tasks.keys()]) if (!tasksHere.has(k)) { S.tasks.delete(k); S.preset = null; }
+}
+function setPreset(id) {
+  const p = D.presets.find(x => x.id === id), have = new Set(pool().map(r => r.t));
+  S.tasks = new Map(p.tasks.filter(x => have.has(x.task)).map(x => [x.task, x.headline_only ? 'headline' : 'all']));
+  S.preset = p.tasks.every(x => have.has(x.task)) ? id : null;
+}
+function draw() {
+  fixState();
+  document.documentElement.lang = S.lang;
+  $('t-title').textContent = t('title'); $('t-sub').textContent = t('sub') + (D.preview ? '  ' + t('preview') : '') + `  ${t('gen')} ${D.generated}`;
+  for (const [id, k] of [['h-env', 'env'], ['l-env', 'lenv'], ['h-engine', 'engine'], ['l-engine', 'lengine'], ['h-driver', 'driver'], ['l-driver', 'ldriver'],
+    ['h-models', 'models'], ['l-models', 'lmodels'], ['h-tasks', 'tasks'], ['l-tasks', 'ltasks'], ['h-time', 'time'], ['h-head', 'head'], ['h-cover', 'cover'],
+    ['h-recipe', 'recipe'], ['l-recipe', 'lrecipe'], ['copy', 'copy'], ['copy2', 'copy2'], ['recipe-note', 'rnote'], ['est-note', 'estnote']]) $(id).textContent = t(k);
+  seg($('lang'), LANGS.map(l => [l, LNAME[l]]), S.lang, v => { S.lang = v; });
+  const theme = document.documentElement.dataset.theme || '';
+  seg($('theme'), [['', 'Auto'], ['light', 'Light'], ['dark', 'Dark']], theme, v => { if (v) document.documentElement.dataset.theme = v; else delete document.documentElement.dataset.theme; });
+
+  // 1 environment
+  $('env').replaceChildren(...D.envs.map((e, i) => el('option', {value: i, selected: i === S.env}, e.label + (e.local ? `  (${t('local')})` : ''))));
+  const hw = env().hardware;
+  $('env-info').textContent = `${env().id} · VRAM ${hw.gpu_vram_gib ?? '?'} GiB · RAM ${hw.ram_gib ?? '?'} GiB · drafters: ${(env().drafters || []).join(', ')}`;
+
+  // 2 engine and track
+  $('engines').replaceChildren(...D.engines.map(e => el('button', {class: 'card' + (e.id === S.engine ? ' on' : ''), onclick: () => { S.engine = e.id; draw(); }},
+    el('b', {}, e.label), el('div', {class: 'q'}, L(e.about)),
+    el('span', {class: 'tag ' + (e.managed ? 'g' : 'w')}, t(e.managed ? 'managed' : 'attach')),
+    e.pin ? el('span', {class: 'tag'}, 'pin ' + e.pin.version) : '')));
+  $('tracks').replaceChildren(el('span', {class: 'small'}, t('track') + ':'), ...Object.keys(engine().tracks).filter(k => engine().managed || k === 'custom')
+    .map(k => el('button', {class: 'btn' + (k === S.track ? ' on' : ''), onclick: () => { S.track = k; draw(); }}, k)));
+  const ap = (engine().approximations || []).map(a => `${a.option}: exact = ${a.exact}; default = ${a.default}`).join(' / ');
+  $('track-info').textContent = t('t' + S.track) + (ap ? '  —  ' + ap : '');
+
+  // 3 driver
+  $('drivers').replaceChildren(...D.divisions.filter(d => d.status === 'active').sort((a, b) => (a.harness ? 1 : 0) - (b.harness ? 1 : 0)).map(d => {
+    const ok = d.id === 'plain' || S.engine === 'strata';
+    return el('button', {class: 'card' + (d.id === S.driver ? ' on' : '') + (ok ? '' : ' off'), disabled: !ok, onclick: () => { S.driver = d.id; S.tasks.clear(); S.preset = null; draw(); }},
+      el('b', {}, L(d.label)), d.pin.version ? el('span', {class: 'tag'}, `${d.pin.name || d.harness} ${d.pin.version}`) : '',
+      el('details', {onclick: ev => ev.stopPropagation()}, el('summary', {}, '…'), el('div', {class: 'small'}, L(d.summary))));
+  }));
+
+  // 4 models
+  const here = modelsHere(), sizeClass = Object.fromEntries(pool().map(r => [r.f + ' ' + r.m, r.sc]));
+  $('model-buttons').replaceChildren(
+    el('button', {class: 'btn', onclick: () => { S.models = engine().managed ? new Set(here) : new Set([...here].slice(0, 1)); draw(); }}, t('all')),
+    el('button', {class: 'btn', onclick: () => { S.models.clear(); draw(); }}, t('none')),
+    el('span', {class: 'small'}, engine().managed ? '' : t('one')));
+  const body = [];
+  for (const b of D.bases) {
+    body.push(el('tr', {class: 'base'}, el('td', {colspan: 4}, `${b.label}  ·  tokenizer ${b.tokenizer}${b.thinking ? '' : '  ·  thinking off only'}`)));
+    for (const x of b.builds) {
+      const k = key(x), ok = here.has(k);
+      body.push(el('tr', {class: ok ? '' : 'dis'},
+        el('td', {}, el('input', {type: engine().managed ? 'checkbox' : 'radio', name: 'm', id: 'm-' + k, checked: S.models.has(k), disabled: !ok,
+          onchange: ev => { if (!engine().managed) S.models.clear(); if (ev.target.checked) S.models.add(k); else S.models.delete(k); draw(); }})),
+        el('td', {}, el('label', {for: 'm-' + k}, `${x.family} ${x.display || x.model}`), el('div', {class: 'small'}, (D.i18n_roles?.[x.role]?.[S.lang]) || x.role)),
+        el('td', {class: 'num'}, x.size_gb.toFixed(1) + ' GB'),
+        el('td', {}, ok ? el('span', {class: 'tag ' + (sizeClass[k] === 'small' ? 'g' : 'w')}, (TXT.fit[sizeClass[k]] || ['?', '?', '?'])[LANGS.indexOf(S.lang)]) : el('span', {class: 'small'}, t('notfor')))));
+    }
+  }
+  $('models').replaceChildren(el('table', {class: 'models'}, body));
+
+  // 5 tasks
+  const havePool = pool(), tasksHere = new Set(havePool.map(r => r.t));
+  const mine = havePool.filter(r => S.models.has(r.f + ' ' + r.m));
+  $('presets').replaceChildren(el('span', {class: 'small'}, t('preset') + ':'), ...D.presets.filter(p => p.tasks.some(x => tasksHere.has(x.task))).map(p =>
+    el('button', {class: 'btn' + (S.preset === p.id ? ' on' : ''), title: L(p.about), onclick: () => { setPreset(p.id); draw(); }}, `${L(p.label)}`)),
+    el('span', {class: 'small'}, S.preset ? L(D.presets.find(p => p.id === S.preset).about) : ''));
+  $('tasks').replaceChildren(...D.tasks.filter(x => tasksHere.has(x.id)).map(x => {
+    const rows = mine.filter(r => r.t === x.id), on = S.tasks.has(x.id), fx = [...new Set(havePool.filter(r => r.t === x.id).map(r => r.fx))];
+    const envsDone = D.envs.filter(e => e.rows.some(r => r.t === x.id && r.e === (engine().managed ? S.engine : 'strata') && r.done)).length;
+    const p = fx.map(f => D.prompts[f] ? `── ${f}${D.prompts[f].tokens ? ` (${D.prompts[f].tokens} tokens)` : ''}\n${D.prompts[f].text}${D.prompts[f].cut ? ' … ' + t('cut') : ''}` : '').filter(Boolean).join('\n\n');
+    return el('div', {class: 'card' + (on ? ' on' : ''), onclick: () => { if (on) S.tasks.delete(x.id); else S.tasks.set(x.id, 'all'); S.preset = null; draw(); }},
+      el('b', {}, el('span', {style: `display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;background:${taskColor(x.id)}`}), L(x.label)),
+      el('div', {class: 'q'}, L(x.question)), el('small', {}, L(x.sends)),
+      el('div', {}, el('span', {class: 'tag'}, x.id), x.headline ? el('span', {class: 'tag g'}, x.headline) : '',
+        S.models.size && !rows.length ? el('span', {class: 'tag w'}, t('nocase')) : '', envsDone ? el('span', {class: 'tag'}, t('measured', {n: envsDone})) : '',
+        on && S.tasks.get(x.id) === 'headline' ? el('span', {class: 'tag w'}, x.headline + ' only') : ''),
+      p ? el('details', {onclick: ev => ev.stopPropagation()}, el('summary', {}, t('prompt')), el('pre', {}, p)) : '');
+  }));
+
+  // summary
+  const rows = chosen();
+  const launches = new Map();
+  for (const r of rows) launches.set(r.k, Math.max(launches.get(r.k) || 0, r.l));
+  const launchS = [...launches.values()].reduce((a, b) => a + b, 0), reqS = rows.reduce((a, r) => a + r.est, 0), total = launchS + reqS;
+  $('total').textContent = rows.length ? '≈ ' + fmtTime(total) : '—';
+  const nModels = new Set(rows.map(r => r.f + ' ' + r.m)).size;
+  $('total-sub').textContent = rows.length ? t('cases', {c: rows.length, r: rows.reduce((a, r) => a + r.rq, 0), m: nModels, l: launches.size}) : t('pick');
+  const parts = D.tasks.map(x => [x, rows.filter(r => r.t === x.id).reduce((a, r) => a + r.est, 0)]).filter(([, s]) => s > 0);
+  $('bar').replaceChildren(...parts.map(([x, s]) => el('i', {style: `width:${100 * s / total}%;background:${taskColor(x.id)}`, title: L(x.label)})),
+    launchS ? el('i', {style: `width:${100 * launchS / total}%;background:var(--launch)`, title: t('starts')}) : '');
+  const size = buildsOf().filter(b => S.models.has(key(b)) && here.has(key(b))).reduce((a, b) => a + b.size_gb, 0);
+  $('legend').replaceChildren(...parts.map(([x, s]) => el('div', {}, el('span', {class: 'sw', style: `background:${taskColor(x.id)}`}), L(x.label), el('span', {class: 'v'}, fmtTime(s)))),
+    launchS ? el('div', {}, el('span', {class: 'sw', style: 'background:var(--launch)'}), t('starts'), el('span', {class: 'v'}, fmtTime(launchS))) : '',
+    size ? el('div', {class: 'small'}, t('disk', {g: size.toFixed(0)})) : '');
+
+  // headline numbers
+  const got = new Set(rows.flatMap(r => r.h));
+  $('headlines').replaceChildren(...D.headlines.filter(h => tasksHere.has(h.task)).map(h => {
+    const task = D.tasks.find(x => x.id === h.task);
+    return el('div', {class: 'hl' + (got.has(h.id) ? ' on' : '')}, el('span', {class: 'dot'}),
+      el('div', {}, el('code', {}, h.id), ' ', L(h.label), el('div', {class: 'small'}, got.has(h.id) ? L(h.definition) : t('add', {t: L(task.label)}))));
+  }));
+
+  // metrics covered
+  const sel = D.tasks.filter(x => S.tasks.has(x.id) && rows.some(r => r.t === x.id));
+  if (!sel.length) $('matrix').replaceChildren(el('div', {class: 'empty'}, t('pick')));
+  else {
+    const covered = D.metrics.filter(m => sel.some(x => x.metrics.includes(m.id)));
+    $('matrix').replaceChildren(el('table', {},
+      el('tr', {}, el('th', {}, ''), ...sel.map(x => el('th', {class: 'v', style: `color:${taskColor(x.id)}`}, L(x.label)))),
+      ...covered.map(m => el('tr', {title: L(m.definition)}, el('td', {}, L(m.label), el('span', {class: 'small'}, ` ${m.unit}`)),
+        ...sel.map(x => el('td', {class: 'c'}, el('i', {class: x.metrics.includes(m.id) ? 'on' : ''})))))));
+  }
+
+  // recipe
+  const ready = rows.length > 0;
+  $('recipe').textContent = ready ? recipeText() : t('pick');
+  $('copy').disabled = $('copy2').disabled = !ready;
+}
+function copy(text) {
+  const done = () => { $('copied').textContent = t('copied'); setTimeout(() => { $('copied').textContent = ''; }, 2000); };
+  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(done, () => fallback());
+  else fallback();
+  function fallback() { const ta = el('textarea', {}); ta.value = text; document.body.append(ta); ta.select(); document.execCommand('copy'); ta.remove(); done(); }
+}
+$('env').addEventListener('change', ev => { S.env = Number(ev.target.value); draw(); });
+$('copy').addEventListener('click', () => copy(recipeText()));
+$('copy2').addEventListener('click', () => copy(t('ask') + '```\n' + recipeText() + '\n```\n'));
+
+// start: the language of the browser, this PC's environment (or #env=<id>), the reference-sized default selection
+const nav = (navigator.language || 'ja').slice(0, 2); S.lang = LANGS.includes(nav) ? nav : 'en';
+const q = new URLSearchParams(location.hash.slice(1));
+if (q.get('lang') && LANGS.includes(q.get('lang'))) S.lang = q.get('lang');
+S.env = Math.max(0, D.envs.findIndex(e => q.get('env') ? e.id === q.get('env') : e.local));
+if (q.get('engine') && D.engines.some(e => e.id === q.get('engine'))) S.engine = q.get('engine');
+const pickRef = () => { const here = modelsHere(); S.models = new Set(env().ref && here.has(env().ref) ? [env().ref] : [...here].slice(0, 1)); };
+pickRef();
+setPreset('standard');
+draw();
+</script>
+</body>
+</html>

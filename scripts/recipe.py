@@ -18,7 +18,7 @@ Case by case the ruler is finer still: every case carries the hash of its own co
 only cases with the same hash are put side by side across environments.
 
 Lines: "engine: <id> (track <t>)" or "engine: <id>"; "driver: <division>"; "preset: <id>" and / or
-"tasks: a, b" (a task may be narrowed as in the preset: "speed-decode[headline]"); "models: all" or a list;
+"tasks: a, b" (whole tasks; only a preset narrows one: quick reads just the headline cases); "models: all" or a list;
 "id:" is checked when present. Unknown lines are an error, so that a typo does not silently change a run.
 """
 import hashlib
