@@ -32,6 +32,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import case_plan  # noqa: E402
+import catalog  # noqa: E402
+import engines  # noqa: E402
 from case_plan import display_model as dm  # noqa: E402
 import envs  # noqa: E402
 import i18n  # noqa: E402
@@ -270,6 +272,51 @@ def artifacts(case, rel, per_request=None):
     return out
 
 
+def frac(text):
+    """'2/3' -> 2 (the first number of a count the runner wrote as n/m), None where there is none."""
+    try:
+        return int(str(text).split('/')[0])
+    except (TypeError, ValueError):
+        return None
+
+
+def headline_rows(rows, cases):
+    """The headline numbers (catalog/metrics.json "headlines") of one environment: one entry per model that has a
+    result for any of them, each number read from the one fixed condition the headline names. A number is None where
+    its case is not measured."""
+    by_id = {c['id']: c for c in cases}
+    out = {}
+    for h in catalog.headlines():
+        for (fam, model), group in catalog.headline_rows(h, rows).items():
+            got = [by_id[r['id']] for r in group if r['id'] in by_id and by_id[r['id']].get('status') == 'done']
+            if not got:
+                continue
+            e = out.setdefault((fam, model), {'family': fam, 'model': dm(fam, model), 'engine': group[0].get('engine', 'strata'),
+                                             'runs': set(), 'conds': {}, 'v': {}})
+            e['runs'] |= {c['run_id'] for c in got}
+            e['conds'][h['id']] = sorted({r['cond'] for r in group if r['id'] in by_id})
+            if h['id'] == 'JB-decode':
+                e['v'][h['id']] = got[0].get('decode_tps')
+                e['v']['drafter'] = 'DFlash2' if group[0]['config'] == 'drafter=DFlash2' else None
+            elif h['id'] == 'JB-ttft-32k':
+                e['v'][h['id']] = round(got[0]['ttft_ms'] / 1000, 2) if got[0].get('ttft_ms') is not None else None
+            elif h['id'] == 'JB-answer':
+                right = [frac(c.get('correct')) for c in got]
+                e['v'][h['id']] = sum(1 for x in right if x is not None and x >= 2)
+                e['v']['JB-answer-of'] = len(got)
+                e['v']['JB-answer-s'] = round(statistics.median(c['total_ms'] for c in got if c.get('total_ms') is not None) / 1000, 1) \
+                    if any(c.get('total_ms') is not None for c in got) else None
+                e['v']['thinking'] = group[0]['effort'] != 'none'
+            elif h['id'] in ('JB-page', 'JB-agent'):
+                arts = [a for c in got for a in c.get('artifacts') or []]
+                e['v'][h['id']] = sum(1 for a in arts if a.get('look') == 'drawn' and not a.get('console_errors')) if arts \
+                    else frac(got[0].get('drawn'))
+                e['v'][h['id'] + '-of'] = len(arts) or got[0].get('n')
+                if h['id'] == 'JB-agent':
+                    e['v']['JB-agent-s'] = round(got[0]['total_ms'] / 1000, 1) if got[0].get('total_ms') is not None else None
+    return [{**e, 'runs': sorted(e['runs'])} for e in out.values()]
+
+
 def collect_env(cfg, run_id, published_only, rel=''):
     env_id = cfg['id']
     plan = case_plan.build(cfg)
@@ -325,6 +372,7 @@ def collect_env(cfg, run_id, published_only, rel=''):
            'dflash2_models': sorted({f'{r["family"]} {dm(r["family"], r["model"])}' for r in rows if r['config'] == 'drafter=DFlash2'}),
            'noise_pct': {k: restart_noise(found, k) for k in ('decode', 'prefill')}}
     env['ref'] = ' '.join(case_plan.REF) if case_plan.REF else None   # this environment's (case_plan.use_env)
+    env['headlines'] = headline_rows(rows, cases)
     env['_rows'], env['_found'] = rows, found
     return env, cases
 
@@ -334,6 +382,9 @@ def collect(run_id, published_only=False, rel=''):
     out = {'generated': datetime.now().astimezone().strftime('%Y-%m-%d %H:%M %Z'), 'envs': [], 'cases': [], 'here': here,
            'tr': i18n.TR}
     out['division'] = envs.division()
+    out['headline_defs'] = [h for h in catalog.headlines()]
+    out['engines'] = {e['id']: {'label': e['label'], 'managed': e['managed']} for e in engines.entries()}
+    out['tasks'] = [{k: t[k] for k in ('id', 'label', 'question', 'sends', 'headline')} for t in catalog.tasks()]
     out['harness'] = envs.load_division(out['division']).get('harness')
     for env_id in envs.page_ids(published_only):
         env, cases = collect_env(envs.load(env_id, published_only), run_id, published_only, rel)
@@ -392,6 +443,9 @@ def main():
                     f'{machine_info.env_box(ROOT, envs.load(e["id"], bool(snap)), bool(snap), how=False)}</div>' for e in data['envs'])
     page = page.replace('{{env}}', boxes).replace('{{how}}', machine_info.how_html()).replace('{{csv}}', html.escape(data['csv']))
     page = page.replace('{{cases}}', html.escape(cases_link))
+    # the configurator: the committed page beside the snapshots (GitHub Pages), or the preview one
+    conf = os.path.relpath((ROOT / 'configurator/index.html') if snap else envs.PREVIEW / 'configurator.html', page_path.parent)
+    page = page.replace('{{configurator}}', html.escape(conf))
     page = page.replace('{{division}}', i18n.division_html(envs.load_division(data['division']), base))
     page = page.replace('{{i18n_head}}', i18n.HEAD).replace('{{i18n_script}}', i18n.SCRIPT).replace('{{lang_switch}}', i18n.SWITCH)
     page_path.parent.mkdir(parents=True, exist_ok=True)
