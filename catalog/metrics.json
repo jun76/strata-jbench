@@ -1,0 +1,448 @@
+{
+ "metrics": [
+  {
+   "id": "decode_tps",
+   "unit": "tok/s",
+   "better": "higher",
+   "source": "engine",
+   "label": {
+    "ja": "decode の速さ",
+    "en": "decode speed",
+    "zh": "decode 速度"
+   },
+   "definition": {
+    "ja": "エンジンが応答に載せる timings.predicted_per_second（出力 token ÷ 生成にかかった時間）。待ち時間全体で割った値ではない",
+    "en": "The engine's timings.predicted_per_second in the response (output tokens ÷ the time spent generating), not divided by the whole wait",
+    "zh": "引擎在响应中给出的 timings.predicted_per_second（输出 token ÷ 生成耗时），不是除以整个等待时间"
+   }
+  },
+  {
+   "id": "decode_wall_tps",
+   "unit": "tok/s",
+   "better": "higher",
+   "source": "client",
+   "label": {
+    "ja": "decode の速さ（クライアント計測）",
+    "en": "decode speed (client-side)",
+    "zh": "decode 速度（客户端测量）"
+   },
+   "definition": {
+    "ja": "出力 token 数 ÷（最初の token が届いてから最後の token が届くまでの時間）。timings を返さないエンジンでも測れる",
+    "en": "Output tokens ÷ the time from the first token arriving to the last. Measurable on an engine that returns no timings",
+    "zh": "输出 token 数 ÷（第一个 token 到达至最后一个 token 到达的时间）。不返回 timings 的引擎也能测"
+   }
+  },
+  {
+   "id": "prefill_tps",
+   "unit": "tok/s",
+   "better": "higher",
+   "source": "engine",
+   "label": {
+    "ja": "prefill の速さ",
+    "en": "prefill speed",
+    "zh": "prefill 速度"
+   },
+   "definition": {
+    "ja": "エンジンの timings.prompt_n ÷ prompt_ms。cache から再利用した token は含めない",
+    "en": "The engine's timings.prompt_n ÷ prompt_ms; tokens reused from the cache are not counted",
+    "zh": "引擎的 timings.prompt_n ÷ prompt_ms；不含从缓存复用的 token"
+   }
+  },
+  {
+   "id": "ttft_s",
+   "unit": "s",
+   "better": "lower",
+   "source": "client",
+   "label": {
+    "ja": "最初の 1 文字まで",
+    "en": "time to first token",
+    "zh": "首 token 时间"
+   },
+   "definition": {
+    "ja": "リクエストを送る直前から、最初の空でない思考または回答の断片が届くまで",
+    "en": "From just before the request is sent to the first non-empty piece of thinking or answer",
+    "zh": "从发送请求前一刻到收到第一个非空的思考或回答片段"
+   }
+  },
+  {
+   "id": "first_answer_s",
+   "unit": "s",
+   "better": "lower",
+   "source": "client",
+   "label": {
+    "ja": "回答が始まるまで",
+    "en": "time to the answer",
+    "zh": "到回答开始的时间"
+   },
+   "definition": {
+    "ja": "リクエストを送る直前から、回答（思考ではない本文）の最初の断片が届くまで",
+    "en": "From just before the request is sent to the first piece of the answer itself (not thinking)",
+    "zh": "从发送请求前一刻到收到回答正文（非思考）的第一个片段"
+   }
+  },
+  {
+   "id": "total_s",
+   "unit": "s",
+   "better": "lower",
+   "source": "client",
+   "label": {
+    "ja": "完了まで",
+    "en": "time to the end",
+    "zh": "完成时间"
+   },
+   "definition": {
+    "ja": "リクエストを送る直前から、応答のストリームが終わるまで",
+    "en": "From just before the request is sent to the end of the response stream",
+    "zh": "从发送请求前一刻到响应流结束"
+   }
+  },
+  {
+   "id": "accept_rate",
+   "unit": "%",
+   "better": "higher",
+   "source": "engine",
+   "label": {
+    "ja": "drafter の採用率",
+    "en": "draft acceptance",
+    "zh": "drafter 接受率"
+   },
+   "definition": {
+    "ja": "draft_n_accepted ÷ draft_n。エンジンが draft 数を返さないときは未計測",
+    "en": "draft_n_accepted ÷ draft_n; not measured when the engine returns no draft counts",
+    "zh": "draft_n_accepted ÷ draft_n；引擎不返回 draft 数时为未测量"
+   }
+  },
+  {
+   "id": "reasoning_tokens",
+   "unit": "tokens",
+   "better": "info",
+   "source": "engine",
+   "label": {
+    "ja": "思考の token 数",
+    "en": "thinking tokens",
+    "zh": "思考 token 数"
+   },
+   "definition": {
+    "ja": "回答の前に使った思考の token 数",
+    "en": "Tokens spent thinking before the answer",
+    "zh": "回答前用于思考的 token 数"
+   }
+  },
+  {
+   "id": "completion_tokens",
+   "unit": "tokens",
+   "better": "info",
+   "source": "engine",
+   "label": {
+    "ja": "出力の token 数",
+    "en": "output tokens",
+    "zh": "输出 token 数"
+   },
+   "definition": {
+    "ja": "思考と回答を合わせた出力の token 数",
+    "en": "Output tokens, thinking and answer together",
+    "zh": "思考与回答合计的输出 token 数"
+   }
+  },
+  {
+   "id": "correct",
+   "unit": "n",
+   "better": "higher",
+   "source": "judge",
+   "label": {
+    "ja": "正答",
+    "en": "correct",
+    "zh": "正确"
+   },
+   "definition": {
+    "ja": "期待する答えとの照合（コードはテストを実行）。3 回のうち何回正しかったか",
+    "en": "Checked against the expected answer (code by running its tests): how many of the 3 runs were right",
+    "zh": "与期望答案比对（代码通过运行测试）：3 次中正确的次数"
+   }
+  },
+  {
+   "id": "capped",
+   "unit": "n",
+   "better": "lower",
+   "source": "engine",
+   "label": {
+    "ja": "上限で打ち切り",
+    "en": "cut at the cap",
+    "zh": "触及上限"
+   },
+   "definition": {
+    "ja": "出力上限に達して途中で終わった回数",
+    "en": "Runs that ended at the output cap",
+    "zh": "因达到输出上限而中断的次数"
+   }
+  },
+  {
+   "id": "page_drawn",
+   "unit": "n",
+   "better": "higher",
+   "source": "judge",
+   "label": {
+    "ja": "描画されたページ",
+    "en": "pages drawn",
+    "zh": "成功绘制的页面"
+   },
+   "definition": {
+    "ja": "headless Chrome で 10 秒動かして、何かが描画され、固まらなかった回数",
+    "en": "Runs whose page, after 10 s in headless Chrome, had drawn something and had not frozen",
+    "zh": "在 headless Chrome 中运行 10 秒后有绘制且未卡死的次数"
+   }
+  },
+  {
+   "id": "page_errors",
+   "unit": "n",
+   "better": "lower",
+   "source": "judge",
+   "label": {
+    "ja": "ページのエラー",
+    "en": "page errors",
+    "zh": "页面报错"
+   },
+   "definition": {
+    "ja": "ページを開いたときのコンソールエラーと構文エラーの数",
+    "en": "Console and syntax errors when the page is opened",
+    "zh": "打开页面时的控制台错误与语法错误数"
+   }
+  },
+  {
+   "id": "launch_ok",
+   "unit": "bool",
+   "better": "higher",
+   "source": "runner",
+   "label": {
+    "ja": "起動できたか",
+    "en": "launched",
+    "zh": "能否启动"
+   },
+   "definition": {
+    "ja": "その設定でエンジンが起動し、応答したか",
+    "en": "Whether the engine started with that setting and answered",
+    "zh": "引擎能否以该设置启动并响应"
+   }
+  },
+  {
+   "id": "launch_spread",
+   "unit": "%",
+   "better": "lower",
+   "source": "runner",
+   "label": {
+    "ja": "起動間のばらつき",
+    "en": "spread between launches",
+    "zh": "启动间波动"
+   },
+   "definition": {
+    "ja": "同じ条件で起動しなおした 3 回の中央値の、最小から最大までの幅",
+    "en": "The range, min to max, of the medians of 3 separate launches under the same conditions",
+    "zh": "相同条件下 3 次重新启动的中位数的最小到最大范围"
+   }
+  },
+  {
+   "id": "rss_peak",
+   "unit": "GiB",
+   "better": "info",
+   "source": "runner",
+   "label": {
+    "ja": "RAM の最大",
+    "en": "peak RAM",
+    "zh": "RAM 峰值"
+   },
+   "definition": {
+    "ja": "エンジンのプロセスの RSS の最大",
+    "en": "The engine process's peak RSS",
+    "zh": "引擎进程 RSS 的峰值"
+   }
+  },
+  {
+   "id": "vram_peak",
+   "unit": "MiB",
+   "better": "info",
+   "source": "runner",
+   "label": {
+    "ja": "VRAM の最大",
+    "en": "peak VRAM",
+    "zh": "VRAM 峰值"
+   },
+   "definition": {
+    "ja": "計測中の GPU メモリ使用量の最大",
+    "en": "Peak GPU memory in use during the case",
+    "zh": "测量期间 GPU 显存占用的峰值"
+   }
+  },
+  {
+   "id": "turns",
+   "unit": "n",
+   "better": "info",
+   "source": "proxy",
+   "label": {
+    "ja": "ターン数",
+    "en": "turns",
+    "zh": "轮数"
+   },
+   "definition": {
+    "ja": "ハーネスがエンジンに送ったリクエストの数",
+    "en": "Requests the harness sent to the engine",
+    "zh": "harness 发给引擎的请求数"
+   }
+  },
+  {
+   "id": "tool_calls",
+   "unit": "n",
+   "better": "info",
+   "source": "proxy",
+   "label": {
+    "ja": "tool call",
+    "en": "tool calls",
+    "zh": "tool call"
+   },
+   "definition": {
+    "ja": "モデルが呼んだ tool の数",
+    "en": "Tools the model called",
+    "zh": "模型调用的 tool 数"
+   }
+  },
+  {
+   "id": "preamble_tokens",
+   "unit": "tokens",
+   "better": "lower",
+   "source": "proxy",
+   "label": {
+    "ja": "ハーネスの前置き",
+    "en": "harness preamble",
+    "zh": "harness 前置部分"
+   },
+   "definition": {
+    "ja": "最初のリクエストの入力 token 数（system prompt と tool 定義）",
+    "en": "Input tokens of the first request (system prompt and tool definitions)",
+    "zh": "第一个请求的输入 token 数（system prompt 与 tool 定义）"
+   }
+  },
+  {
+   "id": "cache_reuse",
+   "unit": "%",
+   "better": "higher",
+   "source": "proxy",
+   "label": {
+    "ja": "prefix cache の再利用",
+    "en": "prefix-cache reuse",
+    "zh": "prefix cache 复用"
+   },
+   "definition": {
+    "ja": "全リクエストの入力 token のうち、cache から再利用された割合",
+    "en": "The share of all input tokens that was reused from the cache",
+    "zh": "所有请求的输入 token 中从缓存复用的比例"
+   }
+  }
+ ],
+ "headlines": [
+  {
+   "id": "JB-decode",
+   "task": "speed-decode",
+   "metric": "decode_tps",
+   "aggregate": "median of 3 seeds",
+   "where": {
+    "context": 131072,
+    "effort": "none",
+    "config": "baseline",
+    "fixture": "decode-prose-en",
+    "temperature": 0.7
+   },
+   "label": {
+    "ja": "書く速さ",
+    "en": "Writing speed",
+    "zh": "生成速度"
+   },
+   "definition": {
+    "ja": "英語の説明文を書かせたときの decode tok/s。temperature 0.7、thinking off、コンテキスト 128K、3 回の中央値",
+    "en": "decode tok/s writing English prose: temperature 0.7, thinking off, context 128K, median of 3 runs",
+    "zh": "生成英语说明文时的 decode tok/s：temperature 0.7，thinking off，上下文 128K，3 次的中位数"
+   }
+  },
+  {
+   "id": "JB-ttft-32k",
+   "task": "speed-prefill",
+   "metric": "ttft_s",
+   "aggregate": "median of 3 seeds",
+   "where": {
+    "context": 131072,
+    "effort": "none",
+    "config": "baseline",
+    "fixture": "prefill-32k",
+    "temperature": 0.7
+   },
+   "label": {
+    "ja": "32K を読んで最初の 1 文字まで",
+    "en": "First character after reading 32K",
+    "zh": "读入 32K 后的首字符时间"
+   },
+   "definition": {
+    "ja": "32K token の入力を送ってから最初の 1 文字が届くまでの秒数。thinking off、コンテキスト 128K、3 回の中央値",
+    "en": "Seconds from sending a 32K-token input to the first character: thinking off, context 128K, median of 3 runs",
+    "zh": "发送 32K token 输入到收到第一个字符的秒数：thinking off，上下文 128K，3 次的中位数"
+   }
+  },
+  {
+   "id": "JB-answer",
+   "task": "think-qa",
+   "metric": "correct",
+   "also": "total_s",
+   "aggregate": "tasks right out of 4 (a task is right when at least 2 of its 3 runs are); median total_s over the 4 tasks",
+   "where": {
+    "context": 131072,
+    "effort": "high",
+    "config": "baseline"
+   },
+   "label": {
+    "ja": "考えて答える",
+    "en": "Thinking and answering",
+    "zh": "思考后作答"
+   },
+   "definition": {
+    "ja": "4 問を thinking on で解いたときの正答数（0〜4。3 回中 2 回以上正しければ正答）と、完了までの秒数の中央値。thinking のないモデルは off の値",
+    "en": "Tasks answered right out of 4 with thinking on (right when at least 2 of 3 runs are), and the median seconds to the end. A model without thinking: its thinking-off values",
+    "zh": "在 thinking on 下 4 题的正确数（0〜4，3 次中至少 2 次正确算正确）与完成秒数的中位数。没有 thinking 的模型取 off 的值"
+   }
+  },
+  {
+   "id": "JB-page",
+   "task": "code-oneshot",
+   "metric": "page_drawn",
+   "aggregate": "count of 3 seeds",
+   "where": {
+    "context": 131072,
+    "fixture": "coding-harbor"
+   },
+   "label": {
+    "ja": "1 回で書けたページ",
+    "en": "Pages from one request",
+    "zh": "一次生成的页面"
+   },
+   "definition": {
+    "ja": "3 回のうち、エラーなく描画されたページの数（0〜3）",
+    "en": "Of 3 runs, the pages that were drawn without an error (0 to 3)",
+    "zh": "3 次中无报错并成功绘制的页面数（0〜3）"
+   }
+  },
+  {
+   "id": "JB-agent",
+   "task": "agent-oneshot",
+   "metric": "page_drawn",
+   "also": "total_s",
+   "aggregate": "count of 3 seeds; median total_s",
+   "where": {},
+   "label": {
+    "ja": "エージェントに任せた結果",
+    "en": "Handed to an agent",
+    "zh": "交给智能体的结果"
+   },
+   "definition": {
+    "ja": "3 回のうち描画されたゲームの数（0〜3）と、完了までの秒数の中央値",
+    "en": "Of 3 runs, the games that were drawn (0 to 3), and the median seconds to the end",
+    "zh": "3 次中成功绘制的游戏数（0〜3）与完成秒数的中位数"
+   }
+  }
+ ]
+}

@@ -4,13 +4,21 @@ catalog/models/<base>.json is one base model (Qwen3.8-Flash-Next, Hy4-Flash, ...
 it (tokenizer, trained length, whether it thinks, its drafter) and its builds (family, model, size, role). The plan
 builder and the runner read these properties instead of naming families: a new base model or build is a JSON edit.
 
-`python3 -I scripts/catalog.py` lists the catalog and reports what is wrong in it.
+catalog/tasks.json names what a run can do (the tasks: what each asks, what it sends, which metrics it gives) and
+the presets that bundle them; catalog/metrics.json defines every metric in one line and the headline numbers (one
+fixed condition each). A task is tied to the plan's cases by "match" (the step and the fixture's prefix).
+
+`python3 -I scripts/catalog.py` lists the catalog and reports what is wrong in it, the plans on this PC included
+(every case belongs to exactly one task).
 """
 import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MODELS_DIR = ROOT / 'catalog' / 'models'
+TASKS = ROOT / 'catalog' / 'tasks.json'
+METRICS = ROOT / 'catalog' / 'metrics.json'
+LANGS = ('ja', 'en', 'zh')
 
 BASE_KEYS = {'base', 'order', 'label', 'tokenizer', 'trained_context', 'max_context', 'thinking', 'lineup', 'drafter',
              'builds'}
@@ -74,6 +82,89 @@ def by_family(found=None):
     return {e['family']: b for b in found or load() for e in b['builds']}
 
 
+def tasks():
+    return json.loads(TASKS.read_text())['tasks']
+
+
+def presets():
+    return json.loads(TASKS.read_text())['presets']
+
+
+def metrics():
+    return json.loads(METRICS.read_text())['metrics']
+
+
+def headlines():
+    return json.loads(METRICS.read_text())['headlines']
+
+
+def matches(task, row):
+    m = task['match']
+    return row['step'] in m['step'] and ('fixture_prefix' not in m or row['fixture'].startswith(tuple(m['fixture_prefix'])))
+
+
+def task_of(row, found=None):
+    """The task a plan row (a case) belongs to: its id, or None."""
+    hit = [t['id'] for t in found or tasks() if matches(t, row)]
+    return hit[0] if len(hit) == 1 else None
+
+
+def selects(only, row):
+    """A preset's "only" (key -> allowed values) against a row."""
+    return all(row.get(k) in v for k, v in (only or {}).items())
+
+
+def task_problems():
+    out = []
+    ts, ms, hs = tasks(), {m['id'] for m in metrics()}, {h['id']: h for h in headlines()}
+    ids = [t['id'] for t in ts]
+    for t in ts:
+        for k in ('label', 'question', 'sends'):
+            if set(t.get(k, {})) != set(LANGS):
+                out.append(f'task {t["id"]}: "{k}" needs {", ".join(LANGS)}')
+        for m in t.get('metrics', []):
+            if m not in ms:
+                out.append(f'task {t["id"]}: metric {m!r} is not in metrics.json')
+        if t.get('headline') and t['headline'] not in hs:
+            out.append(f'task {t["id"]}: headline {t["headline"]!r} is not in metrics.json')
+    for h in hs.values():
+        if h['task'] not in ids:
+            out.append(f'headline {h["id"]}: no task {h["task"]!r}')
+        for m in (h['metric'], h.get('also')):
+            if m and m not in ms:
+                out.append(f'headline {h["id"]}: metric {m!r} is not in metrics.json')
+    for p in presets():
+        for x in p['tasks']:
+            if x['task'] not in ids:
+                out.append(f'preset {p["id"]}: no task {x["task"]!r}')
+    return out
+
+
+def plan_problems():
+    """Every case of the plans on this PC (plan/<division>/<env>/cases.jsonl) belongs to exactly one task, and every
+    headline's condition picks exactly one case per model that has the task."""
+    out, ts, hs = [], tasks(), headlines()
+    for path in sorted((ROOT / 'plan').glob('*/*/cases.jsonl')):
+        rows = [json.loads(line) for line in path.read_text().splitlines()]
+        where = f'{path.parent.parent.name}/{path.parent.name}'
+        stray = [r['id'] for r in rows if len([t for t in ts if matches(t, r)]) != 1]
+        if stray:
+            out.append(f'plan {where}: {len(stray)} case(s) in no task or in two, e.g. {stray[0]}')
+        for h in hs:
+            mine = [r for r in rows if task_of(r, ts) == h['task']]
+            per = {}
+            for r in mine:
+                if all(r.get(k) == v for k, v in h['where'].items()):
+                    per.setdefault((r['family'], r['model']), []).append(r['id'])
+            if h['id'] in ('JB-decode', 'JB-ttft-32k', 'JB-page'):   # one case per model; the others combine several
+                many = {k: v for k, v in per.items() if len(v) != 1}
+                none = {(r['family'], r['model']) for r in mine} - set(per)
+                if many or none:
+                    out.append(f'plan {where}: headline {h["id"]} picks {len(many)} model(s) with several cases and '
+                               f'{len(none)} with none ({sorted(none)[:3]})')
+    return out
+
+
 def main():
     found = bases()
     for b in found:
@@ -84,7 +175,11 @@ def main():
         for e in b.get('builds', []):
             print(f'  {e.get("family")} {e.get("model")}  {e.get("size_gb")} GB'
                   + ('  derivative' if e.get('derivative') else ''))
-    bad = problems(found)
+    for t in tasks():
+        print(f'task {t["id"]}: {t["label"]["en"]} ({", ".join(t["metrics"])})' + (f' -> {t["headline"]}' if t.get('headline') else ''))
+    for p in presets():
+        print(f'preset {p["id"]}: {", ".join(x["task"] + ("*" if x.get("only") else "") for x in p["tasks"])}')
+    bad = problems(found) + task_problems() + plan_problems()
     for line in bad:
         print('NG ' + line)
     raise SystemExit(1 if bad else 0)

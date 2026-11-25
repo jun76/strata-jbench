@@ -45,3 +45,23 @@ Notes on particular builds (kept here, JSON has no comments):
 
 Where a property belongs to the pair of an engine and a model rather than to the model (the drafter, today), it will
 move to the engine's entry when engines get a catalog of their own.
+
+## tasks.json
+
+`tasks`: what a run can do, by name. A task is tied to the plan's cases by `match` (`step`: the Tiers it covers;
+`fixture_prefix`: the fixtures within them), so every case belongs to exactly one task (`scripts/catalog.py` checks the
+plans on this PC). `label`, `question` (what it answers) and `sends` (what is sent, in plain words) are for readers, in
+Japanese, English and Chinese. `metrics` are the metrics it gives (ids of metrics.json), `headline` its headline number,
+`models` which models get it (`all`, `representatives`, `reference`), `engines` / `drivers` where it is limited to some.
+
+`presets`: bundles of tasks. An entry may narrow a task with `only` (a case's field -> the values kept): `quick` keeps
+just the cases the headline numbers are read from.
+
+## metrics.json
+
+`metrics`: every metric in one line: its unit, which way is better, and where the number comes from (`engine`: the
+engine's own timings in the response; `client`: the runner's clock; `judge`: a check of the answer or the page;
+`runner`, `proxy`: the runner's and the recording proxy's records).
+
+`headlines`: the numbers shown first and compared across environments. Each is one metric of one task under one fixed
+condition (`where`: a case's fields), never a summary over several kinds of cases, so that it can be said in one line.
