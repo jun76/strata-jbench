@@ -232,7 +232,7 @@ def overnight_models():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--phase', choices=['acquire', 'bench', 'all'], default='all')
-    ap.add_argument('--steps', default='0,1,2,3,4a,4b,4c,4d,5')
+    ap.add_argument('--steps', default='', help='default: 0,1,2,3,4a,4b,4c,4d,5, or G in a harness division')
     ap.add_argument('--no-smoke', action='store_true', help='skip the one real launch (when a run is using the GPU)')
     ap.add_argument('--env', default='', help='the environment (default: the one this hardware matches)')
     a = ap.parse_args()
@@ -248,7 +248,8 @@ def main():
     if a.phase in ('bench', 'all'):
         env_id = env_check(a.env)
         if env_id:
-            bench_checks(a.steps.split(','), env_id)
+            harness = envs.load_division(envs.division()).get('harness')
+            bench_checks((a.steps or ('G' if harness else '0,1,2,3,4a,4b,4c,4d,5')).split(','), env_id)
             if envs.load_division(envs.division()).get('harness'):
                 harness_checks(envs.division())
             if not a.no_smoke and all(r['ok'] for r in results):

@@ -172,7 +172,8 @@ class Adapter(Engine):
         if not out[0][1]:
             return out
         out.append((f'{self.id}: port {self.port} is free', self.port_free(), ''))
-        out.append((f'{self.id}: no compute process on GPU {self.gpu}', not self.gpu_compute_busy(), ''))
+        busy = self.gpu_compute_busy()
+        out.append((f'{self.id}: no other process holds 1 GB or more on GPU {self.gpu}', not busy, busy))
         for item in self.needs(models):
             out.append((f'{self.id}: {item["what"]} on disk', item['state'] == 'ok', item['detail']))
         return out
@@ -229,7 +230,7 @@ class Adapter(Engine):
         stdout = stderr = ''
         try:
             if not self.port_free() or self.gpu_compute_busy():
-                raise ValueError('benchmark port in use or GPU already has a compute process')
+                raise ValueError('benchmark port in use, or another process holds 1 GB or more of the GPU')
             self.setup_home()
             proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=self.child_env())
             try:

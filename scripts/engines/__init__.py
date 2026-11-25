@@ -158,9 +158,17 @@ class Engine:
         return True
 
     def gpu_compute_busy(self):
-        r = subprocess.run(['nvidia-smi', '-i', str(self.gpu), '--query-compute-apps=pid', '--format=csv,noheader,nounits'],
-                           capture_output=True, text=True)
-        return bool(r.stdout.strip())
+        """The compute processes on the card that hold 1 GB of VRAM or more, as "pid name MiB" lines ('' when none). A
+        desktop's own (the compositor, a browser's GPU process) are listed as compute processes too and hold far
+        less; an inference engine left running holds more."""
+        r = subprocess.run(['nvidia-smi', '-i', str(self.gpu), '--query-compute-apps=pid,process_name,used_memory',
+                            '--format=csv,noheader,nounits'], capture_output=True, text=True)
+        busy = []
+        for line in r.stdout.splitlines():
+            parts = [x.strip() for x in line.split(',')]
+            if len(parts) >= 3 and parts[-1].isdigit() and int(parts[-1]) >= 1000:
+                busy.append(f'{parts[0]} {parts[1].split()[0]} {parts[-1]} MiB')
+        return '; '.join(busy)
 
 
 def get(engine_id=None, **ctx):
