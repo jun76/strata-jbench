@@ -45,6 +45,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import agent_proxy  # noqa: E402
+import catalog  # noqa: E402
 import envs  # noqa: E402
 import harnesses  # noqa: E402
 import machine_info  # noqa: E402
@@ -586,9 +587,9 @@ def lscpu_pcores():
     return ','.join(str(c) for c in firsts if c != 0)
 
 
-# build_cases.OWN_DRAFTER's families (also skipped by preflight's MTP check), with the --draft value serve gives their
-# engine (serve/hy4_kind.py, serve/inkling_kind.py)
-OWN_DRAFTER = {'hy4-flash': 'dfly2', 'inkling-2-mini': 'dspark'}
+# Families whose builds carry their own drafter (catalog "drafter": {"builtin": ...}; also skipped by preflight's MTP
+# check), with the --draft value serve gives their engine (serve/hy4_kind.py, serve/inkling_kind.py)
+OWN_DRAFTER = {f: b['drafter']['builtin'] for f, b in catalog.by_family().items() if 'builtin' in b['drafter']}
 
 
 def launch_args(row):

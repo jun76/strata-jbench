@@ -21,78 +21,28 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from i18n import one, tr, untranslated  # noqa: E402
 import envs  # noqa: E402
+import catalog  # noqa: E402
 import machine_info  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# (family, model, size GB, role). How large a model is for the environment's memory: size_class() (for the estimates).
-MODELS = [
-    ('qwen', 'Q2_0', 67.3, '元重みの量子化 (ISTA)'),
-    ('qwen', 'IQ2_XS', 68.0, '元重みの量子化 (ISTA)'),
-    ('qwen', 'IQ3_XXS', 75.8, '元重みの量子化 (ISTA)'),
-    ('qwen', 'IQ3_S', 83.6, '元重みの量子化 (ISTA)'),
-    ('coder', 'IQ1_M', 58.4, 'expert 半減の剪定版'),
-    ('gyro', 'Gyro-S', 58.5, '元重みの量子化 (trellis)'),
-    ('gyro', 'Gyro-M', 92.0, '元重みの量子化 (trellis)'),
-    # Unsloth at the commit Strata pinned first (38bb39ee). Dynamic v3.1 (2026-11-04) replaced UD-IQ4_XS only (another file,
-    # 345 of 1224 tensors of another type: UD-IQ4_XS-v31 below); UD-Q4_K_XL (the same tensors, sharded anew), UD-Q5_K_XL,
-    # UD-Q6_K_XL and Q8_0 are the files the repository still has, so these stay models of their own beside the v3.1 sets.
-    ('unsloth', 'UD-IQ4_XS', 93.7, '元重みの量子化 (Unsloth、v3.1 前の版)'),
-    ('unsloth', 'UD-Q4_K_XL', 111.3, '元重みの量子化 (Unsloth、v3.1 でも同じ)'),
-    ('unsloth', 'UD-Q5_K_XL', 158.3, '元重みの量子化 (Unsloth、v3.1 でも同じ)'),
-    ('unsloth', 'UD-Q6_K_XL', 169.2, '元重みの量子化 (Unsloth、v3.1 でも同じ)'),
-    ('unsloth', 'Q8_0', 188.2, '元重みの量子化 (Unsloth、v3.1 でも同じ)、品質の参照点'),
-    # Unsloth Dynamic v3.1 (the repository re-published on 2026-11-04, Strata's setup.py UNSLOTH_V31_*; engine 0.1.57 or
-    # later). UD-IQ4_XS-v31 is Strata's name for the new UD-IQ4_XS, another file from the one above.
-    ('unsloth', 'UD-IQ1_M', 68.0, '元重みの量子化 (Unsloth v3.1)'),
-    ('unsloth', 'UD-Q2_0', 70.5, '元重みの量子化 (Unsloth v3.1)'),
-    ('unsloth', 'UD-IQ2_XS', 75.8, '元重みの量子化 (Unsloth v3.1)'),
-    ('unsloth', 'UD-Q2_K_XL', 79.6, '元重みの量子化 (Unsloth v3.1)'),
-    ('unsloth', 'UD-IQ3_XXS', 83.6, '元重みの量子化 (Unsloth v3.1)'),
-    ('unsloth', 'UD-Q3_K_XL', 89.5, '元重みの量子化 (Unsloth v3.1)'),
-    ('unsloth', 'UD-IQ4_XS-v31', 93.7, '元重みの量子化 (Unsloth v3.1、UD-IQ4_XS の新しい版)'),
-    ('swift', 'IQ2_XS', 69.1, 'fine-tune（思考が短い）'),
-    ('swift', 'IQ3_XXS', 76.0, 'fine-tune（思考が短い）'),
-    ('swift', 'IQ3_S', 83.7, 'fine-tune（思考が短い）'),
-    ('nvfp4', 'NVFP4', 128.0, '元重みの量子化 (GPTQ)'),
-    ('nvfp4', 'NVFP4-NVIDIA', 128.0, '元重みの量子化 (RTN)'),
-    ('nvfp4', 'NVFP4-QAD', 102.3, 'FP4 向け再学習版'),
-    # Tencent Hy4-Flash (220B-A12B, Strata 0.2.18 on): another model with its own engine (strata-hy4) and its built-in
-    # drafter (DFly2), Strata's own .strata builds. The size is the build's file (Strata's hy4_fit footprint is within
-    # 0.6 GB of it); the Engram shard every build shares (67.6 GB) is a lookup table read as needed, not counted here.
-    ('hy4-flash', 'SQ-64', 62.0, 'Strata の量子化 (別モデル Hy4-Flash、64 GB RAM 向け)'),
-    ('hy4-flash', 'SQ-96', 89.6, 'Strata の量子化 (別モデル Hy4-Flash、96 GB RAM 向け)'),
-    ('hy4-flash', 'SQ-128', 113.7, 'Strata の量子化 (別モデル Hy4-Flash、128 GB RAM 向け、元重みに最も近い)'),
-    # Thinking Machines Inkling-2-Mini (Strata 0.2.19 on): another model with its own engine (strata-inkling) and its
-    # built-in drafter (DSpark), Strata's own .strata v1.1 builds; no thinking (Strata serves it with thinking off only).
-    # The size is the build's file (Strata's inkling_fit footprint is the same).
-    ('inkling-2-mini', 'SQ-10', 10.5, 'Strata の量子化 (別モデル Inkling-2-Mini、小さく速い)'),
-    ('inkling-2-mini', 'SQ-15', 14.3, 'Strata の量子化 (別モデル Inkling-2-Mini、作者の推奨)'),
-    ('inkling-2-mini', 'SQ-20', 19.3, 'Strata の量子化 (別モデル Inkling-2-Mini、元重みと同じ)'),
-]
-# Unsloth re-published its repository on 2026-11-04 as Dynamic v3.1 under the same names. Of the sets pinned before
-# (38bb39ee), UD-IQ4_XS and UD-Q4_K_XL were replaced on the Hub then (Strata keeps the old UD-Q4_K_XL, and calls the new
-# UD-IQ4_XS UD-IQ4_XS-v31); UD-Q5_K_XL, UD-Q6_K_XL and Q8_0 are the same files there still. The pages show which set a
-# replaced name is from; case ids and folders keep the plain names.
-UNSLOTH_V31 = {'UD-IQ1_M', 'UD-Q2_0', 'UD-IQ2_XS', 'UD-Q2_K_XL', 'UD-IQ3_XXS', 'UD-Q3_K_XL', 'UD-IQ4_XS-v31'}
-UNSLOTH_REPLACED = {'UD-IQ4_XS', 'UD-Q4_K_XL'}   # the files before v3.1, which the Hub's same names no longer serve
+# (family, model, size GB, role), from the catalog (catalog/models/<base>.json; scripts/catalog.py). How large a model
+# is for the environment's memory: size_class() (for the estimates).
+CATALOG = catalog.load()
+MODELS = catalog.builds(CATALOG)
+_BASE = catalog.by_family(CATALOG)
+_BUILD = {(e['family'], e['model']): e for b in CATALOG for e in b['builds']}
 
 
 def display_model(family, model):
-    """The model's name on the pages: 'UD-Q2_K_XL (v3.1)', 'UD-IQ4_XS (v3.1)' for UD-IQ4_XS-v31, 'UD-Q4_K_XL (pre-v3.1)'
-    for a set the Hub replaced under the same name, and the others (UD-Q5_K_XL, UD-Q6_K_XL, Q8_0, other families) as
-    they are."""
-    if family != 'unsloth':
-        return model
-    if model in UNSLOTH_V31:
-        return model.removesuffix('-v31') + ' (v3.1)'
-    if model in UNSLOTH_REPLACED:
-        return model + ' (pre-v3.1)'
-    return model
+    """The model's name on the pages: the build's "display" where its name alone would mislead ('UD-Q2_K_XL (v3.1)',
+    'UD-IQ4_XS (v3.1)' for UD-IQ4_XS-v31, 'UD-Q4_K_XL (pre-v3.1)' for a set the Hub replaced under the same name), else
+    the name as it is. Case ids and folders keep the plain names."""
+    return _BUILD.get((family, model), {}).get('display') or model
 
 
-DERIVATIVE = {('coder', 'IQ1_M'), ('swift', 'IQ2_XS'), ('swift', 'IQ3_XXS'), ('swift', 'IQ3_S'),
-              ('nvfp4', 'NVFP4-QAD')}
+# A build that is not a quantization of the original weights (a fine-tune, a pruned version): "derivative" in the catalog
+DERIVATIVE = {k for k, e in _BUILD.items() if e.get('derivative')}
 # The environment's reference model and the representatives of Tiers 4b, 4c and 5: set per environment by use_env, from
 # env.json "ref" or Strata's own pick for its RAM + VRAM (envs.ref), and from roles (representatives()), never from a
 # lineup named here, so that any card and any set of models gets a plan.
@@ -103,21 +53,23 @@ K = 1024
 CTX_LABEL = {32 * K: '32K', 64 * K: '64K', 128 * K: '128K', 200 * K: '200K', 256 * K: '256K',
              384 * K: '384K', 512 * K: '512K', 768 * K: '768K', 1024 * K: '1M'}
 TRAINED = 256 * K
-# The trained length where a family's differs from Qwen3.8-Flash-Next's 256K: Hy4-Flash reads 1M without YaRN.
-TRAINED_OF = {'hy4-flash': 1024 * K, 'inkling-2-mini': 256 * K}
+# What follows is each family's base model, as the catalog says it ("trained_context", "max_context", "thinking",
+# "lineup", "drafter"); the plan below asks these, never a family's name.
+# The trained length (past it Strata uses YaRN): Hy4-Flash reads 1M without it.
+TRAINED_OF = {f: b['trained_context'] for f, b in _BASE.items()}
 # The longest context a family's engine takes (Strata's inkling_fit.CONTEXTS ends at 256K); longer cases are not made.
-MAX_CONTEXT_OF = {'inkling-2-mini': 256 * K}
+MAX_CONTEXT_OF = {f: b['max_context'] for f, b in _BASE.items() if b['max_context']}
 # Families served with thinking off only (Strata's inkling_family.HAS_THINKING False): their thinking-on cases are not
 # made, and the coding task is asked with thinking off.
-NO_THINKING = {'inkling-2-mini'}
-# Families that are another model, not Qwen3.8-Flash-Next (representatives: not the lineup's largest or smallest)
-OTHER_MODELS = {'hy4-flash', 'inkling-2-mini'}
+NO_THINKING = {f for f, b in _BASE.items() if not b['thinking']}
+# Families that are another model than the lineup's main one (representatives: not the lineup's largest or smallest)
+OTHER_MODELS = {f for f, b in _BASE.items() if b['lineup'] == 'other'}
 # Families with a drafter of their own instead of the MTP layer the runner pins (bench_runner.launch_args): Hy4-Flash
 # starts with DFly2, built into its builds (Strata's default for it); Tier 5's "--drafting off" still turns it off.
-OWN_DRAFTER = {'hy4-flash': 'DFly2', 'inkling-2-mini': 'DSpark'}
+OWN_DRAFTER = {f: b['drafter']['label'] for f, b in _BASE.items() if 'builtin' in b['drafter']}
 # Families whose engine reports no draft counts in the response's timings (strata-hy4 0.1.64 sends draft_n 0 while
 # DFly2 runs; its log has only tree statistics), so no acceptance rate is measured for them.
-NO_DRAFT_COUNTS = {'hy4-flash'}
+NO_DRAFT_COUNTS = {f for f, b in _BASE.items() if b['drafter'].get('reports_counts') is False}
 
 
 def drafter_measures(fam):
@@ -170,7 +122,7 @@ TIER5_VARIANTS = [
 TIER5_CASES = ['decode-prose-ja', 'decode-code', 'prefill-4k', 'prefill-32k']
 # Families whose models DFlash2 drafts (strata launch --plan on 0.1.56 and 0.1.58: Auto picks it for these; coder, swift and nvfp4
 # stay on MTP). Every case pins MTP; only these models also get Tier 1's decode cases with DFlash2.
-DFLASH2_FAMILIES = {'qwen', 'gyro', 'unsloth'}
+DFLASH2_FAMILIES = {f for b in CATALOG for f in b['drafter'].get('also', {}).get('dflash2', [])}
 DFLASH2_NOTE = '0.2.10 から Auto はこのモデルで DFlash2 を選ぶ（ほかのケースは MTP に固定）。drafter（1.2 GB。0.2.12 から一部のモデルは Strata が調整した 0.34 GB も）は計測前に取得しておく'
 
 # Practical coding cases. Plain Tiers 0 and 3 ask for a scene titled "A sailing ship calling at a harbor" in 3D voxel art as
