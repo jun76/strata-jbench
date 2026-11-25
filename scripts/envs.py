@@ -294,7 +294,7 @@ def strata_models_dir():
 
 
 # Families Strata reads from strata_models_dir() alone (it fetches them again when they are anywhere else)
-STRATA_FOLDER_ONLY = ('hy4-flash',)
+STRATA_FOLDER_ONLY = ('hy4-flash', 'inkling-2-mini')
 
 
 STRATA_SOURCE = source_root(os.environ.get('STRATA_SOURCE') or Path.home() / 'Strata')

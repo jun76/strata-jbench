@@ -586,7 +586,9 @@ def lscpu_pcores():
     return ','.join(str(c) for c in firsts if c != 0)
 
 
-OWN_DRAFTER = {'hy4-flash'}   # build_cases.OWN_DRAFTER's families (also skipped by preflight's MTP check)
+# build_cases.OWN_DRAFTER's families (also skipped by preflight's MTP check), with the --draft value serve gives their
+# engine (serve/hy4_kind.py, serve/inkling_kind.py)
+OWN_DRAFTER = {'hy4-flash': 'dfly2', 'inkling-2-mini': 'dspark'}
 
 
 def launch_args(row):
@@ -605,7 +607,7 @@ def launch_args(row):
     # its args; every later launch of that model then ran without the draft layer (qwen IQ3_S in 2026-11-03-main).
     # --mtp on makes such a setup write it back on; a launch that runs no setup cannot, so preflight checks the installed
     # configs and start_session checks that the layer loaded.
-    # A family with a drafter of its own (Hy4-Flash: DFly2, built into its builds) has no MTP layer: it starts with its
+    # A family with a drafter of its own (Hy4-Flash: DFly2, Inkling-2-Mini: DSpark, built into its builds) has no MTP layer: it starts with its
     # own, Strata's default for it (build_cases.OWN_DRAFTER), and only Tier 5's --drafting off changes that.
     if '--drafting' not in opts and row['family'] not in OWN_DRAFTER:
         args += ['--drafting', 'mtp', '--mtp', 'on']
@@ -625,9 +627,10 @@ def not_applied(args, log):
         if '--mtp' in eng or '--draft' in eng:
             return ['--drafting off, but the engine has a drafter (--mtp / --draft)']
     elif a.get('--family') in OWN_DRAFTER:
-        # its own drafter: serve adds --draft dfly2 only when the engine says it has one (serve/hy4_kind.py), else starts
-        # without it with one log line; a case meant to measure the drafter must not run without
-        want.append(('--draft', 'dfly2'))
+        # its own drafter: serve adds --draft <it> only when the engine says it has one (serve/hy4_kind.py,
+        # serve/inkling_kind.py), else starts without it with one log line; a case meant to measure the drafter must not
+        # run without
+        want.append(('--draft', OWN_DRAFTER[a['--family']]))
     if a.get('--kv'):
         want.append(('--kv', a['--kv']))
     if a.get('--parallel', '1') != '1':

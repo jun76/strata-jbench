@@ -37,12 +37,22 @@ ORDER = [('qwen', 'Q2_0'), ('gyro', 'Gyro-S'), ('unsloth', 'UD-IQ4_XS'),
          ('nvfp4', 'NVFP4'), ('nvfp4', 'NVFP4-NVIDIA'), ('nvfp4', 'NVFP4-QAD'),
          ('unsloth', 'UD-IQ1_M'), ('unsloth', 'UD-Q2_0'), ('unsloth', 'UD-IQ2_XS'), ('unsloth', 'UD-Q2_K_XL'),
          ('unsloth', 'UD-IQ3_XXS'), ('unsloth', 'UD-Q3_K_XL'), ('unsloth', 'UD-IQ4_XS-v31'),
-         ('hy4-flash', 'SQ-64'), ('hy4-flash', 'SQ-96'), ('hy4-flash', 'SQ-128')]
+         ('hy4-flash', 'SQ-64'), ('hy4-flash', 'SQ-96'), ('hy4-flash', 'SQ-128'),
+         ('inkling-2-mini', 'SQ-10'), ('inkling-2-mini', 'SQ-15'), ('inkling-2-mini', 'SQ-20')]
 # Hy4-Flash (Strata 0.2.18 on): not in setup.py's file pins but in strata_control/hy4_family.py (FILES: bytes and SHA-256),
 # fetched from huggingface.co/strata-engine/Hy4-Flash-Strata, which Strata names at main (terminal/data/hy4-sources.json).
 # The commit is pinned here so that models.json can say which upload was measured: main on 2026-11-22.
 HY4_REPO = 'strata-engine/Hy4-Flash-Strata'
 HY4_REVISION = '995bac227ab7e0d221772be641e2b5954a9fac06'
+# Inkling-2-Mini (Strata 0.2.19 on): strata_control/inkling_family.py pins the builds and the Vision shard; Strata names
+# huggingface.co/strata-engine/Inkling-2-Mini-Strata at main (terminal/data/inkling-sources.json), pinned here at the
+# commit whose SHA256SUMS.txt matches it. tokenizer.json and chat_template.jinja beside them are fetched too (setup
+# fetches them when it builds the tokenizer; Strata pins their sizes only).
+INKLING_REPO = 'strata-engine/Inkling-2-Mini-Strata'
+INKLING_REVISION = '04996a1e2c45009b6a04f2af126cb6bdb2ba3587'
+# tokenizer.json and chat_template.jinja: Strata pins their sizes only; these are the files at that commit
+INKLING_TOKENIZER_SHA256 = {'tokenizer.json': '7f332727f9a3f093dd452a39cc978e6757627e5dad1b0673aa4e75174f236dd6',
+                            'chat_template.jinja': '53a9035f3255945704b5857657cfb00c1165090c0641c4f782a0cbf268cc16dc'}
 
 
 def build_manifest(s, source, models, chosen=None):
@@ -74,6 +84,16 @@ def build_manifest(s, source, models, chosen=None):
                 files.append({'family': family, 'model': model,
                               'url': f'https://huggingface.co/{HY4_REPO}/resolve/{HY4_REVISION}/{name}',
                               'path': f'{h.FAMILY}/{name}', 'bytes': size, 'sha256': sha})
+        elif family == 'inkling-2-mini':
+            # The build, the Vision shard (Strata's default set: files_of) and tokenizer.json, in <models>/inkling-2-mini,
+            # the folder Strata reads them from (setup.py inkling_folder).
+            h = s['inkling_family']
+            for name in [*h.files_of(model, vision=True), h.TOKENIZER_FILE, h.CHAT_TEMPLATE_FILE]:
+                size, sha = h.FILES.get(name) or h.TOKENIZER_FILES[name]
+                files.append({'family': family, 'model': model,
+                              'url': f'https://huggingface.co/{INKLING_REPO}/resolve/{INKLING_REVISION}/{name}',
+                              'path': f'{h.FAMILY}/{name}', 'bytes': size,
+                              'sha256': sha or INKLING_TOKENIZER_SHA256[name]})
         elif family == 'nvfp4':
             for role, repo, revision, filename, size, sha in s['ready_files'](model):
                 add(f'https://huggingface.co/{repo}/resolve/{revision}/{filename}',
@@ -97,7 +117,7 @@ def build_manifest(s, source, models, chosen=None):
             ['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip(),
             'source_setup_sha256': hashlib.sha256((source / 'setup.py').read_bytes()).hexdigest(),
             'models_root': str(models), 'choices': choices, 'files': list(unique.values()),
-            'scope': f'{len(choices)} of the {len(ORDER)} models the benchmark knows (Qwen3.8-Flash-Next variants and Hy4-Flash) (the environment\'s env.json "models"). '
+            'scope': f'{len(choices)} of the {len(ORDER)} models the benchmark knows (Qwen3.8-Flash-Next variants, Hy4-Flash and Inkling-2-Mini) (the environment\'s env.json "models"). '
                      'Excludes Qwen3.6, Orca, DeepSeek. QAD checkpoint download only; conversion separate.'}
 
 

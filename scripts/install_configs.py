@@ -64,7 +64,8 @@ def needs_install(fam, model, card):
     return None
 
 
-PROGRESS = re.compile(r'\d+\.\d+ / \d+\.\d+ GB \(\d+%\)')   # setup's download progress ("0.02 / 62.03 GB (0%)")
+PROGRESS = re.compile(r'\d+\.\d+ / (\d+\.\d+) GB \(\d+%\)')   # setup's download progress ("0.02 / 62.03 GB (0%)")
+MODEL_FILE_GB = 0.1   # a download this large is a model file; a smaller one (a chat template, a tokenizer) is let through
 
 
 def outside_strata_folder(fam, model):
@@ -82,7 +83,7 @@ def run_install(args):
     out = b''
     while chunk := p.stdout.read1(65536):
         out += chunk
-        if PROGRESS.search(out[-4096:].decode(errors='replace')):
+        if any(float(m.group(1)) >= MODEL_FILE_GB for m in PROGRESS.finditer(out[-4096:].decode(errors='replace'))):
             p.terminate()
             try:
                 p.wait(30)

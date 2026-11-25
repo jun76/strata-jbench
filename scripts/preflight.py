@@ -110,7 +110,7 @@ def bench_checks(steps, env_id):
     install = Path.home() / '.local/share/strata/install'
     off = []
     for fam, model in models:
-        if fam in ('hy4-flash',):   # its own drafter (DFly2), no MTP layer (build_cases.OWN_DRAFTER)
+        if fam in ('hy4-flash', 'inkling-2-mini'):   # its own drafter (DFly2, DSpark), no MTP layer (build_cases.OWN_DRAFTER)
             continue
         conf = install / f'strata-{model.lower() if fam == "qwen" else f"{fam}-{model.lower()}"}.json'
         try:

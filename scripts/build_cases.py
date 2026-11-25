@@ -63,6 +63,12 @@ MODELS = [
     ('hy4-flash', 'SQ-64', 62.0, 'Strata の量子化 (別モデル Hy4-Flash、64 GB RAM 向け)'),
     ('hy4-flash', 'SQ-96', 89.6, 'Strata の量子化 (別モデル Hy4-Flash、96 GB RAM 向け)'),
     ('hy4-flash', 'SQ-128', 113.7, 'Strata の量子化 (別モデル Hy4-Flash、128 GB RAM 向け、元重みに最も近い)'),
+    # Thinking Machines Inkling-2-Mini (Strata 0.2.19 on): another model with its own engine (strata-inkling) and its
+    # built-in drafter (DSpark), Strata's own .strata v1.1 builds; no thinking (Strata serves it with thinking off only).
+    # The size is the build's file (Strata's inkling_fit footprint is the same).
+    ('inkling-2-mini', 'SQ-10', 10.5, 'Strata の量子化 (別モデル Inkling-2-Mini、小さく速い)'),
+    ('inkling-2-mini', 'SQ-15', 14.3, 'Strata の量子化 (別モデル Inkling-2-Mini、作者の推奨)'),
+    ('inkling-2-mini', 'SQ-20', 19.3, 'Strata の量子化 (別モデル Inkling-2-Mini、元重みと同じ)'),
 ]
 # Unsloth re-published its repository on 2026-11-04 as Dynamic v3.1 under the same names. Of the sets pinned before
 # (38bb39ee), UD-IQ4_XS and UD-Q4_K_XL were replaced on the Hub then (Strata keeps the old UD-Q4_K_XL, and calls the new
@@ -98,10 +104,17 @@ CTX_LABEL = {32 * K: '32K', 64 * K: '64K', 128 * K: '128K', 200 * K: '200K', 256
              384 * K: '384K', 512 * K: '512K', 768 * K: '768K', 1024 * K: '1M'}
 TRAINED = 256 * K
 # The trained length where a family's differs from Qwen3.8-Flash-Next's 256K: Hy4-Flash reads 1M without YaRN.
-TRAINED_OF = {'hy4-flash': 1024 * K}
+TRAINED_OF = {'hy4-flash': 1024 * K, 'inkling-2-mini': 256 * K}
+# The longest context a family's engine takes (Strata's inkling_fit.CONTEXTS ends at 256K); longer cases are not made.
+MAX_CONTEXT_OF = {'inkling-2-mini': 256 * K}
+# Families served with thinking off only (Strata's inkling_family.HAS_THINKING False): their thinking-on cases are not
+# made, and the coding task is asked with thinking off.
+NO_THINKING = {'inkling-2-mini'}
+# Families that are another model, not Qwen3.8-Flash-Next (representatives: not the lineup's largest or smallest)
+OTHER_MODELS = {'hy4-flash', 'inkling-2-mini'}
 # Families with a drafter of their own instead of the MTP layer the runner pins (bench_runner.launch_args): Hy4-Flash
 # starts with DFly2, built into its builds (Strata's default for it); Tier 5's "--drafting off" still turns it off.
-OWN_DRAFTER = {'hy4-flash': 'DFly2'}
+OWN_DRAFTER = {'hy4-flash': 'DFly2', 'inkling-2-mini': 'DSpark'}
 # Families whose engine reports no draft counts in the response's timings (strata-hy4 0.1.64 sends draft_n 0 while
 # DFly2 runs; its log has only tree statistics), so no acceptance rate is measured for them.
 NO_DRAFT_COUNTS = {'hy4-flash'}
@@ -315,16 +328,16 @@ def build(cfg):
 
     for fam, model, *_ in env_models():
         for task, content in TASKS:
-            for eff in EFFORTS:
+            for eff in ['none'] if fam in NO_THINKING else EFFORTS:
                 rows.append(base('3', '3', fam, model, _key=f'{task}-{eff}', fixture=task, content=content,
                                  input_tokens='短文', output_cap=16384, effort=eff, temperature=1.0,
                                  measures='思考 token 数, 回答までの時間, 完了時間, 正答, cap 到達',
                                  note=effort_note(eff, 16384)))
-        for eff in GAME_EFFORTS:
+        for eff in ['none'] if fam in NO_THINKING else GAME_EFFORTS:
             rows.append(game_case('3', '3', fam, model, eff, 1.0, CODING_CAP, 3600))
 
     for fam, model, *_ in env_models():
-        for ctx in [128 * K, 256 * K, 1024 * K]:
+        for ctx in [c for c in [128 * K, 256 * K, 1024 * K] if c <= MAX_CONTEXT_OF.get(fam, c)]:
             rows.append(base('4', '4a', fam, model, _key=f'ctxcost-{CTX_LABEL[ctx]}', context=ctx,
                              fixture='ctxcost-4k', content='4K の文章 + 続きを書く指示', input_tokens=4 * K,
                              output_cap=512, measures='decode tok/s, expert cache スロット数, VRAM / RAM peak, 起動可否'))
@@ -333,6 +346,8 @@ def build(cfg):
         out = []
         for fam, model in models:
             for n, label in lengths:
+                if ctx_of(n) > MAX_CONTEXT_OF.get(fam, ctx_of(n)):
+                    continue
                 for q, content in QUESTIONS:
                     first = q == QUESTIONS[0][0]
                     out.append(base('4', step, fam, model, _key=f'long-{label}-{q}', context=ctx_of(n),
@@ -393,8 +408,11 @@ def representatives(models):
     cand = [(f, m, gb) for f, m, gb, _ in models if (f, m) not in DERIVATIVE] or [(f, m, gb) for f, m, gb, _ in models]
     if not cand:
         return [], [], []
-    largest = max(cand, key=lambda x: x[2])[:2]
-    smallest = min(cand, key=lambda x: x[2])[:2]
+    # The largest and the smallest are Qwen3.8-Flash-Next's (the lineup the reference is from); another model (Hy4-Flash,
+    # Inkling-2-Mini) is a representative only as its family's largest in 4b, unless nothing else is measured
+    main = [x for x in cand if x[0] not in OTHER_MODELS] or cand
+    largest = max(main, key=lambda x: x[2])[:2]
+    smallest = min(main, key=lambda x: x[2])[:2]
     families = list(dict.fromkeys(f for f, _, _ in cand))
     per_family = [max((x for x in cand if x[0] == f), key=lambda x: x[2])[:2] for f in families]
 

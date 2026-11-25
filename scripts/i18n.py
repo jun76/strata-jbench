@@ -43,6 +43,9 @@ TR = {
     'Strata の量子化 (別モデル Hy4-Flash、128 GB RAM 向け、元重みに最も近い)': (
         "Strata's quantization (another model, Hy4-Flash; for 128 GB of RAM, the closest to the original weights)",
         'Strata 的量化（另一模型 Hy4-Flash，面向 128 GB 内存，最接近原始权重）'),
+    'Strata の量子化 (別モデル Inkling-2-Mini、小さく速い)': ('Strata\'s quantization (another model, Inkling-2-Mini, small and fast)', 'Strata 的量化（另一模型 Inkling-2-Mini，小而快）'),
+    'Strata の量子化 (別モデル Inkling-2-Mini、作者の推奨)': ('Strata\'s quantization (another model, Inkling-2-Mini, the author\'s pick)', 'Strata 的量化（另一模型 Inkling-2-Mini，作者推荐）'),
+    'Strata の量子化 (別モデル Inkling-2-Mini、元重みと同じ)': ('Strata\'s quantization (another model, Inkling-2-Mini, lossless)', 'Strata 的量化（另一模型 Inkling-2-Mini，与原权重相同）'),
     # input contents
     '日本語の説明文': ('Japanese explanatory prose', '日语说明文'),
     '英語の説明文': ('English explanatory prose', '英语说明文'),
@@ -152,6 +155,13 @@ TR = {
         '检查成果的展开和截图机制。thinking off：reasoning_effort "none" + chat_template_kwargs.enable_thinking false。'
         '成果展开到 artifact/（response.md、files/、manifest.json，静态 HTML 另有 screenshot.png）。'
         '形式（单个 HTML / 需要服务器 / 有无 README）记录在 manifest 中'),
+    'thinking off: reasoning_effort "none" + chat_template_kwargs.enable_thinking false。成果物は artifact/ に展開'
+    '（response.md、files/、manifest.json、静的 HTML なら screenshot.png）。単一の HTML ファイルか、形式（単体 HTML / 要サーバー / README の有無）は manifest に記録': (
+        'thinking off: reasoning_effort "none" + chat_template_kwargs.enable_thinking false. The result is unpacked into '
+        'artifact/ (response.md, files/, manifest.json, and screenshot.png for static HTML). Whether it is one HTML file, '
+        'and its form (single HTML / needs a server / has a README), are recorded in the manifest',
+        'thinking off：reasoning_effort "none" + chat_template_kwargs.enable_thinking false。成果展开到 artifact/（response.md、files/、'
+        'manifest.json，静态 HTML 另有 screenshot.png）。是否为单个 HTML 文件及其形式（单个 HTML / 需要服务器 / 有无 README）记录在 manifest 中'),
     # the coding task: a sailing ship at a harbor in plain, Minecraft in the harness divisions
     '港に寄港する帆船の情景を 3D ボクセルアートの単一の HTML ファイルで（実用的なコーディング）': (
         'a scene of a sailing ship calling at a harbor in 3D voxel art as one HTML file (practical coding)',
