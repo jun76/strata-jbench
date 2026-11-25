@@ -5,8 +5,11 @@
 
 [日本語](README.md) | [English](README.en.md) | **中文**
 
-在本地 LLM 推理引擎 Strata 上，以相同条件测量 Qwen3.8-Flash-Next 的 18 个量化版与派生版模型的结果。
-计划、测量脚本和原始记录也一并放在这里，可以按同样的步骤复现。
+用**同一把尺子**测量本地 LLM 推理引擎 [Strata](https://github.com/Niko1221/Strata) 及其衍生引擎上各模型的基准测试及其结果。
+以固定条件发送固定提示词，记录速度、等待时间、正确率和生成的页面。计划、测量脚本和原始记录也一并放在这里，任何人都可以按同样的步骤测量。
+
+- **选什么能得到哪些数字、需要多久**：[配置器](https://jun76.github.io/strata-jbench/configurator/)（在浏览器中选择，它会把测量条件写成一段文本，即“配方”）
+- **在自己的电脑上测量**：克隆本仓库，让智能体（如 Claude Code）“用 strata-jbench 测量”。步骤在随仓库附带的[技能](.claude/skills/strata-jbench/SKILL.md)中（见[复现](#复现)）
 
 目前公开的全部是**纯模型部门**（无 harness）的结果：不经过智能体 harness，测量模型与引擎本身的性能。
 
@@ -58,18 +61,58 @@
 
 ## 测量了什么
 
-纯模型部门的测量分为若干层级（Tier）。用例定义在 [scripts/case_plan.py](scripts/case_plan.py)，模型列表在 [catalog/](catalog/README.md)，各用例的条件可在上表的“用例一览”中查看。
+一次测量针对**一个引擎**（官方 Strata、衍生引擎，或已启动的引擎）、**一个环境**（该电脑的硬件），测量所选的**模型**与**项目**。
 
-| Tier | 看什么 | 对象 |
+### 项目
+
+| 项目 | 回答的问题 | 发送的内容 |
 | --- | --- | --- |
-| 0 | 测量本身是否正确、波动有多大 | 部分模型 |
-| 1 | 各模型的基本速度（prefill・decode，按文章种类、temperature、drafter） | 全部模型 |
-| 2 | Strata 自带基准 standard-v1 的速度与 sanity 正确率 | 全部模型 |
-| 3 | 有无 thinking 对到回答的时间、正确率和编程结果的影响 | 全部模型 |
-| 4 | 预留上下文长度的代价（4a）与实际长文处理（4b〜4d，至 1M token） | 4a 为全部模型，4b〜4d 为代表模型 |
-| 5 | 逐个改变启动选项时的变化（含自动 tune） | 3 个代表模型 |
+| **生成速度**<br>`speed-decode` | 生成文本有多快？ | 5 种简短指令（日语说明文、英语说明文、JSON、Python 代码、照抄给定文本），输出最多 512 token，temperature 0 / 0.7 / 1.0，thinking off，各 3 次。支持 DFlash2 的模型再用 DFlash2 测一次 |
+| **读取速度**<br>`speed-prefill` | 读取长输入有多快，到第一个字符要等多久？ | 把固定的记录列表精确截到 4K / 32K / 128,000 token（与 Strata 的 standard-v1 相同的构造方式），输出最多 128 token，temperature 0.7，thinking off，各 3 次 |
+| **Strata 官方标准基准**<br>`official-standard` | 官方标准基准（standard-v1）的结果如何？ | 原样运行 strata bench run --suite standard-v1 共 3 次（thinking xhigh，temperature 1.0，9 个性能请求 + 12 道 sanity 题）。其 fixture 按 Qwen3.8 的 tokenizer 定长，其他基础模型的 token 数不一致 |
+| **思考后作答**<br>`think-qa` | 开启思考后，作答时间与正确率如何变化？ | 4 道可自动判定答案的题（数学、代码（运行测试判定）、日语推理、英语推理），分别在 thinking off 与 on（xhigh）下，输出最多 16,384 token，temperature 1.0，各 3 次。没有 thinking 的模型只测 off |
+| **一次请求生成页面**<br>`code-oneshot` | 一次请求能写出可运行的页面吗？ | 用英文请求把“停靠港口的帆船”场景做成单个 HTML 文件的 3D 体素艺术。思考 64K，输出用满 128K 窗口，temperature 1.0，3 次。页面在 headless Chrome 中运行 10 秒，记录报错、是否卡死、是否有绘制 |
+| **预留上下文的代价**<br>`context-reserve` | 仅仅预留更大的上下文就会变慢吗？ | 分别以 128K / 256K / 1M 上下文启动，相同的 4K 输入 + 512 输出各 3 次。能否以 1M 启动也在此体现 |
+| **长文阅读**<br>`long-read` | 真正读入长文档时，速度与正确率如何？（至 1M token） | 由青空文库与 Project Gutenberg 的 10 部日英作品拼成的文档，长度 32K / 128K / 256K（训练范围）与 512K / 1M（扩展范围）。对埋在 10% / 50% / 90% 位置的事实各问一题，最后一题需要综合多处。各 3 次。仅代表模型 |
+| **YaRN 的影响**<br>`yarn-check` | 超出训练长度的设置（YaRN）会改变相同输入的结果吗？ | 约 300K 输入在 384K 容量下（有 / 无 YaRN），约 200K 输入在 256K 与 1M 容量下。仅基准模型 |
+| **启动选项的效果**<br>`launch-options` | 哪些启动选项有效？ | 每次只改基准启动的一项（drafter、draft 深度、KV 格式、prefill chunk、VRAM 分配、vision、CPU 分配、PLE 表位置、并行、自动 tune），2 种生成与 2 种读取用例各 3 次。仅代表模型 |
+| **测量自检**<br>`selfcheck` | 测量本身是否正确，重新启动之间波动多大？ | 在基准模型上分 3 次启动测量“生成速度”“读取速度”；按作者公开的条件测 Gyro-S 并与公开数值比较；跑一次编程任务以确认成果提取。每个环境一次 |
+| **交给智能体**<br>`agent-oneshot` | 一次性交给智能体 harness，需要多久、能做出什么？ | 把“做一个类似 Minecraft 的 3D 沙盒游戏”（日语）不加格式说明、一次性交给 harness。思考 32K，输出用满窗口，每次最多 3,600 秒，3 次。记录代理把 sampling、thinking、seed 与输出上限对所有 harness 统一 |
 
-各个 RUN 包含哪些 Tier，见上表的“Tier”列。
+项目按“预设”打包：`quick`（只测两个头条速度数字，数分钟）、`standard`（生成、读取、思考后作答、生成页面）、`full`（全部）。
+项目与用例的对应以及各用例的条件见上表的“用例一览”（Tier 是项目的旧称，用例一览与图表仍同时标注）。定义在 [catalog/tasks.json](catalog/tasks.json) 与 [scripts/case_plan.py](scripts/case_plan.py)。
+
+### 头条数字
+
+最先看的数字都取自**一个固定条件**。多种用例的汇总值（平均、中位数的中位数）不作为头条。
+
+| 名称 | 定义 |
+| --- | --- |
+| **JB-decode** 生成速度 | 生成英语说明文时的 decode tok/s：temperature 0.7，thinking off，上下文 128K，drafter 为引擎自己的选择（Strata 的 Auto：支持 DFlash2 的模型用 DFlash2，其余用 MTP 或内置 drafter），3 次的中位数 |
+| **JB-ttft-32k** 读入 32K 后的首字符时间 | 发送 32K token 输入到收到第一个字符的秒数：thinking off，上下文 128K，3 次的中位数 |
+| **JB-answer** 思考后作答 | 在 thinking on 下 4 题的正确数（0〜4，3 次中至少 2 次正确算正确）与完成秒数的中位数。没有 thinking 的模型取 off 的值 |
+| **JB-page** 一次生成的页面 | 3 次中无报错并成功绘制的页面数（0〜3） |
+| **JB-agent** 交给智能体的结果 | 3 次中成功绘制的游戏数（0〜3）与完成秒数的中位数 |
+
+按文本种类、temperature、drafter 等的细分都在图表页面。各指标的定义在 [catalog/metrics.json](catalog/metrics.json) 中各占一行。
+
+### 引擎与模型
+
+| 引擎 | 测量方式 |
+| --- | --- |
+| **Strata** (`strata`) | 官方 Strata。用 `strata launch` 启动，并核对所要求的设置是否到达引擎的命令行。 |
+| **Sync-Strata** (`sync-strata`) | Strata 的分支，用自己的量化 Sync-XS / S / M 运行 Qwen3.8-Flash-Next（格式与上游不兼容）。用 `sync up --api-only` 启动，每次 run 使用独立的设置目录。 |
+| **OpenAI-compatible endpoint (attach only)** (`endpoint`) | 只连接到已启动的引擎的 URL。jbench 不启动也不停止它，因此无法核对启动方式（结果标注“仅连接”）。用于先试用没有适配器的衍生引擎。 |
+
+以质量换速度的设置（如 Sync-Strata 的 tail skip）默认关闭后测量（`exact`）。按引擎默认设置测得的结果（`default`）单独对待，不混合。
+
+模型按基础模型放在 [catalog/models/](catalog/models/)：Qwen3.8-Flash-Next（28）、Tencent Hy4-Flash（3）、Thinking Machines Inkling 2 Mini（3）。tokenizer 相同的模型输入 token 数相同，tok/s 可以直接比较；tokenizer 不同的模型之间仅供参考。
+
+### 同一把尺子
+
+- 测量条件写成一段文本“配方”，其 id（引擎、设置类别、驱动方式、项目及其版本的 hash）随结果保存。
+- 每个用例也带有自身条件的 hash（提示词的 SHA-256、上下文、启动选项、thinking、temperature、输出上限、seed）。跨环境并排比较的只有 hash 相同的用例。
+- 无法确认所要求的设置已到达引擎的用例记为失败，不计为速度数字。
 
 ### 测量方法
 
@@ -131,21 +174,28 @@
 
 ## 复现
 
-测量耗时很长，因此在与终端分离的监视进程下无人值守运行（失败或卡住的运行器的重启与状态记录也由它负责）。步骤（准备环境、preflight、开始、监视、异常恢复、确定结果）见
-[AGENTS.md](AGENTS.md)（英语），环境定义的写法见 [envs/README.md](envs/README.md)。
+测量耗时很长，因此由脱离终端的监督进程无人值守地运行（卡住的用例的重启和状态记录也由它负责）。
 
-前提是已安装 Strata（桌面应用）并安装过一次模型，且 Strata 的源码位于 `~/Strata`（下载哪些文件及其 SHA-256 由源码的
-`setup.py` 决定）。下载用和 NVFP4-QAD 转换用的 Python 环境由 `scripts/setup_acquire.py` 创建，`scripts/bench.py start` 会自动调用它。
-测量设置（RUN_ID、部门、要运行的 Tier・模型・用例等）写在 `bench.json` 中，`scripts/bench.py config` 可列出全部项目及默认值。
+**交给智能体**（推荐）：克隆本仓库，让 Claude Code 等智能体“用 strata-jbench 测量”。
+仓库附带的 [strata-jbench 技能](.claude/skills/strata-jbench/SKILL.md)会引导完成：确认环境 → 在配置器中选择 → 确认计划与缺少的东西 → 开始 → 监视 → 检查结果。
+缺少的引擎、harness、模型，会先询问“可否下载到仓库内的 `tools/`（不纳入 Git），或者电脑上已有的话在哪里”，然后再准备。
+
+**手动运行**：
 
 ```bash
-python3 -I scripts/envs.py list          # 与当前硬件匹配的环境
-python3 -I scripts/bench.py config        # 全部设置（bench.json 中的值与默认值）
-python3 -I scripts/bench.py plan          # 所选范围的用例数与预估时间
-python3 -I scripts/bench.py start         # 检查后开始（监视进程与终端分离运行）
-python3 -I scripts/bench.py status        # 运行状况
-python3 -I scripts/bench.py stop          # 停止（以同一 run_id 再次 start 会接着运行）
+python3 -I scripts/envs.py list                  # 与当前硬件匹配的环境
+python3 -I scripts/build_configurator.py         # 生成 preview/configurator.html（在浏览器中打开并选择）
+python3 -I scripts/bench.py recipe --apply FILE  # 把复制的配方写入 bench.json
+python3 -I scripts/bench.py plan                 # 所选范围的用例数与预计时间
+python3 -I scripts/acquire.py check              # 缺少的东西（模型、引擎、harness）
+python3 -I scripts/bench.py start                # 检查后开始（监督进程脱离终端运行）
+python3 -I scripts/bench.py status               # 状态
+python3 -I scripts/bench.py stop                 # 停止（用相同 run_id 再次 start 即可续跑）
 ```
+
+测量官方 Strata 需要先安装 Strata（桌面应用）并通过它安装过一次模型，并把 Strata 的源码放在 `~/Strata`（要获取的文件及其 SHA-256 由源码的 `setup.py` 决定）。
+完整步骤见 [AGENTS.md](AGENTS.md) 与技能的 [references/](.claude/skills/strata-jbench/references/)（英文），环境定义的写法见 [envs/README.md](envs/README.md)。
+想提供自己测得的结果，请把确定的 RUN（`published/<部门>/<环境>/<RUN_ID>/`）以 pull request 发送。
 
 ## 许可证
 
@@ -158,6 +208,7 @@ python3 -I scripts/bench.py stop          # 停止（以同一 run_id 再次 sta
 ## 参考与致谢
 
 - **[Strata](https://github.com/Niko1221/Strata)**（Niko1221 and the Strata contributors，MIT License）：本次测量所用的本地 LLM 推理引擎。Tier 2 的 standard-v1 也是 Strata 自带的基准。
+- **[Sync-Strata](https://github.com/hiruhiru2005/sync-strata)**（hiruhiru2005）：Strata 的分支及其量化 Sync-XS / S / M，在此作为衍生引擎测量。
 - **[青空文库](https://www.aozora.gr.jp/)**：长文中的 5 部日语作品（夏目漱石《我是猫》、岛崎藤村《破戒》、有岛武郎《某个女人》、太宰治《人间失格》、宫泽贤治《银河铁道之夜》）。
   感谢录入与校对的志愿者。各作品的底本・录入・校对信息保留在 `prompts/long-sources.json`。
 - **[Project Gutenberg](https://www.gutenberg.org/)**：长文中的 5 部英语作品（Melville《白鲸》、Austen《傲慢与偏见》、Dickens《双城记》、Shelley《弗兰肯斯坦》、Doyle《福尔摩斯探案集》）。

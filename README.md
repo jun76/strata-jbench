@@ -5,8 +5,11 @@
 
 **日本語** | [English](README.en.md) | [中文](README.zh.md)
 
-ローカル LLM 推論エンジン Strata で、Qwen3.8-Flash-Next の量子化版・派生版 18 モデルを同じ条件で測った結果です。
-計画・計測スクリプト・生の記録も一緒に置いてあり、同じ手順で追試できます。
+ローカル LLM 推論エンジン [Strata](https://github.com/Niko1221/Strata) とその派生エンジンで、モデルを**同じ物差し**で測るためのベンチと、その結果です。
+固定のプロンプトを固定の条件で送り、速さ・待ち時間・正答・成果物を記録します。計画・計測スクリプト・生の記録も一緒に置いてあり、誰でも同じ手順で測れます。
+
+- **何を選ぶとどの数字が取れて、どれだけ時間がかかるか**: [コンフィギュレータ](https://jun76.github.io/strata-jbench/configurator/)（ブラウザで選ぶと、測定条件を 1 つのテキスト「レシピ」にします）
+- **自分の PC で測る**: このリポをクローンして、エージェント（Claude Code など）に「strata-jbench で測って」と頼みます。手順は同梱の[スキル](.claude/skills/strata-jbench/SKILL.md)にあります（[追試する](#追試する)）
 
 いま公開しているのは、すべて**プレーン部門**（ハーネスなし）の結果です。エージェント用のハーネスは通さず、モデルとエンジンそのものの性能を測っています。
 
@@ -59,18 +62,58 @@
 
 ## 何を測ったか
 
-プレーン部門の計測は段階（Tier）に分けています。ケースの定義は [scripts/case_plan.py](scripts/case_plan.py)、モデルの一覧は [catalog/](catalog/README.md) にあり、各ケースの条件は上の表の「ケース一覧」で見られます。
+1 回の計測は、**1 つのエンジン**（本家 Strata、派生エンジン、または起動済みのエンジン）を、**1 つの環境**（その PC のハードウェア）で、選んだ**モデル**と**種目**について測ります。
 
-| Tier | 何を見るか | 対象 |
+### 種目
+
+| 種目 | 答える疑問 | 送るもの |
 | --- | --- | --- |
-| 0 | 計測そのものが正しいか、ばらつきはどの程度か | 一部のモデル |
-| 1 | 各モデルの素の速さ（prefill・decode、文章の種類別、temperature 別、drafter 別） | 全モデル |
-| 2 | Strata 同梱のベンチ standard-v1 での速さと sanity の正答 | 全モデル |
-| 3 | thinking の有無で、回答までの時間・正答・コーディングの出来がどう変わるか | 全モデル |
-| 4 | コンテキスト長の確保コスト（4a）と、実際の長文の処理（4b〜4d、〜1M token） | 4a は全モデル、4b〜4d は代表モデル |
-| 5 | 起動オプションを1つずつ変えたときの変化（自動 tune を含む） | 代表3モデル |
+| **書く速さ**<br>`speed-decode` | 文章を書く速さは？ | 短い指示を 5 種類（日本語の説明文、英語の説明文、JSON、Python のコード、渡した文章の書き写し）。出力は 512 token まで。temperature 0 / 0.7 / 1.0、thinking off、各 3 回。DFlash2 を持つモデルは DFlash2 でもう一度 |
+| **読む速さ**<br>`speed-prefill` | 長い入力を読む速さと、最初の 1 文字までの待ち時間は？ | 固定のレコード列を 4K / 32K / 128,000 token ちょうどに切ったもの（Strata の standard-v1 と同じ作り方）。出力は 128 token まで。temperature 0.7、thinking off、各 3 回 |
+| **Strata 公式の標準ベンチ**<br>`official-standard` | 本家の標準ベンチ（standard-v1）の値は？ | strata bench run --suite standard-v1 をそのまま 3 回（thinking xhigh、temperature 1.0、性能 9 リクエスト + sanity 12 問）。fixture は Qwen3.8 の tokenizer に合わせてあり、ほかのベースモデルでは token 数が揃わない |
+| **考えて答える**<br>`think-qa` | 考えさせると、答えるまでの時間と正答はどう変わる？ | 答えを自動で判定できる 4 問（数学、コード（テストを実行して判定）、日本語の推論、英語の推論）を、thinking off と on（xhigh）で。出力は 16,384 token まで、temperature 1.0、各 3 回。thinking のないモデルは off だけ |
+| **1 回の依頼でページを書く**<br>`code-oneshot` | 1 回の依頼で、動くページを書けるか？ | 「港に寄港する帆船」の情景を 3D ボクセルアートの単一 HTML ファイルで、という英文の依頼。思考 64K、出力はコンテキスト 128K の枠いっぱい、temperature 1.0、3 回。ページは headless Chrome で 10 秒動かして、エラー・固まったか・描画されたかを記録 |
+| **コンテキストの確保コスト**<br>`context-reserve` | コンテキストを広く確保するだけで遅くなるか？ | コンテキストを 128K / 256K / 1M にして起動し、同じ 4K 入力 + 512 出力を 3 回。1M で起動できるかもここで分かる |
+| **長文の読解**<br>`long-read` | 長い文書を実際に読ませると、速さと正答はどうなる？（〜1M token） | 青空文庫と Project Gutenberg の日英 10 作品から作った文書を 32K / 128K / 256K（学習範囲）と 512K / 1M（拡張範囲）で。10% / 50% / 90% の位置に埋めた事実を 1 つずつ問い、最後に複数箇所を組み合わせる問い。各 3 回。対象は代表のモデル |
+| **YaRN の影響**<br>`yarn-check` | 学習長を超える設定（YaRN）は、同じ入力の結果を変えるか？ | 約 300K の入力を容量 384K（YaRN あり / なし）で、約 200K の入力を容量 256K と 1M で。基準モデルのみ |
+| **起動オプションの効き方**<br>`launch-options` | 起動オプションはどれが効く？ | 基準の起動から 1 回に 1 つだけ変えて（drafter、draft の深さ、KV 形式、prefill chunk、VRAM の配分、vision、CPU の割り当て、PLE の置き場所、並列、自動 tune）、書く速さ 2 種と読む速さ 2 種を 3 回ずつ。対象は代表のモデル |
+| **計測の点検**<br>`selfcheck` | 計測そのものは正しいか、起動しなおすとどれだけばらつくか？ | 基準モデルで「書く速さ」「読む速さ」を、起動しなおしながら 3 回。Gyro-S を作者の公開条件で測って公開値と比べる。コーディングを 1 回流して成果物の取り出しを確かめる。環境ごとに 1 度 |
+| **エージェントに任せる**<br>`agent-oneshot` | エージェントのハーネスに 1 回で任せると、どれだけかかり、何ができるか？ | 「マイクラ風3D箱庭ゲーム作って」を、形式の指示なしでハーネスに one shot で渡す。思考 32K、出力は窓いっぱい、1 回 3,600 秒まで、3 回。sampling・thinking・seed・出力上限は記録プロキシが全ハーネスで同じ値にそろえる |
 
-どの RUN にどの Tier が入っているかは、上の表の「Tier」の列にあります。
+種目は「プリセット」で束ねてあります: `quick`（見出しの速さ 2 つだけ、数分）、`standard`（書く・読む・考えて答える・ページを書く）、`full`（全部）。
+種目とケースの対応、各ケースの条件は上の表の「ケース一覧」で見られます（Tier は種目の旧名で、ケース一覧とグラフではまだ併記しています）。定義は [catalog/tasks.json](catalog/tasks.json) と [scripts/case_plan.py](scripts/case_plan.py) にあります。
+
+### 見出しの数字
+
+最初に見る数字は、どれも **1 つの固定の条件**から読みます。複数のケースをまとめた値（平均や中央値の中央値）は見出しにしません。
+
+| 名前 | 定義 |
+| --- | --- |
+| **JB-decode** 書く速さ | 英語の説明文を書かせたときの decode tok/s。temperature 0.7、thinking off、コンテキスト 128K、drafter はエンジンが自分で選ぶもの（Strata の Auto: DFlash2 を持つモデルは DFlash2、ほかは MTP か内蔵の drafter）、3 回の中央値 |
+| **JB-ttft-32k** 32K を読んで最初の 1 文字まで | 32K token の入力を送ってから最初の 1 文字が届くまでの秒数。thinking off、コンテキスト 128K、3 回の中央値 |
+| **JB-answer** 考えて答える | 4 問を thinking on で解いたときの正答数（0〜4。3 回中 2 回以上正しければ正答）と、完了までの秒数の中央値。thinking のないモデルは off の値 |
+| **JB-page** 1 回で書けたページ | 3 回のうち、エラーなく描画されたページの数（0〜3） |
+| **JB-agent** エージェントに任せた結果 | 3 回のうち描画されたゲームの数（0〜3）と、完了までの秒数の中央値 |
+
+文章の種類別・temperature 別・drafter 別などの内訳は、グラフのページに全部あります。指標の定義は [catalog/metrics.json](catalog/metrics.json) に 1 行ずつあります。
+
+### エンジンとモデル
+
+| エンジン | 測り方 |
+| --- | --- |
+| **Strata** (`strata`) | 本家の Strata。`strata launch` で起動し、頼んだ設定がエンジンの引数に届いたかまで照合する。 |
+| **Sync-Strata** (`sync-strata`) | Strata のフォーク。Qwen3.8-Flash-Next を独自の量子化 Sync-XS / S / M で動かす（形式は本家と互換なし）。`sync up --api-only` で起動し、設定フォルダは run ごとに分ける。 |
+| **OpenAI-compatible endpoint (attach only)** (`endpoint`) | すでに起動してあるエンジンの URL につなぐだけ。jbench は起動も停止もしないので、起動の中身は検証できない（結果に「接続のみ」と出る）。アダプタのない派生エンジンをまず試すためのもの。 |
+
+速さと引き換えに品質が変わる設定（Sync-Strata の tail skip など）は、既定では切って測ります（`exact`）。エンジンの既定のまま測った結果（`default`）は別扱いで、混ぜません。
+
+モデルはベースモデルごとに [catalog/models/](catalog/models/) にあります: Qwen3.8-Flash-Next（28）、Tencent Hy4-Flash（3）、Thinking Machines Inkling 2 Mini（3）。tokenizer が同じモデルどうしは同じ token 数の入力になるので tok/s をそのまま比べられますが、tokenizer が違うモデルの間では参考値です。
+
+### 同じ物差しであること
+
+- 測定条件は「レシピ」という 1 つのテキストになり、その id（エンジン・設定の系統・動かし方・種目とその版の hash）が結果に付きます。
+- ケースごとにも条件の hash が付きます（プロンプトの SHA-256、コンテキスト、起動オプション、thinking、temperature、出力上限、seed）。環境をまたいで並べるのは、この hash が同じケースだけです。
+- 頼んだ設定がエンジンに届いたことを確認できなかったケースは、失敗として残します（速さの数字にしません）。
 
 ### 測り方
 
@@ -135,22 +178,28 @@
 
 ## 追試する
 
-計測は長時間かかるので、端末から切り離した見張り役のプロセスで無人で動かします（止まったケースの再起動や状態の記録もそのプロセスがします）。手順（環境の用意、preflight、開始、監視、異常時の復旧、結果の確定）は
-[AGENTS.md](AGENTS.md)（英語）に、環境の定義の書き方は [envs/README.md](envs/README.md) にあります。
+計測は長時間かかるので、端末から切り離した見張り役のプロセスで無人で動かします（止まったケースの再起動や状態の記録もそのプロセスがします）。
 
-前提として、Strata（デスクトップアプリ）を入れて一度モデルをインストールしておくことと、Strata のソースを `~/Strata` に
-置いておくことが要ります（取得するファイルとその SHA-256 はソースの `setup.py` が決めます）。ダウンロード用と NVFP4-QAD 変換用の
-Python 環境は `scripts/setup_acquire.py` が作り、`scripts/bench.py start` が自動で呼びます。
-計測の設定（RUN_ID、部門、回す Tier・モデル・ケースなど）は `bench.json` に書きます。項目と既定値は `scripts/bench.py config` で一覧できます。
+**エージェントに頼む場合**（おすすめ）: このリポをクローンして、Claude Code などのエージェントに「strata-jbench で測って」と頼みます。
+リポに同梱の [strata-jbench スキル](.claude/skills/strata-jbench/SKILL.md) が、環境の確認 → コンフィギュレータで選ぶ → 計画と足りないものの確認 → 開始 → 監視 → 結果の確認までを案内します。
+足りないエンジン・ハーネス・モデルは、「リポの中の `tools/`（Git 管理外）に取得してよいか、すでにあるなら場所はどこか」を聞いてから用意します。
+
+**手で動かす場合**:
 
 ```bash
-python3 -I scripts/envs.py list          # いまのハードウェアに合う環境
-python3 -I scripts/bench.py config        # 設定の一覧（bench.json に書いた値と既定値）
-python3 -I scripts/bench.py plan          # 選んだ範囲のケース数と見積もり時間
-python3 -I scripts/bench.py start         # 確認してから開始（見張り役が端末から切り離されて動く）
-python3 -I scripts/bench.py status        # 状況
-python3 -I scripts/bench.py stop          # 止める（同じ run_id でもう一度 start すると続きから）
+python3 -I scripts/envs.py list                  # いまのハードウェアに合う環境
+python3 -I scripts/build_configurator.py         # preview/configurator.html を作る（ブラウザで開いて選ぶ）
+python3 -I scripts/bench.py recipe --apply FILE  # コピーしたレシピを bench.json に入れる
+python3 -I scripts/bench.py plan                 # 選んだ範囲のケース数と見積もり時間
+python3 -I scripts/acquire.py check              # 足りないもの（モデル、エンジン、ハーネス）
+python3 -I scripts/bench.py start                # 確認してから開始（見張り役が端末から切り離されて動く）
+python3 -I scripts/bench.py status               # 状況
+python3 -I scripts/bench.py stop                 # 止める（同じ run_id でもう一度 start すると続きから）
 ```
+
+本家 Strata を測るには、Strata（デスクトップアプリ）を入れて一度モデルをインストールしておくことと、Strata のソースを `~/Strata` に置いておくことが要ります（取得するファイルとその SHA-256 はソースの `setup.py` が決めます）。
+手順の全体は [AGENTS.md](AGENTS.md) とスキルの [references/](.claude/skills/strata-jbench/references/)（英語）、環境の定義の書き方は [envs/README.md](envs/README.md) にあります。
+測った結果を持ち寄るときは、確定した RUN（`published/<部門>/<環境>/<RUN_ID>/`）をプルリクエストで送ってください。
 
 ## ライセンス
 
@@ -163,6 +212,7 @@ python3 -I scripts/bench.py stop          # 止める（同じ run_id でもう�
 ## 参照・謝辞
 
 - **[Strata](https://github.com/Niko1221/Strata)**（Niko1221 and the Strata contributors, MIT License）: 計測に使ったローカル LLM 推論エンジン。Tier 2 の standard-v1 も Strata 同梱のベンチです。
+- **[Sync-Strata](https://github.com/hiruhiru2005/sync-strata)**（hiruhiru2005）: Strata のフォークと、その量子化 Sync-XS / S / M。派生エンジンとして測っています。
 - **[青空文庫](https://www.aozora.gr.jp/)**: 長文の日本語5作品（夏目漱石『吾輩は猫である』、島崎藤村『破戒』、有島武郎『或る女』、太宰治『人間失格』、宮沢賢治『銀河鉄道の夜』）。
   入力・校正をしたボランティアの方々に感謝します。各作品の底本・入力・校正の記載は `prompts/long-sources.json` に残しています。
 - **[Project Gutenberg](https://www.gutenberg.org/)**: 長文の英語5作品（Melville, *Moby-Dick*; Austen, *Pride and Prejudice*; Dickens, *A Tale of Two Cities*;

@@ -5,9 +5,11 @@
 
 [日本語](README.md) | **English** | [中文](README.zh.md)
 
-Benchmark results of 18 quantized and derived Qwen3.8-Flash-Next models on the local LLM inference engine Strata, all
-measured under the same conditions. The plan, the measuring scripts and the raw records are here too, so the same
-procedure can be run again.
+A benchmark for measuring models with **the same ruler** on the local LLM inference engine [Strata](https://github.com/Niko1221/Strata) and engines derived from it, and its results.
+Fixed prompts are sent under fixed conditions; speed, waits, correctness and the pages written are recorded. The plan, the measuring scripts and the raw records are here too, so anyone can measure the same way.
+
+- **What to choose for which number, and how long it takes**: [the configurator](https://jun76.github.io/strata-jbench/configurator/) (pick in the browser; it writes the conditions as one text, the "recipe")
+- **Measuring on your own PC**: clone this repository and ask an agent (Claude Code, say) to "measure with strata-jbench". The procedure is the [skill](.claude/skills/strata-jbench/SKILL.md) that comes with it ([Running it again](#running-it-again))
 
 Everything published so far is the **plain division** (no harness): the models and the engine themselves, with no agent
 harness in between.
@@ -61,19 +63,58 @@ The charts and the case lists show the results of every run measured up to that 
 
 ## What is measured
 
-The plain division is measured in Tiers. The cases are defined in [scripts/case_plan.py](scripts/case_plan.py) and the models in [catalog/](catalog/README.md);
-"Cases" in the table above shows each case's conditions.
+One run measures **one engine** (Strata, a derived engine, or an engine already running) on **one environment** (that PC's hardware) for the **models** and **tasks** chosen.
 
-| Tier | What it looks at | Models |
+### Tasks
+
+| Task | What it answers | What is sent |
 | --- | --- | --- |
-| 0 | Whether the measurement itself is right, and how much it varies | Some |
-| 1 | Each model's plain speed (prefill and decode, by kind of text, by temperature, by drafter) | All |
-| 2 | Speed and sanity answers on standard-v1, the benchmark that ships with Strata | All |
-| 3 | How thinking changes the time to answer, the answers and a coding task | All |
-| 4 | The cost of reserving context (4a) and reading real long documents (4b–4d, to 1M tokens) | 4a all, 4b–4d representative ones |
-| 5 | Changing one launch option at a time (automatic tuning included) | 3 representative ones |
+| **Writing speed**<br>`speed-decode` | How fast does it write? | Five short instructions (Japanese prose, English prose, JSON, Python code, copying a given text), up to 512 output tokens, at temperature 0 / 0.7 / 1.0, thinking off, 3 times each. Models that have DFlash2 are measured once more with it |
+| **Reading speed**<br>`speed-prefill` | How fast does it read a long input, and how long until the first character? | A fixed list of records cut to exactly 4K / 32K / 128,000 tokens (built as Strata's standard-v1 builds its own), up to 128 output tokens, temperature 0.7, thinking off, 3 times each |
+| **Strata's own standard benchmark**<br>`official-standard` | What does Strata's standard benchmark (standard-v1) give? | strata bench run --suite standard-v1 as it is, 3 times (thinking xhigh, temperature 1.0, 9 performance requests + 12 sanity checks). Its fixtures are sized with the Qwen3.8 tokenizer; on another base model the token counts differ |
+| **Thinking and answering**<br>`think-qa` | What does thinking do to the time to an answer, and to getting it right? | Four tasks whose answers are checked automatically (math, code judged by running its tests, reasoning in Japanese, reasoning in English), with thinking off and on (xhigh), up to 16,384 output tokens, temperature 1.0, 3 times each. A model without thinking: off only |
+| **A page from one request**<br>`code-oneshot` | Can it write a working page from one request? | An English request for the scene "A sailing ship calling at a harbor" as 3D voxel art in one HTML file. Thinking 64K, output up to the whole 128K window, temperature 1.0, 3 times. Each page runs 10 s in headless Chrome; its errors, whether it froze and whether anything was drawn are recorded |
+| **The cost of reserving context**<br>`context-reserve` | Does reserving a larger context alone make it slower? | Launched with a 128K / 256K / 1M context, the same 4K input + 512 output 3 times. Whether it starts at 1M at all shows here too |
+| **Reading long documents**<br>`long-read` | Given a really long document, how fast is it and does it answer right? (up to 1M tokens) | A document made of ten works from Aozora Bunko and Project Gutenberg (Japanese and English) at 32K / 128K / 256K (trained range) and 512K / 1M (extended). One question per fact planted at 10% / 50% / 90%, then one that needs several places. 3 times each. Representative models only |
+| **The effect of YaRN**<br>`yarn-check` | Does the setting for going past the trained length (YaRN) change the result on the same input? | About 300K of input at a 384K context with and without YaRN, and about 200K at 256K and at 1M. The reference model only |
+| **What launch options do**<br>`launch-options` | Which launch options matter? | One change at a time from the baseline launch (drafter, draft depth, KV format, prefill chunk, VRAM reserve, vision, CPU assignment, where the PLE table lives, parallel slots, auto tune), two writing and two reading cases 3 times each. Representative models only |
+| **Checking the instruments**<br>`selfcheck` | Are the measurements right, and how much do they vary between launches? | Writing and reading speed on the reference model over 3 separate launches; Gyro-S under its author's published protocol against the published figures; the coding task once, to check that the page is extracted. Once per environment |
+| **Handing it to an agent**<br>`agent-oneshot` | Handed to an agent harness in one shot, how long does it take and what comes out? | "Make a Minecraft-like 3D sandbox game" (in Japanese), handed to the harness in one shot with no format instructions. Thinking 32K, output up to the whole window, 3,600 s per run, 3 times. A recording proxy sets sampling, thinking, seed and the output cap alike for every harness |
 
-The "Tier" column of the table above says which Tiers each run has.
+Presets bundle the tasks: `quick` (the two headline speed numbers, minutes), `standard` (writing, reading, thinking and answering, a page from one request), `full` (everything).
+Which cases a task has, and each case's conditions, are in the case lists linked above (a Tier is a task's earlier name; the lists and the charts still show both). They are defined in [catalog/tasks.json](catalog/tasks.json) and [scripts/case_plan.py](scripts/case_plan.py).
+
+### Headline numbers
+
+The numbers shown first are each read from **one fixed condition**. A summary over several kinds of cases (a mean, a median of medians) is never a headline.
+
+| Name | Definition |
+| --- | --- |
+| **JB-decode** Writing speed | decode tok/s writing English prose: temperature 0.7, thinking off, context 128K, the drafter the engine picks by itself (Strata's Auto: DFlash2 where the model has it, else MTP or the build's own), median of 3 runs |
+| **JB-ttft-32k** First character after reading 32K | Seconds from sending a 32K-token input to the first character: thinking off, context 128K, median of 3 runs |
+| **JB-answer** Thinking and answering | Tasks answered right out of 4 with thinking on (right when at least 2 of 3 runs are), and the median seconds to the end. A model without thinking: its thinking-off values |
+| **JB-page** Pages from one request | Of 3 runs, the pages that were drawn without an error (0 to 3) |
+| **JB-agent** Handed to an agent | Of 3 runs, the games that were drawn (0 to 3), and the median seconds to the end |
+
+The breakdowns (by kind of text, temperature, drafter and so on) are all on the chart pages. Every metric is defined in one line in [catalog/metrics.json](catalog/metrics.json).
+
+### Engines and models
+
+| Engine | How it is measured |
+| --- | --- |
+| **Strata** (`strata`) | Strata itself. Started with `strata launch`; the choices asked for are checked against the engine's own command line. |
+| **Sync-Strata** (`sync-strata`) | A fork of Strata that runs Qwen3.8-Flash-Next in its own quantizations Sync-XS / S / M (formats not compatible with upstream). Started with `sync up --api-only`, with a settings folder of its own per run. |
+| **OpenAI-compatible endpoint (attach only)** (`endpoint`) | Attach to the URL of an engine that is already running. jbench neither starts nor stops it, so how it was started cannot be checked (the results say "attach only"). For a first try of an engine that has no adapter. |
+
+A setting that trades quality for speed (Sync-Strata's tail skip, say) is off by default (`exact`). Results with the engine as it comes (`default`) are kept apart and never mixed in.
+
+The models are in [catalog/models/](catalog/models/), one file per base model: Qwen3.8-Flash-Next (28 builds), Tencent Hy4-Flash (3 builds), Thinking Machines Inkling 2 Mini (3 builds). Models with the same tokenizer get the same number of input tokens, so their tok/s compare directly; across tokenizers they are a reference only.
+
+### The same ruler
+
+- What a run measures is one text, the recipe; its id (a hash of the engine, the track, the driver and the tasks with their versions) goes with the results.
+- Every case also carries the hash of its own conditions (the prompt's SHA-256, the context, the launch options, thinking, the temperature, the output cap, the seeds). Only cases with the same hash are put side by side across environments.
+- A case whose settings could not be confirmed on the engine is kept as a failure, never as a speed.
 
 ### How it is measured
 
@@ -143,25 +184,28 @@ process detached from the terminal (`scripts/supervise.py`) and its children are
 
 ## Running it again
 
-The measurement takes a long time, so it runs unattended under a supervisor process detached from the terminal
-(which also restarts a runner that fails or hangs, and records the state). The procedure (preparing an
-environment, preflight, starting, watching, recovering, making a run final) is in [AGENTS.md](AGENTS.md),
-and how to write an environment in [envs/README.md](envs/README.md).
+A run takes hours, so it runs unattended under a supervisor process detached from the terminal (which also restarts a stuck case and records the state).
 
-It needs Strata (the desktop app) installed, with one model installed once, and Strata's source in `~/Strata` (its
-`setup.py` pins the files fetched and their SHA-256). The Python environments for downloading and for the NVFP4-QAD
-conversion are made by `scripts/setup_acquire.py`, which `scripts/bench.py start` runs by itself. The settings (the
-RUN_ID, the division, the Tiers, models and cases to run, and so on) go in `bench.json`; `scripts/bench.py config` lists
-every one with its default.
+**With an agent** (recommended): clone this repository and ask an agent such as Claude Code to "measure with strata-jbench".
+The [strata-jbench skill](.claude/skills/strata-jbench/SKILL.md) in the repository takes it from checking the environment, through choosing in the configurator, the plan and what is missing, to starting, watching and checking the results.
+For an engine, a harness or a model that is missing it asks first: may it be fetched into `tools/` inside the repository (not in Git), or is it on the PC already, and where.
+
+**By hand**:
 
 ```bash
-python3 -I scripts/envs.py list          # the environment this hardware matches
-python3 -I scripts/bench.py config        # every setting (bench.json's values and the defaults)
-python3 -I scripts/bench.py plan          # the cases chosen and the estimated hours
-python3 -I scripts/bench.py start         # check, then start (the supervisor runs detached)
-python3 -I scripts/bench.py status        # how it is going
-python3 -I scripts/bench.py stop          # stop it (start again with the same run_id resumes)
+python3 -I scripts/envs.py list                  # the environment this hardware matches
+python3 -I scripts/build_configurator.py         # writes preview/configurator.html (open it and choose)
+python3 -I scripts/bench.py recipe --apply FILE  # the recipe you copied, into bench.json
+python3 -I scripts/bench.py plan                 # the cases chosen and the estimated hours
+python3 -I scripts/acquire.py check              # what is missing (models, the engine, a harness)
+python3 -I scripts/bench.py start                # checks, then starts (the supervisor runs detached)
+python3 -I scripts/bench.py status               # how it is going
+python3 -I scripts/bench.py stop                 # stop (start again with the same run_id to resume)
 ```
+
+Measuring Strata itself needs Strata (the desktop app) installed with one model installed through it once, and Strata's source checked out at `~/Strata` (its `setup.py` pins the files fetched and their SHA-256).
+The whole procedure is in [AGENTS.md](AGENTS.md) and the skill's [references/](.claude/skills/strata-jbench/references/); how to write an environment is in [envs/README.md](envs/README.md).
+To offer results you measured, send the run made final (`published/<division>/<env>/<RUN_ID>/`) as a pull request.
 
 ## License
 
@@ -177,6 +221,7 @@ python3 -I scripts/bench.py stop          # stop it (start again with the same r
 
 - **[Strata](https://github.com/Niko1221/Strata)** (Niko1221 and the Strata contributors, MIT License): the local LLM
   inference engine measured here. Tier 2's standard-v1 is the benchmark that ships with it.
+- **[Sync-Strata](https://github.com/hiruhiru2005/sync-strata)** (hiruhiru2005): a fork of Strata with its own quantizations Sync-XS / S / M, measured here as a derived engine.
 - **[Aozora Bunko](https://www.aozora.gr.jp/)**: the five Japanese works of the long document (Natsume Sōseki, *I Am a
   Cat*; Shimazaki Tōson, *The Broken Commandment*; Arishima Takeo, *A Certain Woman*; Dazai Osamu, *No Longer Human*;
   Miyazawa Kenji, *Night on the Galactic Railroad*). Thanks to the volunteers who typed and proofread them; each work's
