@@ -62,6 +62,8 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:now
 .models input{width:16px;height:16px;accent-color:var(--acc);vertical-align:middle;margin:0}
 .models tr.base td{background:var(--soft);font-weight:600;font-size:13px;color:var(--mute);padding:8px 12px}
 .models tr.dis{opacity:.45}
+.models tr.head th{font-size:12.5px;font-weight:600;color:var(--mute);line-height:1.5;padding:10px 12px;white-space:normal}
+.models td.num .tag{min-width:52px;text-align:center}
 .models label{display:block;font-weight:600}
 .models .small{display:block;margin-top:1px}
 label{cursor:pointer}
@@ -157,7 +159,8 @@ const TXT = {
   models: ['モデル', 'Models', '模型'],
   lmodels: ['測るモデルです。サイズと、この環境の RAM + VRAM の合計に対する割合を添えています。割合は大きさの目安で、100% を超えても遅くなるとは限りません。実際の速さは計測結果で確かめてください。', 'The models to measure, with their size and its share of this environment\'s RAM + VRAM together. The share only says how large a model is here: past 100% is not necessarily slow. The measured results say how fast it is.', '要测量的模型，附大小及其占该环境 RAM + VRAM 总和的比例。该比例只表示模型在此环境下有多大，超过 100% 也不一定慢，实际速度请看测量结果。'],
   all: ['すべて', 'All', '全选'], none: ['なし', 'None', '清空'],
-  mem: ['RAM + VRAM の {p}%', '{p}% of RAM + VRAM', 'RAM + VRAM 的 {p}%'],
+  colmodel: ['モデル', 'Model', '模型'], colsize: ['ファイルサイズ', 'File size', '文件大小'],
+  colmem: ['RAM + VRAM 容量に占める割合', 'Share of RAM + VRAM', '占 RAM + VRAM 容量的比例'],
   notfor: ['このエンジンでは動かない', 'not for this engine', '该引擎不支持'],
   one: ['接続のみのエンジンでは、読み込み済みのモデルを 1 つだけ選びます。', 'Attach only: pick the one model that is loaded.', '仅连接时只选择已加载的那一个模型。'],
   tasks: ['種目', 'Tasks', '项目'],
@@ -331,7 +334,7 @@ function draw() {
     el('button', {class: 'btn', onclick: () => { S.models = engine().managed ? new Set(here) : new Set([...here].slice(0, 1)); draw(); }}, t('all')),
     el('button', {class: 'btn', onclick: () => { S.models.clear(); draw(); }}, t('none')),
     el('span', {class: 'small'}, engine().managed ? '' : t('one')));
-  const body = [];
+  const body = [el('tr', {class: 'head'}, el('th', {}, ''), el('th', {}, t('colmodel')), el('th', {class: 'num'}, t('colsize')), el('th', {class: 'num'}, t('colmem')))];
   for (const b of D.bases) {
     body.push(el('tr', {class: 'base'}, el('td', {colspan: 4}, `${b.label}  ·  tokenizer ${b.tokenizer}${b.thinking ? '' : '  ·  thinking off only'}`)));
     for (const x of b.builds) {
@@ -341,7 +344,7 @@ function draw() {
           onchange: ev => { if (!engine().managed) S.models.clear(); if (ev.target.checked) S.models.add(k); else S.models.delete(k); draw(); }})),
         el('td', {}, el('label', {for: 'm-' + k}, `${x.family} ${x.display || x.model}`), el('span', {class: 'small'}, (D.i18n_roles?.[x.role]?.[S.lang]) || x.role)),
         el('td', {class: 'num'}, x.size_gb.toFixed(1) + ' GB'),
-        el('td', {}, ok ? (memGb ? el('span', {class: 'tag'}, t('mem', {p: Math.round(100 * x.size_gb / memGb)})) : '') : el('span', {class: 'small'}, t('notfor')))));
+        el('td', {class: 'num'}, ok ? (memGb ? el('span', {class: 'tag ' + (x.size_gb < memGb ? 'g' : 'w')}, Math.round(100 * x.size_gb / memGb) + '%') : '') : el('span', {class: 'small'}, t('notfor')))));
     }
   }
   $('models').replaceChildren(el('div', {class: 'tablewrap'}, el('table', {class: 'models'}, body)));
