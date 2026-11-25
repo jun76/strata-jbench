@@ -14,7 +14,7 @@ LANGS = [('ja', '日本語'), ('en', 'English'), ('zh', '中文')]
 
 # Japanese data string -> (English, Chinese)
 TR = {
-    # model roles (build_cases.MODELS)
+    # model roles (catalog/models, case_plan.MODELS)
     '元重みの量子化 (ISTA)': ('quantized from the original weights (ISTA)', '原始权重量化（ISTA）'),
     '元重みの量子化 (ISTA)、基準モデル': ('quantized from the original weights (ISTA), the reference model',
                                     '原始权重量化（ISTA），基准模型'),

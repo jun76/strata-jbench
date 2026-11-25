@@ -97,13 +97,13 @@ def chosen(cfg, env_id):
 
 
 def estimate(env_id, rows):
-    """Hours per Tier for these rows, as scripts/build_cases.py estimates the plan (requests and engine launches)."""
+    """Hours per Tier for these rows, as scripts/case_plan.py estimates the plan (requests and engine launches)."""
     import contextlib
     import io
-    import build_cases
+    import case_plan
     with contextlib.redirect_stderr(io.StringIO()):
-        build_cases.use_env(envs.load(env_id))
-    return build_cases.estimate(rows)
+        case_plan.use_env(envs.load(env_id))
+    return case_plan.estimate(rows)
 
 
 def cmd_plan(a):

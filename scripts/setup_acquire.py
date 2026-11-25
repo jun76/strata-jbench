@@ -113,10 +113,10 @@ def make_qad_root(source, rebuild):
 
 def env_choices():
     """(family, model) of every model this environment measures: env.json "models", else every model of the plan."""
-    import build_cases
+    import case_plan
     import envs
-    build_cases.use_env(envs.load(envs.current()))
-    return [(f, m) for f, m, *_ in build_cases.env_models()]
+    case_plan.use_env(envs.load(envs.current()))
+    return [(f, m) for f, m, *_ in case_plan.env_models()]
 
 
 def main():

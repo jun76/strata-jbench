@@ -57,7 +57,7 @@
 
 ## 测量了什么
 
-纯模型部门的测量分为若干层级（Tier）。用例定义在 [scripts/build_cases.py](scripts/build_cases.py)，各用例的条件可在上表的“用例一览”中查看。
+纯模型部门的测量分为若干层级（Tier）。用例定义在 [scripts/case_plan.py](scripts/case_plan.py)，模型列表在 [catalog/](catalog/README.md)，各用例的条件可在上表的“用例一览”中查看。
 
 | Tier | 看什么 | 对象 |
 | --- | --- | --- |

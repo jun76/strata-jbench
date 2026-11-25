@@ -19,6 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
+import case_plan  # noqa: E402
 import envs  # noqa: E402
 import overnight  # noqa: E402  (paths and model completeness of the acquisition phase)
 
@@ -110,7 +111,7 @@ def bench_checks(steps, env_id):
     install = Path.home() / '.local/share/strata/install'
     off = []
     for fam, model in models:
-        if fam in build_cases.OWN_DRAFTER:   # its own drafter (DFly2, DSpark: catalog "drafter"), no MTP layer
+        if fam in case_plan.OWN_DRAFTER:   # its own drafter (DFly2, DSpark: catalog "drafter"), no MTP layer
             continue
         conf = install / f'strata-{model.lower() if fam == "qwen" else f"{fam}-{model.lower()}"}.json'
         try:
@@ -199,8 +200,7 @@ def smoke(env_id):
 
 
 def overnight_models():
-    import build_cases
-    return build_cases.MODELS
+    return case_plan.MODELS
 
 
 def main():

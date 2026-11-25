@@ -31,8 +31,8 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import build_cases  # noqa: E402
-from build_cases import display_model as dm  # noqa: E402
+import case_plan  # noqa: E402
+from case_plan import display_model as dm  # noqa: E402
 import envs  # noqa: E402
 import i18n  # noqa: E402
 import machine_info  # noqa: E402
@@ -272,9 +272,9 @@ def artifacts(case, rel, per_request=None):
 
 def collect_env(cfg, run_id, published_only, rel=''):
     env_id = cfg['id']
-    plan = build_cases.build(cfg)
+    plan = case_plan.build(cfg)
     found = summaries(env_id, run_id, published_only)
-    rows = plan + build_cases.measured_rows(cfg, plan, set(found))   # models no longer measured keep their results
+    rows = plan + case_plan.measured_rows(cfg, plan, set(found))   # models no longer measured keep their results
     runs = sorted({run for run, _ in found.values()}, key=lambda d: d.name)
     per_run = {}
     for d in runs:
@@ -313,8 +313,8 @@ def collect_env(cfg, run_id, published_only, rel=''):
     # Every model in every environment and chart: which ones an environment measures is the measurer's choice (a disk
     # too small for some), not a property of the environment, so a model it has no value for reads "not measured".
     models = [{'key': f'{f} {dm(f, m)}', 'family': f, 'model': dm(f, m), 'gb': gb, 'role': role,
-               'derivative': (f, m) in build_cases.DERIVATIVE, 'ref': (f, m) == build_cases.REF}
-              for f, m, gb, role in build_cases.MODELS]
+               'derivative': (f, m) in case_plan.DERIVATIVE, 'ref': (f, m) == case_plan.REF}
+              for f, m, gb, role in case_plan.MODELS]
     planned = {}
     for r in plan:
         planned.setdefault(r['step'], set()).add(f'{r["family"]} {dm(r["family"], r["model"])}')
@@ -324,7 +324,7 @@ def collect_env(cfg, run_id, published_only, rel=''):
                                  for k, v in planned.items()},
            'dflash2_models': sorted({f'{r["family"]} {dm(r["family"], r["model"])}' for r in rows if r['config'] == 'drafter=DFlash2'}),
            'noise_pct': {k: restart_noise(found, k) for k in ('decode', 'prefill')}}
-    env['ref'] = ' '.join(build_cases.REF) if build_cases.REF else None   # this environment's (build_cases.use_env)
+    env['ref'] = ' '.join(case_plan.REF) if case_plan.REF else None   # this environment's (case_plan.use_env)
     env['_rows'], env['_found'] = rows, found
     return env, cases
 

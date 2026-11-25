@@ -37,7 +37,7 @@ RUN_ID, the division, the Tiers, models and cases chosen, whether to fetch what 
 restarts. It holds only what differs from the defaults; every key, its default and what it does are in
 `scripts/config.py`, listed by `python3 -I scripts/bench.py config`. The run keeps the settings it started with in its
 folder (`bench.json`, the defaults filled in; `bench-starts.jsonl`, one line per start), published with it. What makes
-results comparable is not a setting: the cases are the plan (`scripts/build_cases.py`), and the hardware and the
+results comparable is not a setting: the cases are the plan (`scripts/case_plan.py`, over the catalog in `catalog/`), and the hardware and the
 measurer's choices per environment are its env.json.
 
 **Working and published:** measurements are written to `results/` (not in Git), and only the RUN_IDs made final are
@@ -105,10 +105,10 @@ the NVFP4 ready-made packs need Strata's setup once with `--no-start` to write t
      source's `setup.py`). Strata's recommendation is the only grounds jbench uses: to try another model as the
      reference, change `ref` (when `models` leaves the recommended one out, Tiers 0 and 4d stay out of the plan until
      `ref` names a measured model). The representatives are chosen from the environment's models by role (the reference,
-     the largest, the smallest, the largest of each family: file sizes only), not by name (`scripts/build_cases.py`
+     the largest, the smallest, the largest of each family: file sizes only), not by name (`scripts/case_plan.py`
      `representatives`)
    - `models`: the list (in the form `"qwen IQ3_S"`) to measure only some models; `null` for every model of
-     `scripts/build_cases.py` (including models added later). The downloads follow it too: `scripts/setup_acquire.py`
+     the catalog (`catalog/models/`, including models added later). The downloads follow it too: `scripts/setup_acquire.py`
      lists only these models in `downloads/manifest.json`, and writes it again (removing `downloads/READY`) when it changes
 3. The GPU power-limit unit `gpu-power-limit.service` is fixed at 500 W (for the RTX 5090). On another card, ask the
    user to disable it (`sudo systemctl disable --now gpu-power-limit.service`) or change the value (it is a system
@@ -148,7 +148,9 @@ the user's call); the pinned version goes into `tools/harness/` beside it. Nothi
 (1.8): `acquire.py fetch` refuses while the queue of the run started last is alive.
 
 ### 2.1 When the plan changes
-1. Edit `scripts/build_cases.py` (the only place cases are defined; differences between environments go in env.json).
+1. Edit `scripts/case_plan.py` (the only place cases are defined; differences between environments go in env.json).
+   A model or a base model is added in the catalog instead (`catalog/models/<base>.json`, [catalog/README.md](catalog/README.md));
+   `python3 -I scripts/catalog.py` checks it, the tasks and the headline numbers (`catalog/tasks.json`, `metrics.json`) included.
 2. Run `python3 -I scripts/build_cases.py` and check the number of cases and the estimated hours per environment.
    `preview/cases/` and `plan/<division>/<env>/cases.jsonl` are updated (`--published` for the committed `cases/`).
    The case lists have a Markdown file per language (`README.md`, `README.en.md`, `README.zh.md`, `tier-<Tier>.md`
@@ -175,8 +177,8 @@ the user's call); the pinned version goes into `tools/harness/` beside it. Nothi
    in the lists or the pages (the history goes in docs/SCOUTING.md and the commit message).
    A model is another matter: one left out of env.json `models` (its files replaced, a disk too small) keeps its
    results on the pages and in the lists, for every case the plan builder still makes the same way
-   (`build_cases.measured_rows`); only the plan and the estimate follow `models`. The charts list every model of
-   `build_cases.py` in every environment, the same set everywhere: which models an environment measures is the
+   (`case_plan.measured_rows`); only the plan and the estimate follow `models`. The charts list every model of
+   the catalog in every environment, the same set everywhere: which models an environment measures is the
    measurer's choice (a disk too small for some), so a model with no value reads "not measured".
 
 ### 2.2 Settings and checks before starting (do not start until these pass)

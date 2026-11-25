@@ -25,7 +25,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
-import build_cases  # noqa: E402
+import case_plan  # noqa: E402
 import envs  # noqa: E402
 import overnight  # noqa: E402
 
@@ -112,9 +112,9 @@ def main():
     env_id = envs.current(a.env)
     cfg = envs.load(env_id)
     card = envs.gpu_index(cfg)
-    build_cases.use_env(cfg)
+    case_plan.use_env(cfg)
     failed = []
-    for fam, model, *_ in build_cases.env_models():
+    for fam, model, *_ in case_plan.env_models():
         if not overnight.model_complete(fam, model):
             print(f'{fam} {model}: files not all on disk yet; skipped', flush=True)
             continue

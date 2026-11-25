@@ -58,7 +58,7 @@
 
 ## 何を測ったか
 
-プレーン部門の計測は段階（Tier）に分けています。ケースの定義は [scripts/build_cases.py](scripts/build_cases.py) にあり、各ケースの条件は上の表の「ケース一覧」で見られます。
+プレーン部門の計測は段階（Tier）に分けています。ケースの定義は [scripts/case_plan.py](scripts/case_plan.py)、モデルの一覧は [catalog/](catalog/README.md) にあり、各ケースの条件は上の表の「ケース一覧」で見られます。
 
 | Tier | 何を見るか | 対象 |
 | --- | --- | --- |

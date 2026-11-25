@@ -60,7 +60,7 @@ The charts and the case lists show the results of every run measured up to that 
 
 ## What is measured
 
-The plain division is measured in Tiers. The cases are defined in [scripts/build_cases.py](scripts/build_cases.py);
+The plain division is measured in Tiers. The cases are defined in [scripts/case_plan.py](scripts/case_plan.py) and the models in [catalog/](catalog/README.md);
 "Cases" in the table above shows each case's conditions.
 
 | Tier | What it looks at | Models |

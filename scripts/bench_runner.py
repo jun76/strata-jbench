@@ -609,7 +609,7 @@ def launch_args(row):
     # --mtp on makes such a setup write it back on; a launch that runs no setup cannot, so preflight checks the installed
     # configs and start_session checks that the layer loaded.
     # A family with a drafter of its own (Hy4-Flash: DFly2, Inkling-2-Mini: DSpark, built into its builds) has no MTP layer: it starts with its
-    # own, Strata's default for it (build_cases.OWN_DRAFTER), and only Tier 5's --drafting off changes that.
+    # own, Strata's default for it (case_plan.OWN_DRAFTER), and only Tier 5's --drafting off changes that.
     if '--drafting' not in opts and row['family'] not in OWN_DRAFTER:
         args += ['--drafting', 'mtp', '--mtp', 'on']
     return args + shlex.split(opts)
