@@ -139,19 +139,24 @@ def get(key):
     return load().get(key)
 
 
+def of_engine(engine_id):
+    """The test a plan row passes when this engine can be asked it. An engine jbench starts itself: the rows made for
+    it. An attach-only engine: jbench cannot start it again, so the cases of one start at the usual context, whatever
+    engine the build is listed under (the user says which model is loaded: "models")."""
+    import engines
+    e = engines.entry(engine_id or engines.DEFAULT)
+    if e['managed']:
+        return lambda r: r.get('engine', engines.DEFAULT) == e['id']
+    return lambda r: (r['step'] in e['steps'] and not r['launch_opts'] and r['context'] == 131072 and r['restarts'] == 1
+                      and r.get('engine', engines.DEFAULT) == engines.DEFAULT)
+
+
 def select(rows, cfg):
     """The plan's rows the settings choose, in the order of "tiers"."""
     tiers = cfg.get('tiers')
     models = set(cfg.get('models') or [])
     cases = set(cfg.get('cases') or [])
-    import engines
-    e = engines.entry(cfg.get('engine') or engines.DEFAULT)
-    if e['managed']:
-        mine = lambda r: r.get('engine', engines.DEFAULT) == e['id']  # noqa: E731
-    else:
-        # attach only: jbench cannot start the engine again, so the cases of one start at the usual context, whatever
-        # engine the build is listed under (the user says which model is loaded: "models")
-        mine = lambda r: r['step'] in e['steps'] and not r['launch_opts'] and r['context'] == 131072 and r['restarts'] == 1  # noqa: E731
+    mine = of_engine(cfg.get('engine'))
     import catalog
     out = [r for r in rows if (not tiers or r['step'] in tiers) and (not models or f'{r["family"]} {r["model"]}' in models)
            and (not cases or r['id'] in cases) and mine(r)]

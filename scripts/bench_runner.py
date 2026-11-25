@@ -984,8 +984,9 @@ def main():
     rows = [json.loads(l) for l in (envs.plan_dir(env_id) / 'cases.jsonl').read_text().splitlines()]
     settings = config.load()
     engine_id = a.engine or settings.get('engine') or engines.DEFAULT
+    mine = config.of_engine(engine_id)
     rows = [r for r in rows if r['step'] in steps and (not models or (r['family'], r['model']) in models)
-            and (not ids or r['id'] in ids) and r.get('engine', engines.DEFAULT) == engine_id]
+            and (not ids or r['id'] in ids) and mine(r)]
     if os.environ.get('BENCH_CONFIG'):
         # under the supervisor: the run's own settings narrow the cases further (a preset, tasks); by hand, the
         # arguments alone choose
