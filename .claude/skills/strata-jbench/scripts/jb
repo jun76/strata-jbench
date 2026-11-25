@@ -1,0 +1,26 @@
+#!/bin/bash
+# strata-jbench: the repository's scripts by short names, from any working directory (SKILL.md lists them).
+set -u
+ROOT=$(cd "$(dirname "$(readlink -f "$0")")/../../../.." && pwd)
+cd "$ROOT" || exit 1
+PY="python3 -I"
+cmd=${1:-where}; [ $# -gt 0 ] && shift
+case "$cmd" in
+  where)
+    echo "repository: $ROOT"
+    echo "--- environments (* = this hardware)"; $PY scripts/envs.py list
+    echo "--- engines"; $PY scripts/catalog.py | grep '^engine '
+    echo "--- what is used on this PC (tools/provision.json)"; $PY scripts/provision.py | head -40
+    echo "--- bench.json as a recipe"; $PY scripts/bench.py recipe
+    echo "--- run"; $PY scripts/bench.py status 2>&1 | head -12 ;;
+  configure)
+    $PY scripts/build_configurator.py "$@" || exit 1
+    if [ "${1:-}" = "--published" ]; then echo "open: $ROOT/configurator/index.html"
+    else echo "open: $ROOT/preview/configurator.html   (or http://localhost:8765/preview/configurator.html with the \"pages\" preview server)"; fi ;;
+  recipe)  $PY scripts/bench.py recipe "$@" ;;
+  config|plan|start|status|stop) $PY scripts/bench.py "$cmd" "$@" ;;
+  check)   $PY scripts/acquire.py check "$@" ;;
+  catalog) $PY scripts/catalog.py "$@" ;;
+  pages)   $PY scripts/build_cases.py && $PY scripts/build_results.py && $PY scripts/build_configurator.py ;;
+  *) echo "jb: where | configure | recipe [--apply FILE] | config | plan | check | catalog | start | status | stop | pages" >&2; exit 2 ;;
+esac
