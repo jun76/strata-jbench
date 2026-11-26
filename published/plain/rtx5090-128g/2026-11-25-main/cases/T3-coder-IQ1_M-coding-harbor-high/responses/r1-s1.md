@@ -1,0 +1,481 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Voxel Harbor: Sailing Ship Calling at Harbor</title>
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    #hint {
+      position: fixed;
+      left: 16px;
+      top: 16px;
+      font-family: system-ui, sans-serif;
+      font-size: 13px;
+      color: rgba(255,255,255,0.9);
+      background: rgba(0,0,0,0.35);
+      padding: 6px 8px;
+      border-radius: 6px;
+      pointer-events: none;
+    }
+  </style>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="hint">Drag with mouse to orbit · Scroll to zoom</div>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x86c3dc);
+    scene.fog = new THREE.Fog(0x86c3dc, 90, 260);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
+
+    const camera = new THREE.PerspectiveCamera(
+      55,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      350
+    );
+    camera.position.set(-45, 34, -18);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(2, 7, 0);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = 12;
+    controls.maxDistance = 190;
+    controls.maxPolarAngle = Math.PI * 0.49;
+
+    function resize() {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      renderer.setSize(w, h);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+    resize();
+    window.addEventListener("resize", resize);
+
+    // Lights
+    const ambient = new THREE.AmbientLight(0xffffff, 0.16);
+    scene.add(ambient);
+
+    const hemi = new THREE.HemisphereLight(0xbcd7ff, 0x6b6255, 0.72);
+    scene.add(hemi);
+
+    const sun = new THREE.DirectionalLight(0xfff2d7, 1.25);
+    sun.position.set(-32, 50, -20);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -80;
+    sun.shadow.camera.right = 80;
+    sun.shadow.camera.top = 80;
+    sun.shadow.camera.bottom = -80;
+    sun.shadow.camera.near = 1;
+    sun.shadow.camera.far = 200;
+    sun.shadow.bias = -0.001;
+    scene.add(sun);
+
+    // Voxel builder
+    const staticPositions = [];
+    const staticColors = [];
+
+    function addVoxel(x, y, z, color) {
+      staticPositions.push(new THREE.Vector3(x, y, z));
+      staticColors.push(new THREE.Color(color));
+    }
+
+    function addBox(x0, y0, z0, sx, sy, sz, color) {
+      for (let x = 0; x < sx; x++) {
+        for (let y = 0; y < sy; y++) {
+          for (let z = 0; z < sz; z++) {
+            addVoxel(x0 + x, y0 + y, z0 + z, color);
+          }
+        }
+      }
+    }
+
+    function addSail(x0, z0, y0, sx, sy, stripeColor) {
+      const canvas = 0xf2ead8;
+      for (let y = 0; y < sy; y++) {
+        const c = y % 2 === 0 ? canvas : stripeColor;
+        addBox(x0, y0 + y, z0, sx, 1, 1, c);
+      }
+    }
+
+    function addMast(x, z, topY) {
+      for (let y = 5; y <= topY; y++) addVoxel(x, y, z, 0x583a24);
+    }
+
+    function addYard(mastX, z, y, x0, x1) {
+      for (let x = x0; x <= x1; x++) {
+        if (x !== mastX) addVoxel(x, y, z, 0x8a613c);
+      }
+    }
+
+    // Palette
+    const STONE = 0x97907b;
+    const STONE_DARK = 0x6e665c;
+    const STONE_LIGHT = 0xb4ac97;
+    const WOOD = 0x8a613c;
+    const WOOD_DARK = 0x583a24;
+    const HULL = 0x8f6745;
+    const HULL_DARK = 0x5d412b;
+    const DECK = 0xb28558;
+    const CANVAS = 0xf2ead8;
+    const CANVAS_STRIPE = 0xc45c4d;
+    const METAL = 0x8f98a2;
+    const RED = 0xc7513f;
+    const BLUE = 0x3f7a9c;
+    const YELLOW = 0xd4ae55;
+    const DARK = 0x272c30;
+    const GREEN = 0x48774a;
+    const CYAN = 0x7fd9e8;
+    const WHITE = 0xf4f0e6;
+
+    // ------------------------------------------------------------------
+    // Harbor
+    // ------------------------------------------------------------------
+
+    // Main wharf/quay
+    addBox(11, 0, -24, 24, 4, 49, STONE_DARK); // under quay
+    addBox(11, 4, -24, 24, 1, 49, STONE_LIGHT); // quay top
+    addBox(10, 0, -24, 1, 5, 49, STONE_DARK);   // quay edge wall
+
+    // Fenders on quay side
+    for (let z = -20; z <= 20; z += 4) {
+      addBox(9, 1, z, 1, 3, 1, WOOD_DARK);
+    }
+
+    // Bollards
+    for (let z = -18; z <= 18; z += 6) {
+      addBox(11, 5, z, 1, 2, 1, DARK);
+    }
+
+    // Gangplank
+    addBox(8, 4, -1, 2, 1, 3, DECK);
+    addVoxel(9, 5, -1, WOOD_DARK);
+    addVoxel(9, 5, 1, WOOD_DARK);
+
+    // Containers and crates
+    addBox(13, 5, -10, 4, 2, 3, RED);
+    addBox(13, 7, -10, 4, 1, 3, BLUE);
+
+    addBox(17, 5, 2, 3, 1, 4, YELLOW);
+    addBox(22, 5, 7, 4, 2, 3, BLUE);
+    addBox(22, 7, 7, 4, 1, 3, YELLOW);
+
+    // Warehouses
+    function addWarehouse(x, z, w, d, bodyColor, roofColor, frontZ) {
+      addBox(x, 5, z, w, 5, d, bodyColor);
+      addBox(x - 1, 10, z - 1, w + 2, 2, d + 2, roofColor);
+
+      // door protrudes slightly from front face
+      const doorX = x + Math.floor(w / 2) - 2;
+      addBox(doorX, 5, frontZ, 4, 3, 1, DARK);
+
+      // windows
+      const winZ = frontZ - 1;
+      addBox(x + 2, 7, winZ, 1, 1, 1, CYAN);
+      addBox(x + w - 3, 7, winZ, 1, 1, 1, CYAN);
+    }
+
+    addWarehouse(18, -22, 10, 10, 0xa56f56, RED, -14);
+    addWarehouse(20, 10, 12, 10, 0x5f7d8c, 0x3f5058, 20);
+
+    // Crane
+    addBox(14, 5, 6, 2, 14, 2, METAL);       // upright column
+    addBox(11, 19, 7, 8, 1, 2, METAL);       // beam
+    addBox(13, 9, 7, 1, 10, 1, DARK);        // cable
+    addBox(12, 7, 7, 3, 2, 5, RED);          // hanging container
+
+    // Small trees for a little color contrast
+    function addTree(x, z) {
+      addVoxel(x, 5, z, WOOD_DARK);
+      addBox(x - 1, 6, z - 1, 3, 3, 3, GREEN);
+      addBox(x - 1, 8, z - 1, 3, 1, 3, 0x3b6b42);
+    }
+    addTree(29, -21);
+    addTree(29, 21);
+
+    // Lighthouse on rocky islet
+    addBox(-32, 1, 20, 6, 2, 6, STONE_DARK);
+    addBox(-31, 3, 21, 4, 2, 4, STONE);
+
+    for (let y = 5; y <= 9; y++) {
+      addBox(-30, y, 23, 1, 1, 1, y % 2 === 0 ? WHITE : RED);
+    }
+
+    // Gallery ring around lighthouse, no duplicate center
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dz = -1; dz <= 1; dz++) {
+        if (dx !== 0 || dz !== 0) addVoxel(-30 + dx, 10, 23 + dz, METAL);
+      }
+    }
+    addVoxel(-30, 11, 23, 0xffaa55);
+
+    const lamp = new THREE.PointLight(0xff7040, 0.45, 14);
+    lamp.position.set(-30, 11.2, 23);
+    scene.add(lamp);
+
+    // ------------------------------------------------------------------
+    // Ship
+    // ------------------------------------------------------------------
+
+    function getShipBounds(z) {
+      if (z === -10) return [3, 5];
+      if (z === -9) return [2, 6];
+      if (z === -8) return [1, 7];
+      if (z === -7) return [0, 8];
+
+      if (z >= -6 && z <= 6) return [-2, 8];
+
+      if (z === 7) return [-1, 7];
+      if (z === 8) return [0, 7];
+      if (z === 9) return [1, 6];
+      if (z === 10) return [2, 5];
+      return null;
+    }
+
+    // Hull
+    for (let z = -10; z <= 10; z++) {
+      const b = getShipBounds(z);
+      if (!b) continue;
+      const width = b[1] - b[0] + 1;
+
+      for (let y = 1; y <= 3; y++) {
+        addBox(b[0], y, z, width, 1, 1, y === 1 ? HULL_DARK : HULL);
+      }
+    }
+
+    // Deck
+    for (let z = -8; z <= 8; z++) {
+      const b = getShipBounds(z);
+      if (!b) continue;
+      const inner = b[1] - b[0] - 1;
+      if (inner > 0) addBox(b[0] + 1, 4, z, inner, 1, 1, DECK);
+    }
+
+    // Bulwark
+    for (let z = -9; z <= 9; z++) {
+      const b = getShipBounds(z);
+      if (!b) continue;
+      addVoxel(b[0], 5, z, WOOD_DARK);
+      addVoxel(b[1], 5, z, WOOD_DARK);
+    }
+
+    for (let z of [-9, 9]) {
+      const b = getShipBounds(z);
+      if (!b) continue;
+      for (let x = b[0]; x <= b[1]; x++) addVoxel(x, 5, z, WOOD_DARK);
+    }
+
+    // Cabins
+    addBox(3, 5, -9, 3, 2, 3, WOOD);
+    addBox(2, 7, -9, 5, 1, 4, WOOD_DARK);
+
+    addBox(2, 5, -3, 5, 2, 3, WOOD);
+    addBox(1, 7, -3, 7, 1, 4, WOOD_DARK);
+
+    addBox(3, 5, 6, 3, 2, 4, WOOD);
+    addBox(2, 7, 5, 5, 1, 6, WOOD_DARK);
+
+    // Cargo on deck
+    addBox(2, 5, 2, 3, 2, 2, WOOD_DARK);
+    addBox(5, 5, 2, 2, 1, 2, WOOD);
+
+    // Masts, yards, sails
+    function addMastSails(x, z, topY, sailZ, yards, sailStarts, sailHeights) {
+      addMast(x, z, topY);
+
+      for (let i = 0; i < yards.length; i++) {
+        addYard(x, z, yards[i], -1, 8);
+        addSail(-2, sailZ, sailStarts[i], 11, sailHeights[i], CANVAS_STRIPE);
+      }
+    }
+
+    addMastSails(3, -5, 12, -6, [8, 11], [5, 8], [3, 3]);
+    addMastSails(3, 0, 15, 1, [8, 11, 14], [5, 8, 11], [3, 3, 3]);
+    addMastSails(3, 5, 13, 4, [8, 11], [5, 8], [3, 3]);
+
+    // Small pennant flag at main mast
+    addVoxel(4, 16, 0, RED);
+    addVoxel(5, 16, 0, CANVAS);
+
+    // Stern flag
+    for (let y = 4; y <= 9; y++) addVoxel(5, y, 10, WOOD_DARK);
+    addBox(6, 7, 10, 2, 2, 1, RED);
+    addVoxel(7, 8, 10, WHITE);
+
+    // ------------------------------------------------------------------
+    // Small rowboat
+    // ------------------------------------------------------------------
+    addBox(-8, 1, -14, 3, 1, 5, WOOD);
+    addBox(-8, 2, -14, 1, 1, 5, WOOD_DARK);
+    addBox(-6, 2, -14, 1, 1, 5, WOOD_DARK);
+    addVoxel(-7, 2, -12, DECK);
+
+    // ------------------------------------------------------------------
+    // Build static instanced voxel mesh
+    // ------------------------------------------------------------------
+    const cubeGeo = new THREE.BoxGeometry(1, 1, 1);
+    const voxelMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+
+    const staticMesh = new THREE.InstancedMesh(
+      cubeGeo,
+      voxelMat,
+      staticPositions.length
+    );
+
+    const dummy = new THREE.Object3D();
+
+    for (let i = 0; i < staticPositions.length; i++) {
+      const p = staticPositions[i];
+      dummy.position.set(p.x, p.y, p.z);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      staticMesh.setMatrixAt(i, dummy.matrix);
+      staticMesh.setColorAt(i, staticColors[i]);
+    }
+
+    staticMesh.instanceMatrix.needsUpdate = true;
+    if (staticMesh.instanceColor) staticMesh.instanceColor.needsUpdate = true;
+
+    staticMesh.castShadow = true;
+    staticMesh.receiveShadow = true;
+    scene.add(staticMesh);
+
+    // ------------------------------------------------------------------
+    // Water
+    // ------------------------------------------------------------------
+    const waterPositions = [];
+    for (let x = -32; x <= 9; x++) {
+      for (let z = -26; z <= 26; z++) {
+        waterPositions.push(new THREE.Vector3(x, 0, z));
+      }
+    }
+
+    const waterMat = new THREE.MeshLambertMaterial({ color: 0x2d7f99 });
+    const waterMesh = new THREE.InstancedMesh(cubeGeo, waterMat, waterPositions.length);
+    waterMesh.receiveShadow = true;
+    waterMesh.castShadow = false;
+    scene.add(waterMesh);
+
+    for (let i = 0; i < waterPositions.length; i++) {
+      const p = waterPositions[i];
+      dummy.position.set(p.x, p.y, p.z);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      waterMesh.setMatrixAt(i, dummy.matrix);
+    }
+    waterMesh.instanceMatrix.needsUpdate = true;
+
+    // Deep sea floor
+    const seaFloor = new THREE.Mesh(
+      new THREE.BoxGeometry(340, 1, 340),
+      new THREE.MeshLambertMaterial({ color: 0x164a64 })
+    );
+    seaFloor.position.set(0, -2.2, 0);
+    seaFloor.receiveShadow = true;
+    scene.add(seaFloor);
+
+    // ------------------------------------------------------------------
+    // Rope / rigging lines
+    // ------------------------------------------------------------------
+    const rigPoints = [];
+    function addRope(x1, y1, z1, x2, y2, z2) {
+      rigPoints.push(new THREE.Vector3(x1, y1, z1));
+      rigPoints.push(new THREE.Vector3(x2, y2, z2));
+    }
+
+    // Fore rigging
+    addRope(3, 12, -5, -2, 4, -5);
+    addRope(3, 12, -5, 8, 4, -5);
+    addRope(3, 12, -5, 2, 4, -9);
+    addRope(3, 12, -5, 6, 4, -9);
+
+    // Main rigging
+    addRope(3, 15, 0, -2, 4, 0);
+    addRope(3, 15, 0, 8, 4, 0);
+    addRope(3, 15, 0, 2, 4, -9);
+    addRope(3, 15, 0, 6, 4, 9);
+
+    // Mizzen rigging
+    addRope(3, 13, 5, -2, 4, 5);
+    addRope(3, 13, 5, 8, 4, 5);
+    addRope(3, 13, 5, 2, 4, 9);
+    addRope(3, 13, 5, 6, 4, 9);
+
+    // Mooring lines
+    addRope(8, 5, -6, 11, 6, -6);
+    addRope(8, 5, 0, 11, 6, 0);
+    addRope(8, 5, 6, 11, 6, 6);
+
+    const rigGeo = new THREE.BufferGeometry();
+    const rigMat = new THREE.LineBasicMaterial({ color: 0x6d5b45 });
+    const rig = new THREE.LineSegments(rigGeo, rigMat);
+    rigGeo.setFromPoints(rigPoints);
+    scene.add(rig);
+
+    // ------------------------------------------------------------------
+    // Animation / render loop
+    // ------------------------------------------------------------------
+    function animate() {
+      requestAnimationFrame(animate);
+
+      controls.update();
+
+      const t = performance.now() * 0.001;
+
+      for (let i = 0; i < waterPositions.length; i++) {
+        const p = waterPositions[i];
+        const wave = Math.sin(p.x * 0.55 + p.z * 0.42 + t * 1.7) * 0.14;
+        dummy.position.set(p.x, wave, p.z);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        waterMesh.setMatrixAt(i, dummy.matrix);
+      }
+      waterMesh.instanceMatrix.needsUpdate = true;
+
+      renderer.render(scene, camera);
+    }
+
+    animate();
+  </script>
+</body>
+</html>
+```

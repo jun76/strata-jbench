@@ -1,0 +1,1 @@
+在 Strata 0.2.21 上重新测量全部模型（27 个 build，含 Gyro-S v2 与 Inkling 2 Mini）的 Tier 0–5（1835 个用例完成 1813 个）。未测得：Gyro-S v2 的 256K 与 1M（jbench 未能启动）、NVFP4 的 prefill chunk（设置未传到引擎）、Hy4-Flash SQ-128 与 Inkling SQ-20 的 256K 长文（文档超出上下文窗口）

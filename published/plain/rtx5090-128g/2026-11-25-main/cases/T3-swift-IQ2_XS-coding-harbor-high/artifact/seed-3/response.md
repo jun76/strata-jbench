@@ -1,0 +1,462 @@
+Here is a complete single-file HTML example. Paste it into a file such as `index.html` and open it in Chrome. Drag to rotate, scroll to zoom, right-drag to pan. It requires internet access because Three.js is loaded from a CDN.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Voxel Harbor – Sailing Ship</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #87ceeb;
+  }
+  #info {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    color: #fff;
+    font-family: monospace;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.55);
+    pointer-events: none;
+  }
+  canvas {
+    display: block;
+  }
+</style>
+</head>
+<body>
+<div id="info">
+  Voxel Harbor<br>
+  Drag = rotate · Scroll = zoom · Right-drag = pan
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/OrbitControls.js"></script>
+
+<script>
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x87ceeb);
+  scene.fog = new THREE.Fog(0x87ceeb, 80, 220);
+
+  const camera = new THREE.PerspectiveCamera(
+    55,
+    window.innerWidth / window.innerHeight,
+    0.1,
+    1000
+  );
+  camera.position.set(32, 18, 35);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
+
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.target.set(0, 5, 0);
+  controls.minDistance = 8;
+  controls.maxDistance = 160;
+
+  const sharedMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
+
+  function addBox(arr, x0, x1, y0, y1, z0, z1, color) {
+    for (let x = x0; x <= x1; x++) {
+      for (let y = y0; y <= y1; y++) {
+        for (let z = z0; z <= z1; z++) {
+          arr.push({ x, y, z, color });
+        }
+      }
+    }
+  }
+
+  function voxelLine(arr, x0, y0, z0, x1, y1, z1, color) {
+    const n = Math.max(
+      Math.abs(x1 - x0),
+      Math.abs(y1 - y0),
+      Math.abs(z1 - z0)
+    );
+
+    if (n === 0) {
+      arr.push({ x: x0, y: y0, z: z0, color });
+      return;
+    }
+
+    for (let i = 0; i <= n; i++) {
+      arr.push({
+        x: Math.round(x0 + (x1 - x0) * i / n),
+        y: Math.round(y0 + (y1 - y0) * i / n),
+        z: Math.round(z0 + (z1 - z0) * i / n),
+        color
+      });
+    }
+  }
+
+  function buildMesh(arr, material) {
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const mesh = new THREE.InstancedMesh(geometry, material, arr.length);
+    const obj = new THREE.Object3D();
+
+    for (let i = 0; i < arr.length; i++) {
+      const v = arr[i];
+      obj.position.set(v.x, v.y, v.z);
+      obj.updateMatrix();
+      mesh.setMatrixAt(i, obj.matrix);
+      mesh.setColorAt(i, new THREE.Color(v.color));
+    }
+
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) {
+      mesh.instanceColor.needsUpdate = true;
+    }
+
+    return mesh;
+  }
+
+  const world = [];
+  const water = [];
+  const waterTop = [];
+
+  function addWater(x, y, z, color) {
+    const idx = water.length;
+    water.push({ x, y, z, color });
+    if (y === 0) {
+      waterTop.push(idx);
+    }
+  }
+
+  // Water
+  for (let x = -36; x <= 24; x++) {
+    for (let z = -36; z <= 36; z++) {
+      for (let y = -3; y <= 0; y++) {
+        const color =
+          y === 0 ? 0x238cb8 :
+          y === -1 ? 0x186fa3 :
+          y === -2 ? 0x11547b :
+          0x0c4569;
+
+        addWater(x, y, z, color);
+      }
+    }
+  }
+
+  // Land
+  for (let x = 25; x <= 40; x++) {
+    for (let z = -36; z <= 36; z++) {
+      for (let y = -2; y <= 2; y++) {
+        const color =
+          y === 2 ? (x === 25 ? 0xa9abb8 : 0xa4a7b4) :
+          y === -2 ? 0x463320 :
+          0x6c4b34;
+
+        addBox(world, x, x, y, y, z, z, color);
+      }
+    }
+  }
+
+  // Quayside surface
+  addBox(world, 25, 27, 2, 2, -36, 36, 0xc7c9d5);
+
+  // Pier
+  addBox(world, 13, 25, 1, 1, -2, 4, 0x8d5a2b);
+
+  for (let x = 13; x <= 25; x += 2) {
+    addBox(world, x, x, -3, 0, -2, -2, 0x55331a);
+    addBox(world, x, x, -3, 0, 4, 4, 0x55331a);
+  }
+
+  // Mooring rope from ship bow to pier
+  addBox(world, 11, 13, 4, 4, 0, 0, 0x5b3a24);
+
+  // Lighthouse
+  for (let y = 3; y <= 7; y++) {
+    addBox(
+      world,
+      34, 36,
+      y, y,
+      -14, -12,
+      (y % 2 === 0) ? 0xffffff : 0xd24141
+    );
+  }
+
+  addBox(world, 34, 36, 8, 8, -13, -13, 0xffe57a);
+  addBox(world, 35, 35, 9, 9, -13, -13, 0x444444);
+
+  // Warehouse
+  addBox(world, 32, 36, 3, 5, 4, 10, 0xc04848);
+  addBox(world, 32, 36, 6, 6, 4, 10, 0x922d2d);
+  addBox(world, 33, 35, 7, 7, 5, 9, 0x922d2d);
+  addBox(world, 34, 34, 8, 8, 7, 7, 0x6e2222);
+  addBox(world, 32, 32, 3, 4, 6, 8, 0x333333);
+
+  // House 1
+  addBox(world, 28, 31, 3, 5, -12, -8, 0xf0d6a8);
+  addBox(world, 28, 31, 6, 6, -12, -8, 0xa23a3a);
+  addBox(world, 29, 30, 7, 7, -11, -9, 0xa23a3a);
+  addBox(world, 29, 29, 8, 8, -10, -10, 0x7d2f2f);
+  addBox(world, 28, 28, 4, 4, -11, -9, 0x181818);
+  addBox(world, 28, 28, 3, 3, -10, -10, 0x222222);
+
+  // House 2
+  addBox(world, 32, 35, 3, 5, -4, 0, 0xb8d6f0);
+  addBox(world, 32, 35, 6, 6, -4, 0, 0x3f72bf);
+  addBox(world, 33, 34, 7, 7, -3, -1, 0x3f72bf);
+  addBox(world, 33, 33, 8, 8, -2, -2, 0x2b4f84);
+  addBox(world, 32, 32, 4, 4, -3, -1, 0x181818);
+  addBox(world, 32, 32, 3, 3, -2, -2, 0x222222);
+
+  // Market stall
+  addBox(world, 27, 28, 3, 4, 10, 12, 0xf0e0a0);
+  addBox(world, 27, 28, 5, 5, 10, 12, 0xf05050);
+
+  // Crates and barrels
+  addBox(world, 26, 27, 2, 3, 2, 3, 0x926a46);
+  addBox(world, 26, 26, 3, 4, 1, 1, 0x926a46);
+  addBox(world, 26, 26, 2, 3, 7, 8, 0x724632);
+
+  // Trees
+  addBox(world, 37, 37, 3, 5, 12, 12, 0x6b3f22);
+  addBox(world, 36, 38, 6, 6, 11, 13, 0x2d8b36);
+  addBox(world, 37, 37, 7, 7, 12, 12, 0x2d8b36);
+
+  addBox(world, 38, 38, 3, 5, 20, 20, 0x6b3f22);
+  addBox(world, 37, 39, 6, 6, 19, 21, 0x2d8b36);
+
+  // Ship
+  const shipArr = [];
+
+  const hullBrown = 0x6b3f22;
+  const deckBrown = 0x8e5a32;
+  const darkWood = 0x442816;
+  const sailColor = 0xf5f0d7;
+  const red = 0xd43a3a;
+  const blue = 0x2948c0;
+
+  // Hull
+  for (let x = -24; x <= 10; x++) {
+    const t = (x + 24) / 34;
+    const baseHalf = Math.floor(8 * (1.05 - 0.85 * t));
+
+    for (let y = 1; y <= 4; y++) {
+      const yFactor =
+        y === 1 ? 1.0 :
+        y === 2 ? 0.95 :
+        y === 3 ? 0.85 :
+        0.75;
+
+      const half = Math.max(1, Math.floor(baseHalf * yFactor));
+
+      for (let z = -half; z <= half; z++) {
+        shipArr.push({
+          x,
+          y,
+          z,
+          color: y === 4 ? deckBrown : hullBrown
+        });
+      }
+    }
+
+    if (x % 2 === 0) {
+      const railHalf = Math.max(1, Math.floor(baseHalf * 0.75));
+
+      shipArr.push({
+        x,
+        y: 5,
+        z: -railHalf,
+        color: darkWood
+      });
+
+      shipArr.push({
+        x,
+        y: 5,
+        z: railHalf,
+        color: darkWood
+      });
+    }
+  }
+
+  // Bowsprit
+  addBox(shipArr, 11, 15, 5, 5, 0, 0, darkWood);
+
+  // Stern castle
+  addBox(shipArr, -24, -14, 5, 5, -7, 7, deckBrown);
+  addBox(shipArr, -23, -15, 6, 6, -6, 6, hullBrown);
+  addBox(shipArr, -22, -16, 7, 7, -4, 4, hullBrown);
+  addBox(shipArr, -21, -17, 8, 8, -2, 2, darkWood);
+  addBox(shipArr, -24, -15, 6, 6, -6, -6, 0x181818);
+
+  // Deck cargo
+  addBox(shipArr, -2, 0, 5, 5, -2, 2, darkWood);
+  addBox(shipArr, -20, -18, 5, 5, 2, 3, 0x724632);
+  addBox(shipArr, -12, -10, 5, 5, -4, -3, 0x724632);
+  addBox(shipArr, -6, -4, 5, 5, 4, 5, 0x724632);
+
+  // Masts
+  addBox(shipArr, -7, -7, 1, 15, 0, 0, darkWood);
+  addBox(shipArr, 3, 3, 1, 12, 0, 0, darkWood);
+  addBox(shipArr, -17, -17, 1, 9, 0, 0, darkWood);
+
+  // Yards
+  addBox(shipArr, -15, 1, 13, 13, 0, 0, darkWood);
+  addBox(shipArr, -1, 7, 10, 10, 0, 0, darkWood);
+  addBox(shipArr, -21, -13, 8, 8, 0, 0, darkWood);
+
+  // Sails
+  addBox(shipArr, -14, 0, 5, 12, -6, 6, sailColor);
+  addBox(shipArr, -1, 5, 5, 9, -5, 5, sailColor);
+  addBox(shipArr, -21, -13, 5, 7, -4, 4, sailColor);
+
+  // Rigging
+  voxelLine(shipArr, -22, 5, 0, -7, 15, 0, darkWood);
+  voxelLine(shipArr, -7, 15, 0, 3, 12, 0, darkWood);
+  voxelLine(shipArr, 3, 12, 0, 10, 5, 0, darkWood);
+  voxelLine(shipArr, 10, 5, 0, -7, 15, 0, darkWood);
+
+  voxelLine(shipArr, -7, 15, 6, -7, 1, 6, darkWood);
+  voxelLine(shipArr, -7, 15, -6, -7, 1, -6, darkWood);
+
+  voxelLine(shipArr, 3, 12, 5, 3, 1, 5, darkWood);
+
+  voxelLine(shipArr, -17, 9, 4, -17, 1, 4, darkWood);
+  voxelLine(shipArr, -17, 9, -4, -17, 1, -4, darkWood);
+
+  // Flags
+  addBox(shipArr, -7, -7, 16, 16, 0, 0, darkWood);
+  addBox(shipArr, -7, -3, 15, 15, 0, 0, red);
+  addBox(shipArr, -7, -3, 14, 14, 0, 0, red);
+
+  addBox(shipArr, 3, 7, 11, 11, 0, 0, blue);
+  addBox(shipArr, 3, 6, 10, 10, 0, 0, blue);
+
+  addBox(shipArr, -22, -18, 8, 8, 0, 0, red);
+  addBox(shipArr, -22, -18, 7, 7, 0, 0, red);
+
+  // Clouds
+  const cloudArr = [];
+
+  function addCloud(arr, cx, cy, cz) {
+    addBox(arr, cx - 3, cx + 3, cy, cy + 1, cz - 2, cz + 2, 0xffffff);
+    addBox(arr, cx - 2, cx + 2, cy + 1, cy + 2, cz - 1, cz + 1, 0xffffff);
+    addBox(arr, cx - 1, cx + 1, cy + 2, cy + 2, cz, cz, 0xffffff);
+  }
+
+  for (let i = -2; i <= 2; i++) {
+    addCloud(cloudArr, i * 15, 0, i * 8);
+  }
+
+  // Sun
+  const sunArr = [];
+  addBox(sunArr, 55, 58, 45, 48, -40, -37, 0xffe57a);
+
+  // Birds
+  const birdArr = [];
+
+  for (let i = -4; i <= 4; i += 4) {
+    addBox(birdArr, i, i, 0, 0, 0, 0, 0x222222);
+    addBox(birdArr, i - 1, i + 1, 1, 1, 0, 0, 0x222222);
+  }
+
+  const worldMesh = buildMesh(world, sharedMaterial);
+  const waterMesh = buildMesh(water, sharedMaterial);
+  const shipMesh = buildMesh(shipArr, sharedMaterial);
+  const cloudMesh = buildMesh(cloudArr, sharedMaterial);
+  const birdMesh = buildMesh(birdArr, sharedMaterial);
+
+  const sunMaterial = new THREE.MeshBasicMaterial({ vertexColors: true });
+  const sunMesh = buildMesh(sunArr, sunMaterial);
+
+  const shipGroup = new THREE.Group();
+  shipGroup.position.set(1, 0.4, 0);
+  shipGroup.add(shipMesh);
+  scene.add(shipGroup);
+
+  const cloudGroup = new THREE.Group();
+  cloudGroup.position.set(0, 22, 0);
+  cloudGroup.add(cloudMesh);
+  scene.add(cloudGroup);
+
+  const birdGroup = new THREE.Group();
+  birdGroup.position.set(-8, 24, 6);
+  birdGroup.add(birdMesh);
+  scene.add(birdGroup);
+
+  scene.add(worldMesh);
+  scene.add(waterMesh);
+  scene.add(sunMesh);
+
+  const hemiLight = new THREE.HemisphereLight(
+    0xbfd4e5,
+    0x6b4b34,
+    0.7
+  );
+  scene.add(hemiLight);
+
+  const sunLight = new THREE.DirectionalLight(0xffffff, 1.0);
+  sunLight.position.set(40, 50, -30);
+  scene.add(sunLight);
+
+  const ambientLight = new THREE.AmbientLight(0x778899, 0.4);
+  scene.add(ambientLight);
+
+  const clock = new THREE.Clock();
+  const baseWater = new THREE.Color(0x238cb8);
+
+  function animate() {
+    requestAnimationFrame(animate);
+
+    const t = clock.getElapsedTime();
+
+    // Shimmering water
+    for (const idx of waterTop) {
+      const v = water[idx];
+
+      const s =
+        0.5 +
+        0.35 * Math.sin(v.x * 0.35 + v.z * 0.40 + t * 2) +
+        0.20 * Math.sin(v.x * 0.80 - v.z * 0.55 + t * 3);
+
+      const c = baseWater.clone();
+      c.r = Math.min(1, c.r + 0.04 * s);
+      c.g = Math.min(1, c.g + 0.06 * s);
+      c.b = Math.min(1, c.b + 0.09 * s);
+
+      waterMesh.setColorAt(idx, c);
+    }
+
+    if (waterMesh.instanceColor) {
+      waterMesh.instanceColor.needsUpdate = true;
+    }
+
+    // Ship bobbing
+    shipGroup.position.y = 0.4 + 0.10 * Math.sin(t * 1.2);
+    shipGroup.rotation.z = 0.012 * Math.sin(t * 0.8);
+    shipGroup.rotation.x = 0.010 * Math.cos(t * 0.9);
+
+    // Clouds drifting
+    cloudGroup.position.x = ((t * 4.0) % 180) - 90;
+    cloudGroup.position.y = 22;
+    cloudGroup.rotation.y = Math.sin(t * 0.05) * 0.05;
+
+    // Birds circling
+    birdGroup.position.x = -8 + Math.sin(t * 0.35) * 25;
+    birdGroup.position.y = 24 + Math.sin(t * 1.2) * 2;
+    birdGroup.position.z = 6 + Math.cos(t * 0.25) * 12;
+
+    renderer.render(scene, camera);
+    controls.update();
+  }
+
+  animate();
+
+  window.addEventListener("resize", () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+</script>
+</body>
+</html>
+```

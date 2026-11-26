@@ -1,0 +1,314 @@
+Here is the complete, single HTML file. You can copy the code below, save it as `index.html`, and double-click to open it in Chrome. 
+
+It uses Three.js and OrbitControls (loaded via CDN) to render the scene. You can interact with the camera using your mouse (Left Click to Rotate, Right Click to Pan, Scroll to Zoom).
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voxel Harbor - Sailing Ship</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #87CEEB;
+            font-family: sans-serif;
+        }
+        canvas {
+            display: block;
+        }
+        #instructions {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            color: white;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 12px 18px;
+            border-radius: 8px;
+            pointer-events: none;
+            line-height: 1.5;
+        }
+        #instructions strong {
+            font-size: 16px;
+            color: #ffd700;
+        }
+    </style>
+</head>
+<body>
+    <div id="instructions">
+        <strong>Voxel Harbor</strong><br>
+        Left Click + Drag: Rotate<br>
+        Right Click + Drag: Pan<br>
+        Scroll: Zoom
+    </div>
+
+    <!-- Three.js and OrbitControls from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        // 1. SETUP SCENE, CAMERA, AND RENDERER
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB);
+        scene.fog = new THREE.Fog(0x87CEEB, 50, 150);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 500);
+        camera.position.set(-20, 15, 25);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.target.set(0, 5, 0);
+
+        // 2. LIGHTING
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xfff5e6, 0.8);
+        dirLight.position.set(30, 40, -20);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.near = 0.5;
+        dirLight.shadow.camera.far = 150;
+        dirLight.shadow.camera.left = -50;
+        dirLight.shadow.camera.right = 50;
+        dirLight.shadow.camera.top = 50;
+        dirLight.shadow.camera.bottom = -50;
+        scene.add(dirLight);
+
+        // 3. MATERIALS & VOXEL HELPER
+        const materials = {
+            woodDark: new THREE.MeshLambertMaterial({ color: 0x4a3018 }),
+            woodLight: new THREE.MeshLambertMaterial({ color: 0x8b5a2b }),
+            water: new THREE.MeshLambertMaterial({ color: 0x1e5a7a }),
+            waterLight: new THREE.MeshLambertMaterial({ color: 0x3d8bb5 }),
+            white: new THREE.MeshLambertMaterial({ color: 0xffffff }),
+            red: new THREE.MeshLambertMaterial({ color: 0xd32f2f }),
+            stone: new THREE.MeshLambertMaterial({ color: 0x808080 }),
+            stoneDark: new THREE.MeshLambertMaterial({ color: 0x606060 }),
+            yellow: new THREE.MeshBasicMaterial({ color: 0xffd700 }) // Emissive-like
+        };
+
+        const voxelGeometry = new THREE.BoxGeometry(1, 1, 1);
+
+        function createVoxel(x, y, z, material, parent) {
+            const mesh = new THREE.Mesh(voxelGeometry, material);
+            mesh.position.set(x, y, z);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            parent.add(mesh);
+            return mesh;
+        }
+
+        // 4. BUILD WATER
+        const waterPlane = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), materials.water);
+        waterPlane.rotation.x = -Math.PI / 2;
+        waterPlane.receiveShadow = true;
+        scene.add(waterPlane);
+
+        const waves = [];
+        for (let i = 0; i < 300; i++) {
+            let x = (Math.random() - 0.5) * 150;
+            let z = (Math.random() - 0.5) * 150;
+            // Keep waves out of the immediate dock area
+            if (x > 0 && x < 30 && z > -20 && z < 20) x -= 30; 
+            let wave = createVoxel(x, 0, z, materials.waterLight, scene);
+            wave.userData = { baseY: 0, speed: Math.random() * 0.02 + 0.01, offset: Math.random() * Math.PI * 2 };
+            waves.push(wave);
+        }
+
+        // 5. BUILD SAILING SHIP
+        const ship = new THREE.Group();
+        ship.position.set(-2, 1, 0);
+        scene.add(ship);
+
+        // Hull
+        for (let z = -10; z <= 10; z++) {
+            let hw = 0;
+            if (z === 10) hw = 0;
+            else if (z === 9) hw = 1;
+            else if (z === 8) hw = 2;
+            else if (z >= -8 && z <= 7) hw = 3;
+            else if (z === -9) hw = 2;
+            else if (z === -10) hw = 1;
+
+            for (let x = -hw; x <= hw; x++) {
+                let isEdge = Math.abs(x) === hw || z === 10 || z === -10;
+                for (let y = 0; y <= 2; y++) {
+                    if (isEdge) createVoxel(x, y, z, materials.woodDark, ship);
+                    else if (y === 2) createVoxel(x, y, z, materials.woodLight, ship); // Deck
+                }
+            }
+        }
+
+        // Stern and Bow Castles
+        for (let x = -2; x <= 2; x++) {
+            for (let y = 3; y <= 4; y++) createVoxel(x, y, -9, materials.woodLight, ship);
+        }
+        createVoxel(0, 5, -9, materials.woodLight, ship);
+        for (let x = -1; x <= 1; x++) createVoxel(x, 3, 9, materials.woodLight, ship);
+
+        // Masts
+        for (let y = 3; y <= 16; y++) createVoxel(0, y, 0, materials.woodDark, ship); // Main
+        for (let y = 3; y <= 11; y++) createVoxel(0, y, 7, materials.woodDark, ship); // Fore
+
+        // Crow's nest & Flags
+        createVoxel(0, 13, 0, materials.woodLight, ship);
+        createVoxel(0, 17, 0, materials.red, ship);
+        createVoxel(1, 17, 0, materials.red, ship);
+        createVoxel(0, 16, 0, materials.red, ship);
+        createVoxel(0, 12, 7, materials.red, ship);
+        createVoxel(1, 12, 7, materials.red, ship);
+
+        // Sails
+        for (let y = 5; y <= 10; y++) {
+            for (let x = -5; x <= 5; x++) createVoxel(x, y, 0, materials.white, ship);
+        }
+        for (let y = 12; y <= 14; y++) {
+            for (let x = -3; x <= 3; x++) createVoxel(x, y, 0, materials.white, ship);
+        }
+        for (let y = 5; y <= 9; y++) {
+            for (let x = -4; x <= 4; x++) createVoxel(x, y, 7, materials.white, ship);
+        }
+
+        // Ship Details (Rudder & Cannons)
+        for (let y = 1; y <= 2; y++) createVoxel(0, y, -11, materials.woodDark, ship);
+        createVoxel(3, 3, 5, materials.stoneDark, ship);
+        createVoxel(-3, 3, 5, materials.stoneDark, ship);
+
+        // 6. BUILD HARBOR
+        const harbor = new THREE.Group();
+        scene.add(harbor);
+
+        // Large Stone Base (optimized as a single box)
+        const dockBase = new THREE.Mesh(new THREE.BoxGeometry(21, 1, 41), materials.stone);
+        dockBase.position.set(20, 0.5, 0);
+        dockBase.castShadow = true;
+        dockBase.receiveShadow = true;
+        harbor.add(dockBase);
+
+        // Stone top details
+        for (let x = 10; x <= 30; x++) {
+            for (let z = -20; z <= 20; z++) {
+                if (Math.random() > 0.9) createVoxel(x, 1, z, materials.stoneDark, harbor);
+            }
+        }
+
+        // Wooden Docks
+        for (let x = 3; x <= 9; x++) {
+            for (let z = -8; z <= 8; z++) {
+                createVoxel(x, 1, z, materials.woodLight, harbor);
+                if (x === 3 && z % 3 === 0) {
+                    createVoxel(x, 0, z, materials.woodDark, harbor);
+                    createVoxel(x, -1, z, materials.woodDark, harbor);
+                }
+            }
+        }
+        // Gangplank
+        createVoxel(1, 2, -2, materials.woodLight, harbor);
+        createVoxel(2, 2, -2, materials.woodLight, harbor);
+
+        // Warehouse
+        for (let x = 22; x <= 27; x++) {
+            for (let z = -5; z <= 2; z++) {
+                for (let y = 2; y <= 6; y++) {
+                    if (x === 22 || x === 27 || z === -5 || z === 2 || y === 6) {
+                        let mat = (y === 6) ? materials.red : materials.woodLight;
+                        createVoxel(x, y, z, mat, harbor);
+                    }
+                }
+            }
+        }
+        createVoxel(22, 2, -2, materials.woodDark, harbor);
+        createVoxel(22, 3, -2, materials.woodDark, harbor);
+
+        // Lighthouse
+        for (let y = 2; y <= 12; y++) {
+            for (let x = 15; x <= 18; x++) {
+                for (let z = 10; z <= 13; z++) {
+                    if (x === 15 || x === 18 || z === 10 || z === 13) {
+                        let mat = materials.white;
+                        if (y % 4 === 0) mat = materials.red;
+                        createVoxel(x, y, z, mat, harbor);
+                    }
+                }
+            }
+        }
+        // Lighthouse Lantern
+        for (let x = 16; x <= 17; x++) {
+            for (let z = 11; z <= 12; z++) {
+                createVoxel(x, 13, z, materials.stoneDark, harbor);
+                createVoxel(x, 14, z, materials.yellow, harbor);
+                createVoxel(x, 15, z, materials.red, harbor);
+            }
+        }
+
+        // Crane
+        for (let y = 2; y <= 9; y++) createVoxel(12, y, -12, materials.stoneDark, harbor);
+        for (let x = 12; x <= 18; x++) createVoxel(x, 9, -12, materials.red, harbor);
+        for (let y = 5; y <= 8; y++) createVoxel(17, y, -12, materials.woodDark, harbor);
+        createVoxel(17, 4, -12, materials.stoneDark, harbor);
+
+        // Crates & Barrels
+        createVoxel(8, 2, 3, materials.woodLight, harbor);
+        createVoxel(9, 2, 3, materials.woodLight, harbor);
+        createVoxel(8, 3, 3, materials.woodLight, harbor);
+        createVoxel(7, 2, -4, materials.woodDark, harbor);
+        createVoxel(7, 3, -4, materials.woodDark, harbor);
+
+        // Birds
+        const birds = [];
+        for (let i = 0; i < 5; i++) {
+            let bx = Math.random() * 30 - 20;
+            let by = Math.random() * 10 + 15;
+            let bz = Math.random() * 30 - 15;
+            let b1 = createVoxel(bx, by, bz, materials.white, scene);
+            let b2 = createVoxel(bx + 1, by, bz, materials.white, scene);
+            birds.push({ b1, b2, baseY: by, offset: Math.random() * 10 });
+        }
+
+        // 7. ANIMATION LOOP
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = Date.now() * 0.001;
+
+            // Bobbing water waves
+            waves.forEach(wave => {
+                wave.position.y = wave.userData.baseY + 0.15 * Math.sin(time * 1.5 + wave.userData.offset);
+            });
+
+            // Slight ship sway
+            ship.position.y = 1 + 0.1 * Math.sin(time * 1.2);
+            ship.rotation.z = 0.015 * Math.sin(time * 0.8);
+            ship.rotation.x = 0.01 * Math.cos(time * 1.1);
+
+            // Flying birds
+            birds.forEach(bird => {
+                bird.b1.position.y = bird.baseY + Math.sin(time * 2 + bird.offset) * 0.5;
+                bird.b2.position.y = bird.baseY + Math.cos(time * 2 + bird.offset) * 0.5;
+            });
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // 8. HANDLE WINDOW RESIZE
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
+```

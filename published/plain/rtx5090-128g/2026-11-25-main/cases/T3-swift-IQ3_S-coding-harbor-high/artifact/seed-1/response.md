@@ -1,0 +1,732 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Voxel Harbor — A Sailing Ship Calling at a Harbor</title>
+<style>
+  html, body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: #87ceeb;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+  canvas { display: block; }
+  #ui {
+    position: fixed;
+    left: 12px;
+    top: 12px;
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: rgba(255,255,255,.68);
+    color: #06354f;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 18px rgba(0,0,0,.12);
+    user-select: none;
+  }
+  #ui b { display: block; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<div id="ui">
+  <b>A sailing ship calling at a harbor</b>
+  Drag: orbit · Scroll: zoom · Right drag: pan
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+<script>
+(function () {
+  if (!window.THREE || !THREE.OrbitControls) {
+    document.getElementById('ui').textContent = 'Failed to load Three.js. Check your internet connection.';
+    return;
+  }
+
+  let scene, camera, renderer, controls;
+  let waterMesh, waterBase;
+
+  const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+  const animationDummy = new THREE.Object3D();
+  const mainVoxels = [];
+  const emissiveVoxels = [];
+  const cloudVoxels = [];
+  const waterVoxels = [];
+  const birds = [];
+
+  init();
+
+  function init() {
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color('#9ed9ff');
+    scene.fog = new THREE.Fog('#9ed9ff', 55, 115);
+
+    camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 220);
+    camera.position.set(27, 18, 31);
+
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    document.body.appendChild(renderer.domElement);
+
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 4, 0);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = 9;
+    controls.maxDistance = 85;
+    controls.maxPolarAngle = Math.PI * 0.49;
+
+    const hemi = new THREE.HemisphereLight('#dff1ff', '#8a6b45', 0.72);
+    scene.add(hemi);
+
+    const sun = new THREE.DirectionalLight('#fff1d1', 1.12);
+    sun.position.set(18, 26, 14);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -32;
+    sun.shadow.camera.right = 32;
+    sun.shadow.camera.top = 32;
+    sun.shadow.camera.bottom = -32;
+    sun.shadow.camera.near = 1;
+    sun.shadow.camera.far = 85;
+    sun.shadow.bias = -0.0005;
+    sun.shadow.normalBias = 0.03;
+    scene.add(sun);
+
+    const ambient = new THREE.AmbientLight('#7fb3ff', 0.22);
+    scene.add(ambient);
+
+    makeWorld();
+
+    const mainMaterial = new THREE.MeshStandardMaterial({
+      color: '#ffffff',
+      roughness: 0.92,
+      metalness: 0.02,
+      flatShading: true
+    });
+
+    const emissiveMaterial = new THREE.MeshBasicMaterial({ color: '#ffffff' });
+
+    const cloudMaterial = new THREE.MeshBasicMaterial({
+      color: '#ffffff',
+      transparent: true,
+      opacity: 0.92
+    });
+
+    const waterMaterial = new THREE.MeshStandardMaterial({
+      color: '#ffffff',
+      transparent: true,
+      opacity: 0.82,
+      roughness: 0.1,
+      metalness: 0.05,
+      flatShading: true
+    });
+
+    const mainMesh = buildInstanced(mainVoxels, mainMaterial, true, true);
+    if (mainMesh) scene.add(mainMesh);
+
+    const emissiveMesh = buildInstanced(emissiveVoxels, emissiveMaterial, false, false);
+    if (emissiveMesh) scene.add(emissiveMesh);
+
+    const cloudMesh = buildInstanced(cloudVoxels, cloudMaterial, false, false);
+    if (cloudMesh) scene.add(cloudMesh);
+
+    waterBase = waterVoxels;
+    waterMesh = buildInstanced(waterBase, waterMaterial, false, true);
+    if (waterMesh) scene.add(waterMesh);
+
+    addBirds();
+
+    window.addEventListener('resize', onResize);
+    animate();
+  }
+
+  function add(x, y, z, color, sx = 1, sy = 1, sz = 1) {
+    mainVoxels.push({ x, y, z, color, sx, sy, sz });
+  }
+
+  function addEmissive(x, y, z, color, sx = 1, sy = 1, sz = 1) {
+    emissiveVoxels.push({ x, y, z, color, sx, sy, sz });
+  }
+
+  function addCloudVoxel(x, y, z, color, sx = 1.15, sy = 0.9, sz = 1.15) {
+    cloudVoxels.push({ x, y, z, color, sx, sy, sz });
+  }
+
+  function addWater(x, z) {
+    const dist = Math.hypot(x, z);
+    const lightness = 0.37 + Math.min(0.19, dist * 0.006);
+    const color = new THREE.Color().setHSL(0.55, 0.66, lightness);
+    waterVoxels.push({ x, y: 0, z, color: color.getStyle(), sx: 1, sy: 1, sz: 1 });
+  }
+
+  function buildInstanced(list, material, castShadow, receiveShadow) {
+    if (!list || list.length === 0) return null;
+
+    const mesh = new THREE.InstancedMesh(boxGeo, material, list.length);
+    const dummy = new THREE.Object3D();
+    const color = new THREE.Color();
+
+    for (let i = 0; i < list.length; i++) {
+      const v = list[i];
+      dummy.position.set(v.x, v.y, v.z);
+      dummy.scale.set(v.sx || 1, v.sy || 1, v.sz || 1);
+      dummy.rotation.set(0, 0, 0);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+      mesh.setColorAt(i, color.set(v.color));
+    }
+
+    mesh.castShadow = castShadow;
+    mesh.receiveShadow = receiveShadow;
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+
+    return mesh;
+  }
+
+  function isBay(x, z) {
+    return (Math.abs(x) <= 10 && Math.abs(z) <= 8) || (x >= 8 && Math.abs(z) <= 4);
+  }
+
+  function isDock(x, z) {
+    return x >= 4 && x <= 11 && z >= -3 && z <= 5;
+  }
+
+  function isLand(x, z) {
+    if (Math.hypot(x, z) >= 22) return false;
+    if (isBay(x, z)) return false;
+    return true;
+  }
+
+  function makeWorld() {
+    const landRadius = 22;
+    const seaRadius = 24;
+
+    for (let x = -landRadius; x <= landRadius; x++) {
+      for (let z = -landRadius; z <= landRadius; z++) {
+        if (isLand(x, z)) {
+          add(x, 0, z, '#b98e5b');
+
+          const adjBay =
+            isBay(x + 1, z) ||
+            isBay(x - 1, z) ||
+            isBay(x, z + 1) ||
+            isBay(x, z - 1);
+
+          const adjWater =
+            !isLand(x + 1, z) ||
+            !isLand(x - 1, z) ||
+            !isLand(x, z + 1) ||
+            !isLand(x, z - 1);
+
+          let top = '#67b452';
+          if (adjWater) top = '#d8c48f';
+          if (adjBay) top = '#a8a8a8';
+          if (isDock(x, z)) top = '#7c5b39';
+
+          add(x, 1, z, top);
+        }
+      }
+    }
+
+    for (let x = -seaRadius; x <= seaRadius; x++) {
+      for (let z = -seaRadius; z <= seaRadius; z++) {
+        if (!isLand(x, z)) {
+          add(x, -1, z, '#d6c19a');
+          addWater(x, z);
+        }
+      }
+    }
+
+    // Wooden dock over water.
+    for (let x = 4; x <= 10; x++) {
+      for (let z = -3; z <= 5; z++) {
+        add(x, 1, z, '#7c5b39');
+      }
+    }
+
+    // Dock plank seams.
+    for (let x = 4; x <= 10; x += 2) {
+      for (let z = -3; z <= 5; z++) {
+        add(x, 1.52, z, '#614225', 1, 0.08, 1);
+      }
+    }
+
+    addBuildings();
+    addLighthouse(18, -6);
+    addDockProps();
+    addTrees();
+    addShip();
+
+    addBeacon(13, -4, '#e74c3c');
+    addBeacon(13, 4, '#e74c3c');
+    addBuoys();
+    addClouds();
+  }
+
+  function addBuildings() {
+    addBuilding(14, 6, 4, 4, 3, '#c96d4e', '#4d4d4d');
+    addBuilding(14, -10, 5, 4, 3, '#a65f46', '#3f3f3f');
+    addBuilding(12, 9, 3, 3, 3, '#e0d6c3', '#8b4a2e');
+    addBuilding(16, -8, 3, 3, 3, '#d8c3a8', '#a35b32');
+
+    addBuilding(-16, -6, 3, 3, 3, '#e4d8c8', '#8c5a3b');
+    addBuilding(-16, 0, 3, 3, 3, '#d7c3a6', '#a05834');
+    addBuilding(-16, 6, 3, 3, 3, '#e2b7a0', '#8b4a2e');
+
+    addBuilding(0, -18, 3, 3, 3, '#e0d6c3', '#8b4a2e');
+    addBuilding(-8, 15, 3, 3, 3, '#d7c3a6', '#a05834');
+  }
+
+  function addBuilding(x, z, w, h, d, wallColor, roofColor) {
+    for (let y = 2; y < 2 + h; y++) {
+      for (let bx = x; bx < x + w; bx++) {
+        for (let bz = z; bz < z + d; bz++) {
+          const isX = bx === x || bx === x + w - 1;
+          const isZ = bz === z || bz === z + d - 1;
+
+          if (!isX && !isZ) continue;
+
+          const isDoor =
+            bz === z &&
+            y === 2 &&
+            bx === Math.floor(x + w / 2);
+
+          const isWindow =
+            y === 3 &&
+            (
+              ((bz === z || bz === z + d - 1) && bx > x && bx < x + w - 1) ||
+              ((bx === x || bx === x + w - 1) && bz > z && bz < z + d - 1)
+            );
+
+          if (isDoor) {
+            add(bx, y, bz, '#5d3a21');
+            continue;
+          }
+
+          if (isWindow && ((bx + bz + y) % 2 === 0)) {
+            addEmissive(bx, y, bz, '#ffe27a');
+            continue;
+          }
+
+          add(bx, y, bz, wallColor);
+        }
+      }
+    }
+
+    for (let rx = x - 1; rx <= x + w; rx++) {
+      for (let rz = z - 1; rz <= z + d; rz++) {
+        if (rx === x - 1 || rx === x + w || rz === z - 1 || rz === z + d) {
+          add(rx, 2 + h, rz, roofColor);
+        }
+      }
+    }
+  }
+
+  function addLighthouse(x, z) {
+    for (let bx = x - 1; bx <= x + 1; bx++) {
+      for (let bz = z - 1; bz <= z + 1; bz++) {
+        add(bx, 2, bz, '#9aa2a8');
+      }
+    }
+
+    for (let ty = 3; ty <= 12; ty++) {
+      const white = Math.floor((ty - 3) / 2) % 2 === 0;
+      const stripe = white ? '#f8f4e8' : '#d94545';
+
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          if (Math.max(Math.abs(dx), Math.abs(dz)) <= 1) {
+            add(x + dx, ty, z + dz, stripe);
+          }
+        }
+      }
+    }
+
+    addEmissive(x, 13, z, '#fff0a0', 1.65, 1.25, 1.65);
+    add(x, 14, z, '#b22d2d', 1.3, 0.7, 1.3);
+    add(x, 15, z, '#5b5b5b', 2.25, 0.5, 2.25);
+
+    const light = new THREE.PointLight('#fff0a0', 0.7, 30);
+    light.position.set(x + 0.5, 13, z + 0.5);
+    scene.add(light);
+  }
+
+  function addDockProps() {
+    const crates = [
+      [5, -2], [6, -2], [5, 2], [7, 3], [9, 0], [9, 4]
+    ];
+    crates.forEach(([x, z]) => addCrate(x, z));
+
+    const barrels = [
+      [7, -1], [8, 2], [6, 4]
+    ];
+    barrels.forEach(([x, z]) => addBarrel(x, z));
+
+    const lamps = [
+      [7, -3], [7, 5], [10, 1]
+    ];
+    lamps.forEach(([x, z]) => addLamp(x, z));
+
+    const bollards = [
+      [4, -2], [4, 2], [10, -2], [10, 2], [11, 5]
+    ];
+    bollards.forEach(([x, z]) => addBollard(x, z));
+
+    addAnchor(5, 5);
+  }
+
+  function addCrate(x, z) {
+    add(x, 2, z, '#b2804e', 0.9, 0.9, 0.9);
+    add(x, 2, z, '#8d5c34', 0.4, 0.91, 0.4);
+    add(x, 2.48, z, '#d9b784', 0.91, 0.08, 0.91);
+  }
+
+  function addBarrel(x, z) {
+    add(x, 2, z, '#7a5230', 0.8, 0.95, 0.8);
+    add(x, 1.95, z, '#d9c59c', 0.81, 0.08, 0.81);
+    add(x, 2.48, z, '#d9c59c', 0.81, 0.08, 0.81);
+  }
+
+  function addLamp(x, z) {
+    add(x, 2, z, '#3a3a3a', 0.35, 1, 0.35);
+    add(x, 3, z, '#3a3a3a', 0.25, 1, 0.25);
+    addEmissive(x, 3.5, z, '#ffe07a', 0.5, 0.5, 0.5);
+  }
+
+  function addBollard(x, z) {
+    add(x, 2, z, '#2c2c2c', 0.55, 1, 0.55);
+    add(x, 2.48, z, '#555555', 0.6, 0.08, 0.6);
+  }
+
+  function addAnchor(x, z) {
+    add(x, 2, z, '#2f2f2f', 0.7, 0.5, 0.9);
+    add(x + 0.4, 2.2, z, '#2f2f2f', 0.3, 0.4, 0.3);
+    add(x - 0.4, 2.2, z, '#2f2f2f', 0.3, 0.4, 0.3);
+  }
+
+  function addTrees() {
+    const spots = [
+      [16, 13],
+      [13, 15],
+      [19, -10],
+      [20, -9],
+      [-20, 7],
+      [-19, -10],
+      [-13, 16],
+      [10, -17]
+    ];
+
+    spots.forEach(([x, z]) => addTree(x, z));
+  }
+
+  function addTree(x, z) {
+    if (!isLand(x, z)) return;
+
+    add(x, 2, z, '#6d4324');
+
+    for (let y = 3; y <= 5; y++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          if (y === 5 && (Math.abs(dx) + Math.abs(dz) > 0)) continue;
+          add(x + dx, y, z + dz, '#2f8f3e');
+        }
+      }
+    }
+  }
+
+  function addShip() {
+    const cx = 0;
+    const cy = 1;
+    const cz = 0;
+
+    const dark = '#3c2b1d';
+    const hullDark = '#5f3b20';
+    const hull = '#8b5a33';
+    const deck = '#d9b784';
+    const trim = '#e9c45d';
+    const sailColor = '#f9f4e8';
+    const red = '#d73b3b';
+    const blue = '#2d6df6';
+
+    function H(x, y, z, c) {
+      add(cx + x, cy + y, cz + z, c);
+    }
+
+    function HE(x, y, z, c) {
+      addEmissive(cx + x, cy + y, cz + z, c);
+    }
+
+    // Bottom hull.
+    for (let z = -6; z <= 6; z++) {
+      const m = Math.abs(z) >= 6 ? 0 : Math.abs(z) >= 5 ? 1 : 2;
+      for (let x = -m; x <= m; x++) {
+        H(x, 1, z, x === 0 ? hullDark : hull);
+      }
+    }
+
+    // Main hull.
+    for (let z = -6; z <= 6; z++) {
+      const m = z === 6 ? 1 : 2;
+      for (let x = -m; x <= m; x++) {
+        H(x, 2, z, hull);
+      }
+    }
+
+    // Deck and sides.
+    for (let z = -6; z <= 6; z++) {
+      const m = z === 6 ? 1 : 2;
+      for (let x = -m; x <= m; x++) {
+        const c = (x === -m || x === m) ? hull : deck;
+        H(x, 3, z, c);
+      }
+    }
+
+    // Rail.
+    for (let z = -6; z <= 6; z++) {
+      const m = z === 6 ? 1 : 2;
+      for (let x = -m; x <= m; x++) {
+        if (x === -m || x === m || z === -6 || z === 6) {
+          H(x, 4, z, trim);
+        }
+      }
+    }
+
+    // Sterncastle.
+    for (let z = -5; z <= -4; z++) {
+      for (let x = -1; x <= 1; x++) {
+        H(x, 3, z, deck);
+        H(x, 4, z, hull);
+      }
+    }
+
+    // Stern windows.
+    for (let x = -1; x <= 1; x++) {
+      HE(x, 2, -6, '#ffe07a');
+    }
+
+    // Cannon ports.
+    [-3, 0, 3].forEach((z) => {
+      H(2, 2, z, '#301f14');
+      H(-2, 2, z, '#301f14');
+    });
+
+    // Rudder.
+    H(0, 2, -7, dark);
+    H(0, 3, -7, hull);
+
+    // Bowsprit.
+    for (let z = 7; z <= 11; z++) {
+      H(0, 4, z, trim);
+    }
+
+    function mast(z, top) {
+      for (let y = 4; y <= top; y++) {
+        H(0, y, z, dark);
+      }
+    }
+
+    function yard(z, y, w) {
+      for (let x = -w; x <= w; x++) {
+        H(x, y, z, dark);
+      }
+    }
+
+    function sail(z, yMin, yMax, w) {
+      for (let y = yMin; y <= yMax; y++) {
+        for (let s = -w; s <= w; s++) {
+          add(cx + 0.75, cy + y, cz + z + s, sailColor, 0.55, 1, 1);
+        }
+      }
+    }
+
+    mast(-2, 10);
+    mast(1, 11);
+    mast(4, 9);
+
+    yard(-2, 7, 3);
+    yard(-2, 9, 2);
+    yard(1, 8, 4);
+    yard(1, 10, 3);
+    yard(4, 7, 2);
+    yard(4, 9, 1);
+
+    sail(-2, 5, 6, 2);
+    sail(-2, 8, 9, 1);
+    sail(1, 6, 7, 3);
+    sail(1, 9, 10, 2);
+    sail(4, 5, 6, 1);
+    sail(4, 8, 8, 1);
+
+    // Flags.
+    H(0, 11, 1, trim);
+    for (let x = 1; x <= 2; x++) H(x, 10, 1, red);
+
+    H(0, 10, -2, trim);
+    for (let x = 1; x <= 2; x++) H(x, 9, -2, blue);
+
+    H(0, 9, 4, trim);
+    for (let x = 1; x <= 2; x++) H(x, 8, 4, '#33281d');
+  }
+
+  function addBeacon(x, z, color) {
+    if (isLand(x, z)) return;
+
+    add(x, 1, z, '#54463a', 0.35, 1, 0.35);
+    add(x, 2, z, color, 0.7, 0.8, 0.7);
+    add(x, 3, z, '#ffffff', 0.7, 0.8, 0.7);
+    addEmissive(x, 3, z, '#fff0a0', 0.5, 0.5, 0.5);
+  }
+
+  function addBuoys() {
+    const spots = [
+      [16, -2],
+      [16, 2],
+      [20, -4],
+      [20, 4]
+    ];
+
+    spots.forEach(([x, z]) => {
+      if (isLand(x, z)) return;
+
+      add(x, 1, z, '#e74c3c', 0.65, 0.5, 0.65);
+      add(x, 1.3, z, '#ffffff', 0.65, 0.25, 0.65);
+      addEmissive(x, 1.55, z, '#ffef8a', 0.2, 0.2, 0.2);
+    });
+  }
+
+  function addClouds() {
+    const spots = [
+      [10, 24, -8],
+      [-16, 22, 8],
+      [2, 26, 16],
+      [-8, 25, -18],
+      [18, 23, 12]
+    ];
+
+    spots.forEach(([x, y, z]) => addCloud(x, y, z));
+  }
+
+  function addCloud(cx, cy, cz) {
+    const puffs = [
+      [0, 0, 0],
+      [1, 0, 0],
+      [-1, 0, 0],
+      [2, 0, 0],
+      [-2, 0, 0],
+      [0, 0, 1],
+      [0, 0, -1],
+      [1, 0, 1],
+      [-1, 0, -1],
+      [0, 1, 0],
+      [1, 1, 0],
+      [-1, 1, 0],
+      [0, 1, 1],
+      [0, 1, -1]
+    ];
+
+    puffs.forEach(([dx, dy, dz]) => {
+      addCloudVoxel(cx + dx, cy + dy, cz + dz, '#ffffff');
+    });
+  }
+
+  function addBirds() {
+    const group = new THREE.Group();
+    scene.add(group);
+
+    const mat = new THREE.MeshBasicMaterial({ color: '#ffffff' });
+
+    for (let i = 0; i < 5; i++) {
+      const bird = new THREE.Group();
+
+      const body = new THREE.Mesh(boxGeo, mat);
+      body.scale.set(0.45, 0.18, 0.18);
+      bird.add(body);
+
+      const wingL = new THREE.Mesh(boxGeo, mat);
+      wingL.scale.set(0.55, 0.06, 0.22);
+      wingL.position.set(-0.5, 0.02, 0);
+      bird.add(wingL);
+
+      const wingR = new THREE.Mesh(boxGeo, mat);
+      wingR.scale.set(0.55, 0.06, 0.22);
+      wingR.position.set(0.5, 0.02, 0);
+      bird.add(wingR);
+
+      group.add(bird);
+
+      birds.push({
+        mesh: bird,
+        wingL,
+        wingR,
+        angle: Math.random() * Math.PI * 2,
+        radius: 9 + Math.random() * 8,
+        height: 12 + Math.random() * 4,
+        speed: 0.15 + Math.random() * 0.15,
+        phase: Math.random() * Math.PI * 2
+      });
+    }
+  }
+
+  function onResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+
+  function animate() {
+    requestAnimationFrame(animate);
+
+    const clock = clock || new THREE.Clock();
+    const delta = clock.getDelta();
+    const time = clock.getElapsedTime();
+
+    if (waterMesh) {
+      for (let i = 0; i < waterBase.length; i++) {
+        const v = waterBase[i];
+
+        const y =
+          0 +
+          Math.sin(time * 1.2 + v.x * 0.35 + v.z * 0.25) * 0.11 +
+          Math.sin(time * 2.1 + v.z * 0.55) * 0.05;
+
+        animationDummy.position.set(v.x, y, v.z);
+        animationDummy.scale.set(1, 0.88, 1);
+        animationDummy.rotation.set(0, 0, 0);
+        animationDummy.updateMatrix();
+        waterMesh.setMatrixAt(i, animationDummy.matrix);
+      }
+
+      waterMesh.instanceMatrix.needsUpdate = true;
+    }
+
+    for (const b of birds) {
+      b.angle += delta * b.speed;
+
+      const x = Math.cos(b.angle) * b.radius;
+      const z = Math.sin(b.angle) * b.radius;
+      const y = b.height + Math.sin(time * 2 + b.phase) * 0.35;
+
+      b.mesh.position.set(x, y, z);
+      b.mesh.rotation.y = -b.angle;
+
+      const flap = Math.sin(time * 10 + b.phase) * 0.7;
+      b.wingL.rotation.z = flap;
+      b.wingR.rotation.z = -flap;
+    }
+
+    controls.update();
+    renderer.render(scene, camera);
+  }
+})();
+</script>
+</body>
+</html>
+```

@@ -1,0 +1,677 @@
+Here is a complete single-file HTML page. Paste everything into a file like `voxel-harbor.html` and open it in Chrome.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Voxel Harbor — A sailing ship calling at a harbor</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #9cc7da;
+    }
+    canvas {
+      display: block;
+    }
+    #hud {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      font: 13px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color: #11384a;
+      background: rgba(255, 255, 255, 0.62);
+      padding: 8px 10px;
+      border-radius: 8px;
+      pointer-events: none;
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="hud">
+    A sailing ship calling at a harbor<br />
+    Drag to orbit • Scroll to zoom
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+  <script>
+    if (typeof THREE === "undefined" || typeof THREE.OrbitControls === "undefined") {
+      document.body.innerHTML =
+        '<p style="font-family:sans-serif;padding:20px;">Could not load Three.js from CDN.</p>';
+    } else {
+      // Deterministic pseudo-random for a repeatable scene.
+      let seed = 987654321;
+      function random() {
+        seed = (seed * 1664525 + 1013904223) >>> 0;
+        return seed / 4294967296;
+      }
+      function pick(a) {
+        return a[Math.floor(random() * a.length)];
+      }
+
+      // Palette.
+      const waterColors = [
+        0x174f6b, 0x1f6288, 0x2877a0, 0x358cb3, 0x46a0c6, 0x2d7797
+      ];
+      const grassColors = [
+        0x4f7a42, 0x58884a, 0x436b35, 0x608f50
+      ];
+      const cobble = [0x7d858c, 0x959aa2, 0x6b7179];
+      const stone = [0x8f97a0, 0x79818a, 0xa0a8b1, 0x676e77];
+      const stoneDark = [0x596067, 0x4b5157];
+      const wood = [0x8f5c38, 0x74492d, 0xa06c44];
+      const woodDark = [0x3c2417, 0x2d1a11, 0x4b2f1d];
+      const deck = [0xc99b60, 0xd7aa70, 0xb5854f];
+      const sailColors = [0xf2e7cc, 0xe3d6b8, 0xf8f1de, 0xd9c8a4];
+      const houseWalls = [
+        0xf3ead5, 0xe7c89a, 0xc8d7d1, 0xd29c87, 0xead8b6, 0xf5f2e8
+      ];
+      const houseRoofs = [
+        0x8f3b2f, 0xa84434, 0x5b626d, 0x6d4429, 0x3f4a58
+      ];
+      const windowColors = [0xffdf8a, 0xffcf6a, 0x22303c, 0x9ecbff];
+      const flagColors = [0xc8453a, 0x2e58a6, 0x2f8f4d, 0xf0c84d];
+
+      // Voxel builder: stores unique 1x1x1 cubes and builds an InstancedMesh.
+      class VoxelBuilder {
+        constructor() {
+          this.voxels = [];
+          this.map = new Map();
+        }
+
+        key(x, y, z) {
+          return ((x + 1024) * 2048 + (z + 1024)) * 1024 + (y + 1024);
+        }
+
+        set(x, y, z, color) {
+          x = Math.round(x);
+          y = Math.round(y);
+          z = Math.round(z);
+
+          const k = this.key(x, y, z);
+          if (Array.isArray(color)) color = color[(random() * color.length) | 0];
+          const c = new THREE.Color(color);
+
+          const old = this.map.get(k);
+          if (old) {
+            old.color.copy(c);
+          } else {
+            const v = { x, y, z, color: c };
+            this.voxels.push(v);
+            this.map.set(k, v);
+          }
+        }
+
+        fillAll(x0, x1, y0, y1, z0, z1, color) {
+          const xa = Math.min(x0, x1), xb = Math.max(x0, x1);
+          const ya = Math.min(y0, y1), yb = Math.max(y0, y1);
+          const za = Math.min(z0, z1), zb = Math.max(z0, z1);
+
+          for (let y = ya; y <= yb; y++) {
+            for (let x = xa; x <= xb; x++) {
+              for (let z = za; z <= zb; z++) {
+                this.set(x, y, z, color);
+              }
+            }
+          }
+        }
+
+        fillSurface(x0, x1, y0, y1, z0, z1, colorTop, colorSide = colorTop) {
+          const xa = Math.min(x0, x1), xb = Math.max(x0, x1);
+          const ya = Math.min(y0, y1), yb = Math.max(y0, y1);
+          const za = Math.min(z0, z1), zb = Math.max(z0, z1);
+
+          for (let y = ya; y <= yb; y++) {
+            const top = (y === yb && colorTop !== undefined);
+            for (let x = xa; x <= xb; x++) {
+              for (let z = za; z <= zb; z++) {
+                if (
+                  x === xa || x === xb ||
+                  y === ya || y === yb ||
+                  z === za || z === zb
+                ) {
+                  this.set(x, y, z, top ? colorTop : colorSide);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      const BOX_GEOMETRY = new THREE.BoxGeometry(1, 1, 1);
+      const dummy = new THREE.Object3D();
+
+      function makeMesh(builder, material) {
+        const count = Math.max(1, builder.voxels.length);
+        const mesh = new THREE.InstancedMesh(BOX_GEOMETRY, material, count);
+        mesh.frustumCulled = false;
+
+        for (let i = 0; i < builder.voxels.length; i++) {
+          const v = builder.voxels[i];
+          dummy.position.set(v.x, v.y, v.z);
+          dummy.updateMatrix();
+          mesh.setMatrixAt(i, dummy.matrix);
+          mesh.setColorAt(i, v.color);
+        }
+
+        mesh.instanceMatrix.needsUpdate = true;
+        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+        return mesh;
+      }
+
+      // Scene / renderer / camera.
+      const scene = new THREE.Scene();
+      const sky = 0x9cc7da;
+      scene.background = new THREE.Color(sky);
+      scene.fog = new THREE.Fog(sky, 72, 185);
+
+      const camera = new THREE.PerspectiveCamera(
+        55,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        500
+      );
+      camera.position.set(50, 34, 38);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.enablePan = false;
+      controls.minDistance = 20;
+      controls.maxDistance = 120;
+      controls.maxPolarAngle = Math.PI / 2 - 0.03;
+      controls.target.set(-2, 6, 0);
+      controls.autoRotate = true;
+      controls.autoRotateSpeed = 0.35;
+      renderer.domElement.addEventListener("pointerdown", () => {
+        controls.autoRotate = false;
+      }, { once: true });
+
+      // Lights.
+      scene.add(new THREE.HemisphereLight(0xc7e9ff, 0x275362, 0.95));
+      const sunLight = new THREE.DirectionalLight(0xfff1cf, 1.0);
+      sunLight.position.set(35, 55, 25);
+      scene.add(sunLight);
+      scene.add(new THREE.AmbientLight(0xffffff, 0.12));
+
+      const opaqueMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+      const waterMat = new THREE.MeshPhongMaterial({
+        color: 0xffffff,
+        shininess: 35,
+        specular: 0x7fa0b5
+      });
+
+      // Animated water surface.
+      const waterBuilder = new VoxelBuilder();
+      const waterData = [];
+      const MAP_MIN = -44;
+      const MAP_MAX = 43;
+
+      for (let x = MAP_MIN; x <= MAP_MAX; x++) {
+        for (let z = MAP_MIN; z <= MAP_MAX; z++) {
+          waterBuilder.set(x, 0, z, waterColors);
+          waterData.push({
+            x,
+            z,
+            amp: 0.07 + random() * 0.09
+          });
+        }
+      }
+
+      const waterMesh = makeMesh(waterBuilder, waterMat);
+      scene.add(waterMesh);
+
+      // Static harbor.
+      const staticBuilder = new VoxelBuilder();
+
+      // West quay / town land.
+      staticBuilder.fillSurface(-44, -10, 1, 2, -22, 22, grassColors, stone);
+      for (let z = -20; z <= 20; z++) {
+        staticBuilder.set(-10, 2, z, cobble);
+        staticBuilder.set(-11, 2, z, cobble);
+      }
+
+      // Harbor moles and breakwaters.
+      staticBuilder.fillSurface(-10, 16, 1, 3, -30, -22, stone, stoneDark);
+      staticBuilder.fillSurface(-10, 16, 1, 3, 22, 30, stone, stoneDark);
+      staticBuilder.fillSurface(16, 30, 1, 4, -26, -20, stone, stoneDark);
+      staticBuilder.fillSurface(16, 30, 1, 4, 20, 26, stone, stoneDark);
+
+      // Wooden landing pier.
+      staticBuilder.fillSurface(-10, -9, 1, 3, -6, 6, deck, woodDark);
+      for (let z = -6; z <= 6; z += 2) {
+        staticBuilder.set(-10, 3, z, 0x6e4b2d);
+        staticBuilder.set(-9, 3, z, 0x6e4b2d);
+      }
+
+      // Bollards along quay and pier.
+      for (let z = -20; z <= 20; z += 5) {
+        if (z < -6 || z > 6) {
+          staticBuilder.set(-10, 3, z, [0x2d3035, 0x434a52]);
+          staticBuilder.set(-10, 4, z, [0x2d3035, 0x434a52]);
+        }
+      }
+      for (let z = -4; z <= 4; z += 4) {
+        staticBuilder.set(-10, 4, z, [0x2d3035, 0x434a52]);
+      }
+
+      function addCrate(b, x, z, y, s = 2) {
+        b.fillAll(x, x + s - 1, y, y + s - 1, z, z + s - 1, wood);
+        const edge = 0x57361f;
+        for (let i = 0; i < s; i++) {
+          b.set(x + i, y, z, edge);
+          b.set(x + i, y + s - 1, z, edge);
+          b.set(x + i, y, z + s - 1, edge);
+          b.set(x + i, y + s - 1, z + s - 1, edge);
+        }
+      }
+
+      function addBarrel(b, x, z, y) {
+        b.fillAll(x, x + 1, y, y + 1, z, z + 1, wood);
+        b.fillAll(x, x + 1, y + 1, y + 1, z, z + 1, deck);
+        const edge = 0x4a2f1f;
+        b.set(x, y, z, edge);
+        b.set(x + 1, y, z, edge);
+        b.set(x, y, z + 1, edge);
+        b.set(x + 1, y, z + 1, edge);
+      }
+
+      // Cargo near the quay.
+      addCrate(staticBuilder, -12, 14, 3, 2);
+      addCrate(staticBuilder, -13, -16, 3, 2);
+      addBarrel(staticBuilder, -14, 10, 3);
+      addBarrel(staticBuilder, -15, -10, 3);
+
+      // Cargo on pier.
+      addCrate(staticBuilder, -10, -2, 4, 2);
+      addCrate(staticBuilder, -10, 2, 4, 2);
+      addBarrel(staticBuilder, -10, -4, 4);
+
+      // Town buildings.
+      function addHouse(b, x, z, w, d, h) {
+        const wall = pick(houseWalls);
+        const roof = pick(houseRoofs);
+        const win = pick(windowColors);
+        const door = pick([0x452b1c, 0x321d12]);
+
+        b.fillAll(x, x + w - 1, 3, 3 + h - 1, z, z + d - 1, wall);
+
+        const ex = x + w - 1;
+        const fz = z + d - 1;
+
+        for (let y = 4; y <= 3 + h - 1; y += 2) {
+          for (let zz = z; zz <= z + d - 1; zz += 2) {
+            b.set(ex, y, zz, win);
+          }
+          for (let xx = x; xx <= x + w - 1; xx += 2) {
+            b.set(xx, y, fz, win);
+          }
+        }
+
+        b.set(ex, 3, Math.floor(z + d / 2), door);
+        b.set(Math.floor(x + w / 2), 3, fz, door);
+
+        const roofH = Math.max(1, Math.floor((Math.min(w, d) + 1) / 2));
+        for (let r = 0; r < roofH; r++) {
+          const x0 = x + r;
+          const x1 = x + w - 1 - r;
+          const z0 = z + r;
+          const z1 = z + d - 1 - r;
+          if (x1 >= x0 && z1 >= z0) {
+            b.fillSurface(x0, x1, 3 + h + r, 3 + h + r, z0, z1, roof);
+          }
+        }
+      }
+
+      const houses = [
+        [-40, -18, 5, 4, 3], [-33, -18, 4, 4, 3], [-27, -18, 4, 5, 4], [-21, -18, 4, 4, 3],
+        [-40, -12, 4, 4, 4], [-34, -12, 5, 4, 3], [-28, -12, 4, 4, 3], [-22, -12, 5, 4, 4],
+        [-40, -5, 4, 5, 3], [-34, -5, 5, 4, 4], [-28, -5, 4, 4, 3], [-22, -5, 4, 5, 3],
+        [-40, 2, 5, 4, 4], [-33, 2, 4, 4, 3], [-27, 2, 4, 5, 3], [-21, 2, 5, 4, 4],
+        [-40, 9, 4, 4, 3], [-34, 9, 5, 5, 4], [-28, 9, 4, 4, 3],
+        [-17, -2, 5, 7, 4]
+      ];
+      for (const h of houses) addHouse(staticBuilder, h[0], h[1], h[2], h[3], h[4]);
+
+      function addTree(b, x, z) {
+        b.fillAll(x, x, 3, 4, z, z, woodDark);
+        const leaf = pick(grassColors);
+        b.fillAll(x - 1, x + 1, 4, 4, z - 1, z + 1, leaf);
+        b.fillAll(x - 1, x + 1, 5, 5, z - 1, z + 1, leaf);
+        b.fillAll(x, x, 6, 6, z, z, leaf);
+      }
+
+      const treeSpots = [
+        [-16, -20], [-16, 20], [-19, 18], [-42, 16], [-42, -14], [-16, 7], [-24, -19]
+      ];
+      for (const t of treeSpots) addTree(staticBuilder, t[0], t[1]);
+
+      // Lighthouse.
+      const lighthouseX = 28;
+      const lighthouseZ = 23;
+
+      function addLighthouse(b, cx, cz) {
+        for (let y = 5; y <= 12; y++) {
+          const r = y <= 9 ? 2 : 1;
+          const col =
+            y >= 11 ? 0x616970 :
+            (y % 2 === 1 ? 0xc9473a : 0xf2f0e5);
+          b.fillAll(cx - r, cx + r, y, y, cz - r, cz + r, col);
+        }
+
+        b.fillAll(cx - 1, cx + 1, 13, 13, cz - 1, cz + 1, 0xffd978);
+        b.fillAll(cx - 1, cx + 1, 14, 14, cz - 1, cz + 1, 0x474f57);
+        b.set(cx, 15, cz, 0x2f363d);
+      }
+
+      addLighthouse(staticBuilder, lighthouseX, lighthouseZ);
+
+      const staticMesh = makeMesh(staticBuilder, opaqueMat);
+      scene.add(staticMesh);
+
+      // Beacon light.
+      const beacon = new THREE.Mesh(
+        new THREE.BoxGeometry(1, 1, 1),
+        new THREE.MeshBasicMaterial({ color: 0xffdf88, fog: false })
+      );
+      beacon.position.set(lighthouseX, 13.5, lighthouseZ);
+      scene.add(beacon);
+
+      const beaconLight = new THREE.PointLight(0xffdf88, 0.9, 80);
+      beaconLight.position.set(lighthouseX, 14, lighthouseZ);
+      scene.add(beaconLight);
+
+      // Ship: length along Z, beam along X. This lets the square sails read nicely.
+      function buildShip() {
+        const b = new VoxelBuilder();
+        const darkWood = pick(woodDark);
+
+        function beamFor(z) {
+          if (z <= -9) return 3;
+          if (z <= -8) return 4;
+          if (z >= 10) return 1;
+          if (z >= 9) return 2;
+          if (z >= 8) return 3;
+          return 4;
+        }
+
+        // Hull.
+        for (let z = -11; z <= 11; z++) {
+          const m = beamFor(z);
+          for (let y = 0; y <= 3; y++) {
+            for (let x = -m; x <= m; x++) {
+              let col;
+              if (y === 0) col = pick(woodDark);
+              else if (y === 3) col = pick(deck);
+              else col = pick(wood);
+              b.set(x, y, z, col);
+            }
+          }
+        }
+
+        // White stripe and gunports.
+        for (let z = -8; z <= 7; z++) {
+          const m = beamFor(z);
+          b.set(m, 1, z, 0xf2eee3);
+          b.set(-m, 1, z, 0xf2eee3);
+        }
+        for (let z = -7; z <= 7; z += 2) {
+          const m = beamFor(z);
+          b.set(m, 2, z, 0x1c1c1c);
+          b.set(-m, 2, z, 0x1c1c1c);
+        }
+
+        // Rail posts.
+        for (let z = -9; z <= 9; z += 2) {
+          const m = beamFor(z);
+          b.set(m, 4, z, darkWood);
+          b.set(-m, 4, z, darkWood);
+        }
+
+        // Sterncastle.
+        b.fillAll(-3, 3, 3, 5, -11, -5, pick(wood));
+        for (let z = -11; z <= -5; z++) {
+          for (let x = -3; x <= 3; x++) {
+            b.set(x, 5, z, pick(deck));
+          }
+        }
+        for (let x = -2; x <= 0; x++) {
+          b.set(x, 4, -11, pick(windowColors));
+        }
+
+        // Forecastle.
+        b.fillAll(-2, 2, 3, 4, 7, 11, pick(wood));
+        for (let z = 7; z <= 11; z++) {
+          for (let x = -2; x <= 2; x++) {
+            b.set(x, 4, z, pick(deck));
+          }
+        }
+
+        // Bowsprit.
+        for (let z = 12; z <= 15; z++) b.set(0, 4, z, darkWood);
+        b.set(0, 5, 16, darkWood);
+
+        // Sails.
+        function addSail(z, y0, y1, w, c) {
+          for (let y = y0; y <= y1; y++) {
+            for (let x = -w; x <= w; x++) {
+              b.set(x, y, z, c);
+            }
+          }
+        }
+
+        addSail(-1, 9, 11, 6, pick(sailColors));
+        addSail(-1, 12, 13, 5, pick(sailColors));
+        addSail(5, 8, 10, 4, pick(sailColors));
+        addSail(5, 11, 12, 3, pick(sailColors));
+        addSail(-7, 8, 10, 4, pick(sailColors));
+        addSail(-7, 11, 12, 3, pick(sailColors));
+
+        // Yards.
+        function addYard(z, y, w) {
+          for (let x = -w; x <= w; x++) b.set(x, y, z, darkWood);
+        }
+
+        addYard(-1, 8, 6);
+        addYard(-1, 12, 5);
+        addYard(-1, 14, 3);
+
+        addYard(5, 7, 4);
+        addYard(5, 11, 3);
+        addYard(5, 13, 2);
+
+        addYard(-7, 7, 4);
+        addYard(-7, 11, 3);
+
+        // Masts (added after sails so the mast line shows through).
+        function addMast(z, top) {
+          for (let y = 4; y <= top; y++) b.set(0, y, z, darkWood);
+        }
+
+        addMast(-1, 15);
+        addMast(5, 13);
+        addMast(-7, 12);
+
+        // Flags.
+        for (let x = 1; x <= 3; x++) b.set(x, 16, -1, pick(flagColors));
+        for (let x = 1; x <= 2; x++) b.set(x, 14, 5, pick(flagColors));
+
+        return b;
+      }
+
+      const shipGroup = new THREE.Group();
+      shipGroup.add(makeMesh(buildShip(), opaqueMat));
+      shipGroup.position.set(-3, 0.04, -1);
+      scene.add(shipGroup);
+
+      // Small sailboat in the basin.
+      function buildSmallSail() {
+        const b = new VoxelBuilder();
+        const dark = pick(woodDark);
+
+        for (let z = -4; z <= 4; z++) {
+          const m = z <= -4 || z >= 4 ? 1 : 2;
+          for (let y = 0; y <= 1; y++) {
+            for (let x = -m; x <= m; x++) {
+              b.set(x, y, z, pick(wood));
+            }
+          }
+        }
+
+        for (let y = 2; y <= 7; y++) b.set(0, y, 0, dark);
+
+        const c = pick(sailColors);
+        for (let y = 3; y <= 6; y++) {
+          for (let x = -2; x <= 2; x++) {
+            b.set(x, y, 1, c);
+          }
+        }
+
+        b.set(1, 8, 0, pick(flagColors));
+        return b;
+      }
+
+      const smallSailGroup = new THREE.Group();
+      smallSailGroup.add(makeMesh(buildSmallSail(), opaqueMat));
+      smallSailGroup.position.set(11, 0, -13);
+      scene.add(smallSailGroup);
+
+      const floats = [
+        {
+          group: shipGroup,
+          baseY: 0.04,
+          amp: 0.11,
+          speed: 0.78,
+          roll: 0.025,
+          pitch: 0.012,
+          phase: 0.0
+        },
+        {
+          group: smallSailGroup,
+          baseY: 0.0,
+          amp: 0.09,
+          speed: 1.15,
+          roll: 0.05,
+          pitch: 0.03,
+          phase: 2.1
+        }
+      ];
+
+      // Simple box birds.
+      const birdBodyMat = new THREE.MeshBasicMaterial({ color: 0xd9e3e8, fog: false });
+      const birdWingMat = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false });
+
+      function createBird() {
+        const g = new THREE.Group();
+
+        const body = new THREE.Mesh(
+          new THREE.BoxGeometry(0.45, 0.28, 1.0),
+          birdBodyMat
+        );
+        g.add(body);
+
+        const wingGeo = new THREE.BoxGeometry(1.2, 0.07, 0.38);
+
+        const wingL = new THREE.Group();
+        wingL.position.x = 0.2;
+        const wingLMesh = new THREE.Mesh(wingGeo, birdWingMat);
+        wingLMesh.position.x = 0.65;
+        wingL.add(wingLMesh);
+
+        const wingR = new THREE.Group();
+        wingR.position.x = -0.2;
+        const wingRMesh = new THREE.Mesh(wingGeo, birdWingMat);
+        wingRMesh.position.x = -0.65;
+        wingR.add(wingRMesh);
+
+        g.add(wingL, wingR);
+        g.userData.wings = [wingL, wingR];
+        return g;
+      }
+
+      const birds = [];
+      for (let i = 0; i < 6; i++) {
+        const bird = createBird();
+        birds.push(bird);
+        scene.add(bird);
+      }
+
+      // Resize.
+      window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      const clock = new THREE.Clock();
+      const waterCount = waterMesh.count;
+
+      function animate() {
+        requestAnimationFrame(animate);
+
+        const time = clock.getElapsedTime();
+        controls.update();
+
+        // Water waves.
+        const tw = time * 1.1;
+        for (let i = 0; i < waterCount; i++) {
+          const d = waterData[i];
+          const y = 0.22 + Math.sin(tw + d.x * 0.24 + d.z * 0.18) * d.amp;
+          dummy.position.set(d.x, y, d.z);
+          dummy.updateMatrix();
+          waterMesh.setMatrixAt(i, dummy.matrix);
+        }
+        waterMesh.instanceMatrix.needsUpdate = true;
+
+        // Bobbing floating objects.
+        for (const f of floats) {
+          f.group.position.y =
+            f.baseY + Math.sin(time * f.speed + f.phase) * f.amp;
+          f.group.rotation.z =
+            Math.sin(time * f.speed * 1.05 + f.phase) * f.roll;
+          f.group.rotation.x =
+            Math.sin(time * f.speed * 0.65 + f.phase + 1.2) * f.pitch;
+        }
+
+        // Birds orbiting.
+        for (let i = 0; i < birds.length; i++) {
+          const bird = birds[i];
+          const a = time * 0.25 + i * 1.1;
+          const r = 24;
+          bird.position.set(
+            Math.cos(a) * r + controls.target.x,
+            26 + Math.sin(time * 0.6 + i * 1.7) * 2.2,
+            Math.sin(a) * r + controls.target.z
+          );
+          bird.rotation.y = -a;
+
+          const flap = Math.sin(time * 9 + i * 2) * 0.55;
+          bird.userData.wings[0].rotation.z = flap;
+          bird.userData.wings[1].rotation.z = -flap;
+        }
+
+        // Lighthouse pulse.
+        const pulse = 1 + 0.08 * Math.sin(time * 2.2);
+        beacon.scale.set(pulse, pulse, pulse);
+        beaconLight.intensity = 0.8 + 0.25 * Math.sin(time * 2.2);
+
+        renderer.render(scene, camera);
+      }
+
+      animate();
+    }
+  </script>
+</body>
+</html>
+```

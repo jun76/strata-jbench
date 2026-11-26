@@ -1,0 +1,1 @@
+Measured every model again on Strata 0.2.21 (27 builds, with Gyro-S v2 and Inkling 2 Mini), Tiers 0-5 (1813 of 1835 cases done). Not measured: Gyro-S v2 at 256K and 1M (jbench could not launch it), NVFP4's prefill chunk (the setting did not reach the engine), and the 256K long-read document of Hy4-Flash SQ-128 and Inkling SQ-20 (longer than the window)

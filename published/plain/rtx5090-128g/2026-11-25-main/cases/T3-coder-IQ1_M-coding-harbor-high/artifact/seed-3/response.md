@@ -1,0 +1,744 @@
+```html
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Voxel Harbor — A Sailing Ship Calling at a Harbor</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #0a1118;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  #hint {
+    position: fixed;
+    left: 14px;
+    bottom: 14px;
+    font: 14px sans-serif;
+    color: rgba(255,255,255,0.70);
+    pointer-events: none;
+    white-space: pre;
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hint">
+A sailing ship calling at a harbor — voxel art
+
+Drag mouse / touch to orbit.
+Wheel / +/- to zoom.
+Arrows to rotate.
+</div>
+
+<script>
+(function () {
+  const canvas = document.getElementById("c");
+  const gl = canvas.getContext("webgl2");
+
+  if (!gl) {
+    const hint = document.getElementById("hint");
+    hint.textContent = "WebGL2 not supported in this browser.";
+    return;
+  }
+
+  // ----------------------------------------------------------------------
+  // Small math helpers
+  // ----------------------------------------------------------------------
+
+  function addV(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
+  function sub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+  function mulS(a, s) { return [a[0] * s, a[1] * s, a[2] * s]; }
+  function dot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+  function len(a) { return Math.sqrt(dot(a, a)); }
+  function norm(a) {
+    const l = len(a) || 1;
+    return [a[0] / l, a[1] / l, a[2] / l];
+  }
+  function cross(a, b) {
+    return [
+      a[1] * b[2] - a[2] * b[1],
+      a[2] * b[0] - a[0] * b[2],
+      a[0] * b[1] - a[1] * b[0]
+    ];
+  }
+
+  function matmul(a, b) {
+    const o = new Float32Array(16);
+    for (let c = 0; c < 4; ++c) {
+      for (let r = 0; r < 4; ++r) {
+        let s = 0;
+        for (let k = 0; k < 4; ++k) {
+          s += a[k * 4 + r] * b[c * 4 + k];
+        }
+        o[c * 4 + r] = s;
+      }
+    }
+    return o;
+  }
+
+  function perspective(fov, aspect, near, far) {
+    const f = 1 / Math.tan(fov * 0.5);
+    const nf = near - far;
+    const m = new Float32Array(16);
+    m[0] = f / aspect;
+    m[5] = f;
+    m[10] = (far + near) / nf;
+    m[11] = -1;
+    m[14] = (2 * far * near) / nf;
+    return m;
+  }
+
+  function lookAt(eye, target) {
+    const up = [0, 1, 0];
+    const z = norm(sub(eye, target));
+    const x = norm(cross(up, z));
+    const y = cross(z, x);
+
+    const m = new Float32Array(16);
+    m[0] = x[0]; m[4] = y[0]; m[8] = z[0];  m[12] = -dot(x, eye);
+    m[1] = x[1]; m[5] = y[1]; m[9] = z[1];  m[13] = -dot(y, eye);
+    m[2] = x[2]; m[6] = y[2]; m[10] = z[2]; m[14] = -dot(z, eye);
+    m[3] = 0;    m[7] = 0;    m[11] = 0;    m[15] = 1;
+    return m;
+  }
+
+  // ----------------------------------------------------------------------
+  // Voxel storage
+  // ----------------------------------------------------------------------
+
+  const offsets = [];
+  const colors = [];
+  const anim = []; // x = phase, y = type: 0 static, 1 water
+
+  function pushVoxel(x, y, z, c, phase = 0, type = 0) {
+    offsets.push(x, y, z);
+    colors.push(c[0], c[1], c[2]);
+    anim.push(phase, type);
+  }
+
+  function addBox(x1, y1, z1, x2, y2, z2, c, phase = 0, type = 0) {
+    if (x1 > x2) { const t = x1; x1 = x2; x2 = t; }
+    if (y1 > y2) { const t = y1; y1 = y2; y2 = t; }
+    if (z1 > z2) { const t = z1; z1 = z2; z2 = t; }
+
+    for (let x = x1; x <= x2; ++x) {
+      for (let y = y1; y <= y2; ++y) {
+        for (let z = z1; z <= z2; ++z) {
+          pushVoxel(x, y, z, c, phase, type);
+        }
+      }
+    }
+  }
+
+  function addWorldLine(x0, y0, z0, x1, y1, z1, c, sag = 0) {
+    const dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
+    const steps = Math.max(Math.max(Math.abs(dx), Math.abs(dy)), Math.abs(dz));
+    for (let i = 0; i <= steps; ++i) {
+      const t = steps === 0 ? 0 : i / steps;
+      const x = Math.round(x0 + dx * t);
+      const y = Math.round(y0 + dy * t - Math.sin(t * Math.PI) * sag);
+      const z = Math.round(z0 + dz * t);
+      pushVoxel(x, y, z, c, 0, 0);
+    }
+  }
+
+  const SX = 0;
+  const SY = 0;
+  const SZ = -10;
+
+  function shipBox(x1, y1, z1, x2, y2, z2, c) {
+    if (x1 > x2) { const t = x1; x1 = x2; x2 = t; }
+    if (y1 > y2) { const t = y1; y1 = y2; y2 = t; }
+    if (z1 > z2) { const t = z1; z1 = z2; z2 = t; }
+
+    for (let x = x1; x <= x2; ++x) {
+      for (let y = y1; y <= y2; ++y) {
+        for (let z = z1; z <= z2; ++z) {
+          pushVoxel(x + SX, y + SY, z + SZ, c, 0, 0);
+        }
+      }
+    }
+  }
+
+  function shipLine(x0, y0, z0, x1, y1, z1, c, sag = 0) {
+    const dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
+    const steps = Math.max(Math.max(Math.abs(dx), Math.abs(dy)), Math.abs(dz));
+    for (let i = 0; i <= steps; ++i) {
+      const t = steps === 0 ? 0 : i / steps;
+      const x = Math.round(x0 + dx * t);
+      const y = Math.round(y0 + dy * t - Math.sin(t * Math.PI) * sag);
+      const z = Math.round(z0 + dz * t);
+      pushVoxel(x + SX, y + SY, z + SZ, c, 0, 0);
+    }
+  }
+
+  function mix(a, b, t) {
+    return [
+      a[0] + (b[0] - a[0]) * t,
+      a[1] + (b[1] - a[1]) * t,
+      a[2] + (b[2] - a[2]) * t
+    ];
+  }
+
+  // ----------------------------------------------------------------------
+  // Palette
+  // ----------------------------------------------------------------------
+
+  const WHITE  = [0.96, 0.94, 0.90];
+  const SAIL   = [0.97, 0.95, 0.88];
+  const CREAM  = [0.93, 0.79, 0.57];
+  const RED    = [0.82, 0.17, 0.17];
+  const BLUE   = [0.17, 0.30, 0.55];
+  const YELLOW = [0.92, 0.72, 0.22];
+
+  const WATER  = [0.17, 0.45, 0.62];
+  const DEEP   = [0.09, 0.27, 0.42];
+  const SAND   = [0.87, 0.76, 0.54];
+  const GRASS  = [0.30, 0.55, 0.32];
+
+  const WOOD   = [0.54, 0.38, 0.23];
+  const PLANK  = [0.67, 0.51, 0.35];
+  const DARKWOOD=[0.29, 0.21, 0.13];
+  const CRATE  = [0.59, 0.42, 0.27];
+
+  const HULL1  = [0.23, 0.15, 0.10];
+  const HULL2  = [0.38, 0.25, 0.15];
+
+  const MAST   = [0.48, 0.34, 0.22];
+  const YARD   = [0.38, 0.28, 0.18];
+  const ROPE   = [0.70, 0.60, 0.41];
+
+  const STONE  = [0.52, 0.54, 0.57];
+  const METAL  = [0.31, 0.33, 0.35];
+  const GLASS  = [0.56, 0.76, 0.92];
+
+  const CABIN  = [0.74, 0.48, 0.28];
+  const ROOF   = [0.34, 0.17, 0.17];
+
+  // ----------------------------------------------------------------------
+  // Cube geometry for each voxel instance
+  // ----------------------------------------------------------------------
+
+  const h = 0.48;
+  const cubePos = [];
+  const cubeNorm = [];
+
+  function pushQuad(verts, n) {
+    function p(v) {
+      cubePos.push(v[0], v[1], v[2]);
+      cubeNorm.push(n[0], n[1], n[2]);
+    }
+    p(verts[0]); p(verts[1]); p(verts[2]);
+    p(verts[2]); p(verts[3]); p(verts[0]);
+  }
+
+  // +X
+  pushQuad([[ h, -h, -h], [h, -h,  h], [h,  h,  h], [h,  h, -h]], [1, 0, 0]);
+  // -X
+  pushQuad([[-h, -h, -h], [-h,  h, -h], [-h,  h,  h], [-h, -h,  h]], [-1, 0, 0]);
+  // +Y
+  pushQuad([[-h,  h, -h], [ h,  h, -h], [ h,  h,  h], [-h,  h,  h]], [0, 1, 0]);
+  // -Y
+  pushQuad([[-h, -h, -h], [-h, -h,  h], [ h, -h,  h], [ h, -h, -h]], [0, -1, 0]);
+  // +Z
+  pushQuad([[-h, -h,  h], [ h, -h,  h], [ h,  h,  h], [-h,  h,  h]], [0, 0, 1]);
+  // -Z
+  pushQuad([[-h, -h, -h], [-h,  h, -h], [ h,  h, -h], [ h, -h, -h]], [0, 0, -1]);
+
+  // ----------------------------------------------------------------------
+  // Scene build: sea, harbor, ship, props
+  // ----------------------------------------------------------------------
+
+  function makeScene() {
+    // Sea surface
+    for (let x = -40; x <= 40; ++x) {
+      for (let z = -14; z <= 55; ++z) {
+        const shade = ((x * 3 + z * 5) & 15) / 15;
+        const c = mix(WATER, DEEP, 0.05 + shade * 0.20);
+        const phase = (((x * 91 + z * 37) & 1023) / 1024);
+        pushVoxel(x, 0, z, c, phase, 1);
+      }
+    }
+
+    // Land behind the quay
+    for (let x = -40; x <= 40; ++x) {
+      for (let z = -40; z <= -17; ++z) {
+        const base = (z < -23) ? GRASS : SAND;
+        const shade = (((x * 13 + z * 7) & 7) * 0.006);
+        const c = mix(base, [0, 0, 0], shade);
+        pushVoxel(x, 1, z, c, 0, 0);
+      }
+    }
+
+    // Quay wall and promenade
+    addBox(-35, 0, -16, 35, 2, -15, mix(STONE, DARKWOOD, 0.10));
+    addBox(-35, 2, -14, 35, 2, -13, mix(WOOD, PLANK, 0.35));
+
+    // Bollards
+    for (let x = -30; x <= 30; x += 12) {
+      addBox(x, 3, -14, x, 4, -14, METAL);
+    }
+
+    // Lamp posts
+    for (let x = -24; x <= 24; x += 16) {
+      addBox(x, 3, -14, x, 5, -14, METAL);
+      addBox(x, 6, -14, x, 6, -14, YELLOW);
+    }
+
+    // Small piers
+    addBox(-29, 2, -13, -27, 2, 3, mix(WOOD, PLANK, 0.25));
+    addBox( 27, 2, -13,  29, 2, 3, mix(WOOD, PLANK, 0.25));
+
+    // Flag poles on land
+    for (let x = -20; x <= 20; x += 20) {
+      addBox(x, 2, -18, x, 5, -18, DARKWOOD);
+      for (let fz = 0; fz < 4; ++fz) {
+        const c = (fz < 1) ? RED : (fz < 2 ? WHITE : (fz < 3 ? BLUE : WHITE));
+        pushVoxel(x, 6, -18 + fz, c, 0, 0);
+      }
+    }
+
+    // Warehouses
+    function addBuilding(cx, cz, w, d, ht, wall, roof) {
+      const x1 = cx - Math.floor(w / 2);
+      const x2 = cx + Math.floor((w - 1) / 2);
+      const z1 = cz - Math.floor(d / 2);
+      const z2 = cz + Math.floor((d - 1) / 2);
+
+      const yTop = 1 + ht; // yBase = 2, so top wall center = 1 + ht
+      addBox(x1, 2, z1, x2, yTop, z2, wall);
+      addBox(x1 - 1, yTop + 1, z1 - 1, x2 + 1, yTop + 1, z2 + 1, roof);
+
+      // Door on front face
+      const dx = Math.round((x1 + x2) / 2);
+      addBox(dx, 2, z2 + 1, dx + 1, 3, z2 + 1, DARKWOOD);
+
+      // Windows
+      for (let x = x1 + 1; x <= x2 - 2; x += 3) {
+        addBox(x, 4, z2 + 1, x, 4, z2 + 1, GLASS);
+        if (ht >= 6) addBox(x, 6, z2 + 1, x, 6, z2 + 1, GLASS);
+      }
+    }
+
+    addBuilding(-26, -31, 14, 10, 7, [0.65, 0.19, 0.23], [0.33, 0.17, 0.17]);
+    addBuilding(  4, -34, 16,  8, 6, [0.86, 0.72, 0.48], [0.42, 0.20, 0.19]);
+    addBuilding( 27, -25, 10,  8, 5, [0.26, 0.42, 0.55], [0.17, 0.25, 0.35]);
+
+    // Lighthouse
+    (function () {
+      const x = 34;
+      const z = -40;
+      addBox(x - 3, 2, z - 3, x + 3, 3, z + 3, STONE);
+
+      for (let y = 4; y <= 13; ++y) {
+        const r = (y < 11) ? 2 : 1;
+        const c = (y & 1) ? WHITE : RED;
+        for (let dx = -r; dx <= r; ++dx) {
+          for (let dz = -r; dz <= r; ++dz) {
+            if (dx * dx + dz * dz <= r * r + 1) {
+              pushVoxel(x + dx, y, z + dz, c, 0, 0);
+            }
+          }
+        }
+      }
+
+      addBox(x - 3, 14, z - 3, x + 3, 14, z + 3, METAL);
+      addBox(x - 1, 15, z - 1, x + 1, 17, z + 1, GLASS);
+      addBox(x - 1, 18, z - 1, x + 1, 18, z + 1, METAL);
+    })();
+
+    // Trees
+    function addTree(x, z) {
+      addBox(x, 2, z, x, 3, z, DARKWOOD);
+      for (let dx = -2; dx <= 2; ++dx) {
+        for (let dz = -2; dz <= 2; ++dz) {
+          for (let dy = -2; dy <= 2; ++dy) {
+            if (dx === 0 && dz === 0 && dy < 0) continue;
+            if (dx * dx + dy * dy + dz * dz <= 5) {
+              const c = mix(GRASS, [0, 0, 0], (((dx + dz + dy + 10) & 3) * 0.03));
+              pushVoxel(x + dx, 5 + dy, z + dz, c, 0, 0);
+            }
+          }
+        }
+      }
+    }
+
+    addTree(-34, -26);
+    addTree(-17, -38);
+    addTree( 12, -41);
+    addTree( -8, -30);
+    addTree( 21, -39);
+
+    // Crates and barrels near quay
+    addBox(-22, 3, -13, -20, 4, -11, CRATE);
+    addBox(-14, 3, -12, -12, 4, -10, CRATE);
+    addBox( 18, 3, -12,  20, 4, -10, CRATE);
+    addBox( 11, 3, -13,  13, 5, -11, DARKWOOD);
+    addBox( 23, 3, -11,  25, 5,  -9, DARKWOOD);
+
+    // Gangplank from quay toward the ship
+    addBox(0, 3, -14, 2, 3, -13, mix(PLANK, WOOD, 0.35));
+
+    // Ship
+    function hullZ(x) {
+      if (x < -9) return [-1, 1];
+      if (x < 10) return [-2, 1];
+      if (x < 12) return [-1, 1];
+      return [0, 0];
+    }
+
+    // Hull
+    for (let x = -12; x <= 14; ++x) {
+      const e = hullZ(x);
+      for (let y = 1; y <= 2; ++y) {
+        const c = (y === 1) ? HULL1 : HULL2;
+        for (let z = e[0]; z <= e[1]; ++z) {
+          shipBox(x, y, z, x, y, z, c);
+        }
+      }
+    }
+
+    // Deck
+    for (let x = -11; x <= 13; ++x) {
+      const e = hullZ(x);
+      for (let z = e[0]; z <= e[1]; ++z) {
+        const edge = (z === e[0]) || (z === e[1]) || (x <= -10) || (x >= 12);
+        shipBox(x, 3, z, x, 3, z, edge ? DARKWOOD : mix(PLANK, WOOD, 0.25));
+      }
+    }
+
+    // Rail
+    for (let x = -11; x <= 13; ++x) {
+      const e = hullZ(x);
+      for (let z = e[0]; z <= e[1]; ++z) {
+        const edge = (z === e[0]) || (z === e[1]) || (x <= -10) || (x >= 12);
+        if (edge) shipBox(x, 4, z, x, 4, z, DARKWOOD);
+      }
+    }
+
+    // Cabins
+    shipBox(-12, 4, -1, -10, 5, 0, CABIN);
+    shipBox(-13, 6, -2,  -9, 6, 1, ROOF);
+    shipBox( -5, 4, -1,  -1, 5, 0, CABIN);
+    shipBox( -6, 6, -2,   0, 6, 1, ROOF);
+
+    // Masts, yards, sails, flags, rigging
+    const mastX = [-8, 1, 8];
+    for (let i = 0; i < mastX.length; ++i) {
+      const mx = mastX[i];
+      const top = (i === 2) ? 13 : 14;
+
+      shipBox(mx, 4, 0, mx, top, 0, MAST);
+
+      shipBox(mx - 2, 6, -2, mx + 2, 6, 1, YARD);
+      shipBox(mx - 2, 9, -2, mx + 2, 9, 1, YARD);
+
+      const lowerEnd = (i === 2) ? 8 : 9;
+      for (let y = 7; y <= lowerEnd; ++y) {
+        shipBox(mx - 2, y, -2, mx + 2, y, 1, (y & 1) ? SAIL : CREAM);
+      }
+
+      if (i !== 2) {
+        shipBox(mx - 1, 10, -1, mx + 1, 11, 0, SAIL);
+        shipBox(mx - 1, 12, -1, mx + 1, 12, 0, YARD);
+      }
+
+      // Flag
+      for (let fz = 1; fz <= 4; ++fz) {
+        let c = WHITE;
+        if (fz === 1) c = RED;
+        else if (fz === 2) c = WHITE;
+        else if (fz === 3) c = BLUE;
+        shipBox(mx, top + 1, fz, mx, top + 1, fz, c);
+      }
+
+      // Rigging
+      shipLine(mx, 13, 0, mx, 3, -2, ROPE, 0.6);
+      shipLine(mx, 13, 0, mx, 3, 1,  ROPE, 0.6);
+      shipLine(mx, 13, 0, mx - 8, 3, 0, ROPE, 0.7);
+      shipLine(mx, 13, 0, mx + 8, 3, 0, ROPE, 0.7);
+    }
+
+    // Bowsprit and bow flag
+    shipBox(14, 3, 0, 16, 3, 0, MAST);
+    shipBox(14, 3, 0, 14, 3, 0, RED);
+    for (let fz = 0; fz < 4; ++fz) {
+      shipBox(16, 6, fz, 16, 6, fz, (fz < 2) ? RED : WHITE);
+    }
+
+    // Mooring lines to dock
+    for (let x of [-4, 2, 8]) {
+      shipLine(x, 3, -14, x, 3, -12, ROPE, 0.0);
+    }
+  }
+
+  makeScene();
+
+  const voxelCount = offsets.length / 3;
+
+  // ----------------------------------------------------------------------
+  // WebGL setup
+  // ----------------------------------------------------------------------
+
+  function createShader(type, source) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      console.error(gl.getShaderInfoLog(shader));
+      gl.deleteShader(shader);
+      return null;
+    }
+    return shader;
+  }
+
+  function createProgram(vertexShader, fragmentShader) {
+    const program = gl.createProgram();
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, fragmentShader);
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      console.error(gl.getProgramInfoLog(program));
+      gl.deleteProgram(program);
+      return null;
+    }
+    return program;
+  }
+
+  const vertexSource = `
+#version 300 es
+precision high float;
+
+layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec3 aNormal;
+layout (location = 2) in vec3 iOffset;
+layout (location = 3) in vec3 iColor;
+layout (location = 4) in vec2 iAnim;
+
+uniform mat4 uProj;
+uniform mat4 uView;
+uniform float uTime;
+
+out vec3 vColor;
+out vec3 vNormal;
+out float vDepth;
+
+void main() {
+  vec3 p = aPos;
+  float type = iAnim.y;
+
+  if (type > 0.25 && type < 0.75) {
+    p.y += sin(uTime * 2.0 + iAnim.x * 6.28318530718) * 0.15;
+  }
+
+  vec4 worldPos = vec4(iOffset + p, 1.0);
+  vec4 viewPos = uView * worldPos;
+  gl_Position = uProj * viewPos;
+
+  vColor = iColor;
+  vNormal = aNormal;
+  vDepth = -viewPos.z;
+}
+  `;
+
+  const fragmentSource = `
+#version 300 es
+precision high float;
+
+in vec3 vColor;
+in vec3 vNormal;
+in float vDepth;
+
+out vec4 fragColor;
+
+void main() {
+  vec3 n = normalize(vNormal);
+  vec3 L = normalize(vec3(0.45, 0.70, 0.30));
+
+  float ndl = max(dot(n, L), 0.0);
+  float shade = 0.54 + 0.50 * ndl;
+  vec3 col = vColor * shade;
+
+  // Very subtle sky wash in shadows
+  col += vec3(0.01, 0.01, 0.015) * (1.0 - ndl);
+
+  float fog = clamp((vDepth - 32.0) / 95.0, 0.0, 1.0) * 0.38;
+  vec3 sky = vec3(0.69, 0.82, 0.90);
+  col = mix(col, sky, fog);
+
+  fragColor = vec4(col, 1.0);
+}
+  `;
+
+  const vs = createShader(gl, gl.VERTEX_SHADER, vertexSource);
+  const fs = createShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
+  const program = createProgram(vs, fs);
+
+  if (!program) {
+    document.getElementById("hint").textContent = "Shader compilation failed. Check console.";
+    return;
+  }
+
+  const uProj  = gl.getUniformLocation(program, "uProj");
+  const uView  = gl.getUniformLocation(program, "uView");
+  const uTime  = gl.getUniformLocation(program, "uTime");
+
+  const cubePosBuf = gl.createBuffer();
+  gl.bufferData(cubePosBuf, new Float32Array(cubePos), gl.STATIC_DRAW);
+
+  const cubeNormBuf = gl.createBuffer();
+  gl.bufferData(cubeNormBuf, new Float32Array(cubeNorm), gl.STATIC_DRAW);
+
+  const offsetBuf = gl.createBuffer();
+  gl.bufferData(offsetBuf, new Float32Array(offsets), gl.STATIC_DRAW);
+
+  const colorBuf = gl.createBuffer();
+  gl.bufferData(colorBuf, new Float32Array(colors), gl.STATIC_DRAW);
+
+  const animBuf = gl.createBuffer();
+  gl.bufferData(animBuf, new Float32Array(anim), gl.STATIC_DRAW);
+
+  gl.useProgram(program);
+
+  gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+  gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
+  gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
+  gl.vertexAttribPointer(3, 3, gl.FLOAT, false, 0, 0);
+  gl.vertexAttribPointer(4, 2, gl.FLOAT, false, 0, 0);
+
+  gl.setAttribDivisor(2, 1);
+  gl.setAttribDivisor(3, 1);
+  gl.setAttribDivisor(4, 1);
+
+  gl.enable(gl.DEPTH_TEST);
+  gl.depthFunc(gl.LEQUAL);
+  gl.enable(gl.CULL_FACE);
+  gl.disable(gl.CULL_FACE); // no culling needed; depth handles it
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    const w = Math.floor(canvas.clientWidth * dpr);
+    const hh = Math.floor(canvas.clientHeight * dpr);
+    if (w <= 0 || hh <= 0) return;
+
+    if (canvas.width !== w || canvas.height !== hh) {
+      canvas.width = w;
+      canvas.height = hh;
+      gl.viewport(0, 0, canvas.width, canvas.height);
+    }
+  }
+
+  // ----------------------------------------------------------------------
+  // Camera controls
+  // ----------------------------------------------------------------------
+
+  let theta = 0.55;
+  let phi = 0.52;
+  let dist = 82;
+  const target = [1, 6, -10];
+
+  let dragging = false;
+  let autoRotate = true;
+  let lastX = 0, lastY = 0;
+
+  canvas.addEventListener("pointerdown", (e) => {
+    dragging = true;
+    autoRotate = false;
+    lastX = e.clientX;
+    lastY = e.clientY;
+  });
+
+  window.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+
+    const dx = e.clientX - lastX;
+    const dy = e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+
+    theta += dx * 0.0055;
+    phi -= dy * 0.0055;
+    phi = Math.max(0.08, Math.min(1.45, phi));
+  });
+
+  window.addEventListener("pointerup", () => {
+    dragging = false;
+  });
+
+  window.addEventListener("wheel", (e) => {
+    const r = canvas.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
+
+    const scale = Math.exp(e.deltaY / 250);
+    dist *= scale;
+    dist = Math.max(26, Math.min(190, dist));
+  });
+
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowLeft")  theta -= 0.04;
+    if (e.key === "ArrowRight") theta += 0.04;
+    if (e.key === "ArrowUp")    phi -= 0.03;
+    if (e.key === "ArrowDown")  phi += 0.03;
+
+    if (e.key === "-" || e.key === "_") dist *= 0.92;
+    if (e.key === "+" || e.key === "=") dist *= 1.08;
+
+    phi = Math.max(0.08, Math.min(1.45, phi));
+    dist = Math.max(26, Math.min(190, dist));
+  });
+
+  // ----------------------------------------------------------------------
+  // Render loop
+  // ----------------------------------------------------------------------
+
+  let prev = performance.now();
+  const start = prev;
+
+  function frame() {
+    const now = performance.now();
+    const dt = (now - prev) / 1000;
+    prev = now;
+
+    if (autoRotate && !dragging) theta += 0.025 * dt;
+
+    resize();
+
+    const cx = target[0] + dist * Math.cos(phi) * Math.sin(theta);
+    const cy = target[1] + dist * Math.sin(phi);
+    const cz = target[2] + dist * Math.cos(phi) * Math.cos(theta);
+
+    const eye = [cx, cy, cz];
+    const view = lookAt(eye, target);
+
+    const aspect = canvas.width / Math.max(1, canvas.height);
+    const proj = perspective(0.90, aspect, 0.5, 500);
+
+    const t = (now - start) / 1000;
+
+    gl.clearColor(0.69, 0.82, 0.90, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    gl.uniformMatrix4fv(uProj, false, proj);
+    gl.uniformMatrix4fv(uView, false, view);
+    gl.uniform1f(uTime, t);
+
+    if (voxelCount > 0) {
+      gl.drawArraysInstanced(gl.TRIANGLES, 0, 36, voxelCount);
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
+```

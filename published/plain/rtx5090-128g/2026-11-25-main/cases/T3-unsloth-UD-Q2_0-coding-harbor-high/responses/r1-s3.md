@@ -1,0 +1,823 @@
+Here is a complete single-file HTML voxel harbor scene. Save it as something like `harbor.html` and open it directly in Chrome. It uses Three.js from a CDN, so you need an internet connection when opening it.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Voxel Harbor — A Sailing Ship Calling at Harbor</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #9fc5e8;
+    }
+    canvas {
+      display: block;
+    }
+    #info {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      z-index: 10;
+      font: 14px/1.45 system-ui, sans-serif;
+      color: #182229;
+      background: rgba(255, 255, 255, 0.55);
+      padding: 8px 12px;
+      border-radius: 8px;
+      pointer-events: none;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+</head>
+<body>
+  <div id="info">
+    A sailing ship calling at a harbor<br />
+    Drag to orbit · Scroll to zoom
+  </div>
+
+  <script>
+    (function () {
+      if (typeof THREE === 'undefined') {
+        document.getElementById('info').textContent =
+          'Three.js failed to load. Check your internet connection.';
+        return;
+      }
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.shadowMap.autoUpdate = false;
+      document.body.appendChild(renderer.domElement);
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x9fc5e8);
+      scene.fog = new THREE.Fog(0x9fc5e8, 60, 140);
+
+      const camera = new THREE.PerspectiveCamera(
+        58,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        300
+      );
+      camera.position.set(34, 24, 36);
+
+      // Simple custom orbit controls so this file needs only one CDN script.
+      const target = new THREE.Vector3(4, 6, 0);
+      const initialOffset = new THREE.Vector3().subVectors(camera.position, target);
+      const radius0 = initialOffset.length();
+
+      let phi = Math.acos(initialOffset.y / radius0);
+      let theta = Math.atan2(initialOffset.x, initialOffset.z);
+      let radius = radius0;
+
+      let targetTheta = theta;
+      let targetPhi = phi;
+      let targetRadius = radius;
+
+      function clamp(v, min, max) {
+        return Math.max(min, Math.min(max, v));
+      }
+
+      function updateCamera() {
+        theta += (targetTheta - theta) * 0.12;
+        phi += (targetPhi - phi) * 0.12;
+        radius += (targetRadius - radius) * 0.12;
+
+        camera.position.setFromSphericalCoords(radius, phi, theta).add(target);
+        camera.lookAt(target);
+      }
+
+      let dragging = false;
+      let lastX = 0;
+      let lastY = 0;
+      const dom = renderer.domElement;
+      dom.style.touchAction = 'none';
+
+      dom.addEventListener('pointerdown', (e) => {
+        dragging = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        dom.setPointerCapture(e.pointerId);
+      });
+
+      dom.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        const dx = e.clientX - lastX;
+        const dy = e.clientY - lastY;
+        lastX = e.clientX;
+        lastY = e.clientY;
+
+        targetTheta -= dx * 0.005;
+        targetPhi += dy * 0.005;
+        targetPhi = clamp(targetPhi, 0.15, Math.PI / 2 - 0.04);
+      });
+
+      dom.addEventListener('pointerup', () => {
+        dragging = false;
+      });
+
+      dom.addEventListener('pointercancel', () => {
+        dragging = false;
+      });
+
+      dom.addEventListener(
+        'wheel',
+        (e) => {
+          e.preventDefault();
+          targetRadius *= Math.exp(e.deltaY * 0.001);
+          targetRadius = clamp(targetRadius, 14, 100);
+        },
+        { passive: false }
+      );
+
+      // Lights
+      const hemi = new THREE.HemisphereLight(0xcfefff, 0x6c5a46, 0.72);
+      scene.add(hemi);
+
+      const sun = new THREE.DirectionalLight(0xfff4d6, 1.05);
+      sun.position.set(45, 62, 28);
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(2048, 2048);
+
+      const shadowSize = 45;
+      sun.shadow.camera.left = -shadowSize;
+      sun.shadow.camera.right = shadowSize;
+      sun.shadow.camera.top = shadowSize;
+      sun.shadow.camera.bottom = -shadowSize;
+      sun.shadow.camera.near = 1;
+      sun.shadow.camera.far = 220;
+      sun.shadow.bias = -0.0004;
+      if (typeof sun.shadow.normalBias === 'number') {
+        sun.shadow.normalBias = 0.02;
+      }
+      sun.shadow.camera.updateProjectionMatrix();
+      scene.add(sun);
+      scene.add(sun.target);
+
+      const fill = new THREE.DirectionalLight(0x87ceeb, 0.22);
+      fill.position.set(-25, 30, -15);
+      scene.add(fill);
+
+      // Small deterministic noise helper
+      function noise(a, b) {
+        const n = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453;
+        return n - Math.floor(n);
+      }
+
+      function pick(colors, value) {
+        return colors[
+          Math.min(colors.length - 1, Math.max(0, Math.floor(value * colors.length)))
+        ];
+      }
+
+      const materialCache = new Map();
+      function getMaterial(color, opts) {
+        opts = opts || {};
+        const key = color + '|' + JSON.stringify(opts);
+        if (!materialCache.has(key)) {
+          materialCache.set(
+            key,
+            new THREE.MeshPhongMaterial(
+              Object.assign({ color, flatShading: true }, opts)
+            )
+          );
+        }
+        return materialCache.get(key);
+      }
+
+      // Instanced voxel builder
+      class VoxelWorld {
+        constructor(boxGeometry) {
+          this.boxGeometry = boxGeometry;
+          this.static = new Map();
+          this.dynamicItems = [];
+          this.dynamicMeshes = [];
+        }
+
+        add(x, y, z, color, opts) {
+          const material = getMaterial(color, opts);
+          let positions = this.static.get(material);
+          if (!positions) {
+            positions = [];
+            this.static.set(material, positions);
+          }
+          positions.push(new THREE.Vector3(x, y, z));
+        }
+
+        addDynamic(x, y, z, color, opts, kind, amp, phase) {
+          const material = getMaterial(color, opts);
+          this.dynamicItems.push({
+            x,
+            y,
+            z,
+            material,
+            kind: kind || 'water',
+            amp: amp || 0.05,
+            phase: phase || 0
+          });
+        }
+
+        build(scene) {
+          const dummy = new THREE.Object3D();
+
+          // Static voxels
+          for (const [material, positions] of this.static) {
+            if (positions.length === 0) continue;
+
+            const mesh = new THREE.InstancedMesh(
+              this.boxGeometry,
+              material,
+              positions.length
+            );
+
+            for (let i = 0; i < positions.length; i++) {
+              dummy.position.copy(positions[i]);
+              dummy.updateMatrix();
+              mesh.setMatrixAt(i, dummy.matrix);
+            }
+
+            mesh.instanceMatrix.needsUpdate = true;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            scene.add(mesh);
+          }
+
+          // Dynamic voxels
+          const dynamicByMaterial = new Map();
+          for (const item of this.dynamicItems) {
+            let group = dynamicByMaterial.get(item.material);
+            if (!group) {
+              group = [];
+              dynamicByMaterial.set(item.material, group);
+            }
+            group.push(item);
+          }
+
+          for (const [material, items] of dynamicByMaterial) {
+            if (items.length === 0) continue;
+
+            const mesh = new THREE.InstancedMesh(
+              this.boxGeometry,
+              material,
+              items.length
+            );
+
+            for (let i = 0; i < items.length; i++) {
+              const item = items[i];
+              dummy.position.set(item.x, item.y, item.z);
+              dummy.updateMatrix();
+              mesh.setMatrixAt(i, dummy.matrix);
+            }
+
+            mesh.instanceMatrix.needsUpdate = true;
+            mesh.castShadow = false;
+            mesh.receiveShadow = true;
+            scene.add(mesh);
+
+            this.dynamicMeshes.push({ mesh, items });
+          }
+        }
+
+        update(time) {
+          const dummy = new THREE.Object3D();
+
+          for (const group of this.dynamicMeshes) {
+            const items = group.items;
+
+            for (let i = 0; i < items.length; i++) {
+              const item = items[i];
+              let y = item.y;
+
+              if (item.kind === 'water') {
+                y = item.y + Math.sin(time * 1.15 + item.phase) * item.amp;
+              }
+
+              dummy.position.set(item.x, y, item.z);
+              dummy.updateMatrix();
+              group.mesh.setMatrixAt(i, dummy.matrix);
+            }
+
+            group.mesh.instanceMatrix.needsUpdate = true;
+          }
+        }
+      }
+
+      const box = new THREE.BoxGeometry(1, 1, 1);
+      const world = new VoxelWorld(box);
+
+      function addBox(x1, x2, y1, y2, z1, z2, color, opts) {
+        for (let x = x1; x <= x2; x++) {
+          for (let z = z1; z <= z2; z++) {
+            for (let y = y1; y <= y2; y++) {
+              world.add(x, y, z, color, opts);
+            }
+          }
+        }
+      }
+
+      // ------------------------------------------------------------------
+      // Harbor content
+      // ------------------------------------------------------------------
+
+      const WATER_X0 = -30;
+      const WATER_X1 = 30;
+      const WATER_Z0 = -25;
+      const WATER_Z1 = 25;
+
+      function addWater() {
+        const inner = [0x4fb8d4, 0x5ac9e6];
+        const mid = [0x3d97b4, 0x45a2bf, 0x2f6f8e];
+        const outer = [0x276884, 0x2f7491];
+
+        for (let x = WATER_X0; x <= WATER_X1; x++) {
+          for (let z = WATER_Z0; z <= WATER_Z1; z++) {
+            const n = noise(x * 0.8, z * 0.9);
+            let color;
+
+            if (x > 6 && x < 16 && Math.abs(z) < 18) {
+              color = inner[n < 0.5 ? 0 : 1];
+            } else if (Math.abs(x) > 26 || Math.abs(z) > 21) {
+              color = outer[n < 0.5 ? 0 : 1];
+            } else {
+              color = mid[n < 0.55 ? 0 : n < 0.82 ? 1 : 2];
+            }
+
+            const amp = 0.014 + 0.022 * noise(x + 17, z + 31);
+            const phase = x * 0.37 + z * 0.51;
+
+            world.addDynamic(
+              x,
+              0,
+              z,
+              color,
+              { shininess: 18, specular: 0x0e1820 },
+              'water',
+              amp,
+              phase
+            );
+          }
+        }
+      }
+
+      function addLand() {
+        const stone = [0x8b8f94, 0x7d8186, 0x6f7378];
+        const sand = [0xcdb88f, 0xc0a779, 0xd6c49b];
+        const grass = [0x4e9b3c, 0x458c36, 0x58a645];
+
+        for (let x = 12; x <= 36; x++) {
+          for (let z = -30; z <= 30; z++) {
+            const n = noise(x * 1.7, z * 2.1);
+            world.add(x, 1, z, pick(sand, n));
+
+            let top;
+            if (x === 12 && z >= -16 && z <= 16) {
+              top = pick(stone, n); // quay wall edge
+            } else if (x >= 13 && x <= 17 && z >= -14 && z <= 14) {
+              top = 0x8a5a32; // dock planks
+            } else if (x >= 18 && x <= 20 && z >= -14 && z <= 14) {
+              top = 0xa88c5f; // harbor path
+            } else if (z > 24 || z < -24 || x > 34) {
+              top = pick(sand, n);
+            } else {
+              top = pick(grass, n);
+            }
+
+            world.add(x, 2, z, top);
+          }
+        }
+      }
+
+      function addBreakwaters() {
+        const stone = [0x8b8f94, 0x7d8186, 0x6f7378, 0x9c9fa3];
+
+        for (let x = -14; x <= 11; x++) {
+          for (const z of [-10, -9, 9, 10]) {
+            const n = noise(x * 2.1, z * 1.3);
+            world.add(x, 1, z, pick(stone, n));
+            world.add(x, 2, z, pick(stone, (n + 0.31) % 1));
+          }
+        }
+      }
+
+      function addLighthouse(x, z) {
+        const stone = [0x7d8186, 0x8b8f94, 0x6f7378];
+
+        for (let dx = -1; dx <= 1; dx++) {
+          for (let dz = -1; dz <= 1; dz++) {
+            const n = noise(x + dx, z + dz);
+            world.add(x + dx, 1, z + dz, pick(stone, n));
+            world.add(x + dx, 2, z + dz, pick(stone, (n + 0.33) % 1));
+          }
+        }
+
+        for (let y = 3; y <= 9; y++) {
+          const color = y % 3 === 0 ? 0xd64c3f : 0xf6f6f6;
+          world.add(x, y, z, color, { shininess: 28 });
+        }
+
+        world.add(x, 10, z, 0x222222);
+        world.add(x, 11, z, 0xffd45a, {
+          emissive: 0xffd45a,
+          emissiveIntensity: 0.9
+        });
+        world.add(x, 12, z, 0xd64c3f);
+
+        const light = new THREE.PointLight(0xffe69a, 0.75, 40, 2);
+        light.position.set(x, 12.5, z);
+        scene.add(light);
+      }
+
+      function addCrane(x, z) {
+        for (let y = 3; y <= 6; y++) world.add(x, y, z, 0x8f613a);
+
+        world.add(x - 2, 7, z, 0x6f4e2f);
+        world.add(x - 1, 7, z, 0x6f4e2f);
+        world.add(x, 7, z, 0x6f4e2f);
+
+        world.add(x - 2, 4, z, 0x3b3b3b);
+        world.add(x - 2, 3, z, 0x555555);
+
+        world.add(x, 8, z, 0xd64c3f);
+      }
+
+      function addQuayDetails() {
+        // Bollards
+        for (const z of [-12, -8, -4, 0, 4, 8, 12]) {
+          world.add(13, 3, z, 0x3f3f3f);
+          world.add(13, 4, z, 0x555555);
+        }
+
+        // Crates
+        const crates = [
+          [14, -11, 0x8f613a, 2],
+          [16, -9, 0xa57a43, 1],
+          [15, -5, 0x764f2f, 2],
+          [16, -4, 0x8f613a, 1],
+          [14, 1, 0xa57a43, 1],
+          [15, 2, 0x764f2f, 2],
+          [16, 3, 0x8f613a, 1],
+          [14, 7, 0xa57a43, 1],
+          [16, 10, 0x764f2f, 2]
+        ];
+
+        for (const crate of crates) {
+          const x = crate[0];
+          const z = crate[1];
+          const color = crate[2];
+          const h = crate[3];
+          for (let i = 0; i < h; i++) world.add(x, 3 + i, z, color);
+        }
+
+        // Barrels
+        const barrels = [
+          [13, -6],
+          [13, 5],
+          [16, -2],
+          [16, 6],
+          [13, 10]
+        ];
+
+        for (const b of barrels) {
+          world.add(b[0], 3, b[1], 0x6f4e2f);
+          world.add(b[0], 4, b[1], 0x5a4028);
+        }
+
+        // Cranes
+        addCrane(15, -10);
+        addCrane(15, 8);
+      }
+
+      function addWarehouse(cx, cz) {
+        addBox(cx, cx + 4, 3, 5, cz, cz + 3, 0x76583c);
+        addBox(cx - 1, cx + 4, 6, 6, cz - 1, cz + 4, 0x454545);
+
+        // Large door facing the dock
+        for (let dz = 0; dz < 3; dz++) {
+          world.add(cx - 1, 3, cz + dz, 0x3b2a1f);
+        }
+        world.add(cx - 1, 4, cz + 1, 0xffd45a, {
+          emissive: 0xffd45a,
+          emissiveIntensity: 0.35
+        });
+      }
+
+      function addHouse(cx, cz, roofColor) {
+        addBox(cx, cx + 3, 3, 5, cz, cz + 3, 0xf0e6cc);
+
+        const roofColors = [0xa83e3a, 0x6d5b46, 0x4a6fa5];
+        const color = roofColor || pick(roofColors, noise(cx, cz));
+
+        for (let i = 0; i < 3; i++) {
+          const rx1 = cx - 1 + i;
+          const rx2 = cx + 4 - i;
+          const rz1 = cz - 1 + i;
+          const rz2 = cz + 4 - i;
+          const y = 6 + i;
+
+          for (let x = rx1; x <= rx2; x++) {
+            for (let z = rz1; z <= rz2; z++) {
+              if (
+                i === 0 ||
+                x === rx1 ||
+                x === rx2 ||
+                z === rz1 ||
+                z === rz2
+              ) {
+                world.add(x, y, z, color, { shininess: 12 });
+              }
+            }
+          }
+        }
+
+        // Chimney
+        world.add(cx, 8, cz + 1, 0x444444);
+        world.add(cx, 9, cz + 1, 0x555555);
+
+        // Windows and door
+        world.add(cx - 1, 4, cz + 1, 0x8fbcd4);
+        world.add(cx - 1, 4, cz + 2, 0x8fbcd4);
+        world.add(cx - 1, 3, cz + 1, 0x5b3a25);
+      }
+
+      function addTree(x, z) {
+        for (let y = 3; y <= 5; y++) world.add(x, y, z, 0x5b3a25);
+
+        const leaves = [0x2f8b33, 0x257c2a, 0x36993b];
+
+        for (let y = 6; y <= 8; y++) {
+          const r = y === 8 ? 1 : 2;
+
+          for (let dx = -r; dx <= r; dx++) {
+            for (let dz = -r; dz <= r; dz++) {
+              if (Math.abs(dx) + Math.abs(dz) > r + 1) continue;
+
+              const n = noise(x + dx, z + dz + y * 3);
+              world.add(x + dx, y, z + dz, pick(leaves, n));
+            }
+          }
+        }
+      }
+
+      function addBuoys() {
+        world.add(-18, 1, -4, 0xd64c3f);
+        world.add(-18, 2, -4, 0xd64c3f);
+        world.add(-18, 3, -4, 0x222222);
+
+        world.add(-18, 1, 4, 0x2ecc71);
+        world.add(-18, 2, 4, 0x2ecc71);
+        world.add(-18, 3, 4, 0x222222);
+      }
+
+      function addShip() {
+        const SX = 1;
+        const SZ = 0;
+
+        function S(x, y, z, color, opts) {
+          world.add(SX + x, y, SZ + z, color, opts);
+        }
+
+        const cannonX = new Set([-5, -3, -1, 1, 3, 5]);
+
+        const hullRows = [
+          [-7, 2],
+          [-6, 3],
+          [-5, 3],
+          [-4, 3],
+          [-3, 3],
+          [-2, 3],
+          [-1, 3],
+          [0, 3],
+          [1, 3],
+          [2, 3],
+          [3, 3],
+          [4, 3],
+          [5, 2],
+          [6, 1]
+        ];
+
+        for (const row of hullRows) {
+          const x = row[0];
+          const w = row[1];
+
+          for (let z = -w; z <= w; z++) {
+            const perimeter = z === -w || z === w;
+
+            S(
+              x,
+              1,
+              z,
+              perimeter ? 0xdca54b : 0x50321b,
+              { shininess: 8 }
+            );
+
+            S(
+              x,
+              2,
+              z,
+              perimeter
+                ? cannonX.has(x)
+                  ? 0x221410
+                  : 0x6d4728
+                : 0x95643a,
+              { shininess: 8 }
+            );
+          }
+        }
+
+        // Bow sprit
+        for (let x = 7; x <= 9; x++) {
+          S(x, 2, 0, 0x5c4a38, { shininess: 5 });
+        }
+
+        // Stern castle
+        for (let x = -6; x <= -5; x++) {
+          for (let z = -2; z <= 2; z++) {
+            S(x, 3, z, x === -6 ? 0x6d4b2c : 0x7d5836);
+            S(x, 4, z, 0x8d653f);
+          }
+        }
+
+        // Sterncastle roof
+        for (let x = -7; x <= -5; x++) {
+          for (let z = -3; z <= 3; z++) {
+            S(x, 5, z, 0x4b3222);
+          }
+        }
+
+        // Aft windows
+        for (let z = -1; z <= 1; z++) {
+          S(-7, 3, z, 0xffd45a, {
+            emissive: 0xffd45a,
+            emissiveIntensity: 0.5
+          });
+          S(-7, 4, z, 0xffd45a, {
+            emissive: 0xffd45a,
+            emissiveIntensity: 0.5
+          });
+        }
+
+        function mast(x, top) {
+          for (let y = 3; y <= top; y++) {
+            S(x, y, 0, 0x5c4a38, { shininess: 5 });
+          }
+        }
+
+        function crosstree(x, y) {
+          for (let z = -2; z <= 2; z++) {
+            S(x, y, z, 0x4a3a2c, { shininess: 5 });
+          }
+        }
+
+        mast(3, 8);    // foremast
+        mast(0, 9);    // mainmast
+        mast(-3, 7);   // mizzenmast
+
+        crosstree(3, 3);
+        crosstree(0, 3);
+        crosstree(-3, 3);
+
+        // Flags
+        S(0, 10, 0, 0xd64c3f);
+        S(3, 9, 0, 0xe74c3c);
+        S(-3, 8, 0, 0x2980b9);
+
+        function sail(x1, x2, y1, y2) {
+          for (let x = x1; x <= x2; x++) {
+            for (let y = y1; y <= y2; y++) {
+              S(x, y, -1, 0xf5f0e6, { shininess: 5 });
+              S(x, y, 0, 0xfaf8f0, { shininess: 5 });
+              S(x, y, 1, 0xf5f0e6, { shininess: 5 });
+            }
+          }
+        }
+
+        // Lower sails
+        sail(-4, -2, 4, 5);  // mizzen
+        sail(-1, 2, 4, 5);   // main
+        sail(3, 5, 4, 5);    // fore
+
+        // Upper sails
+        sail(-4, -3, 6, 7);  // mizzen
+        sail(-1, 0, 6, 7);   // main
+        sail(3, 4, 6, 7);    // fore
+
+        // Small forward sail
+        S(8, 3, 0, 0xf5f0e6);
+        S(8, 4, 0, 0xfaf8f0);
+        S(8, 5, 0, 0xf5f0e6);
+
+        // Deck cargo
+        const deckItems = [
+          [-2, -2, 0x9c6e3d, 2],
+          [-2, 2, 0x764f2f, 1],
+          [1, -2, 0xa57a43, 1],
+          [1, 2, 0x8f613a, 2],
+          [2, 0, 0x6f4e2f, 1],
+          [4, 2, 0x9c6e3d, 1],
+          [-1, 0, 0x5b4028, 1]
+        ];
+
+        for (const item of deckItems) {
+          const x = item[0];
+          const z = item[1];
+          const color = item[2];
+          const h = item[3];
+
+          for (let i = 0; i < h; i++) {
+            S(x, 3 + i, z, color);
+          }
+        }
+      }
+
+      // Build the scene
+      addWater();
+      addLand();
+      addBreakwaters();
+
+      addLighthouse(-14, -10);
+      addLighthouse(-14, 10);
+
+      addQuayDetails();
+
+      addWarehouse(18, -10);
+      addWarehouse(18, -4);
+      addWarehouse(18, 2);
+
+      addHouse(24, -18, 0xa83e3a);
+      addHouse(24, -12, 0x6d5b46);
+      addHouse(24, -6, 0x4a6fa5);
+      addHouse(24, 0, 0xa83e3a);
+      addHouse(24, 6, 0x6d5b46);
+
+      addTree(31, -20);
+      addTree(31, -13);
+      addTree(31, -5);
+      addTree(31, 5);
+      addTree(31, 16);
+
+      addBuoys();
+      addShip();
+
+      // Simple voxel clouds, not part of the shadowed world
+      const cloudMaterial = new THREE.MeshPhongMaterial({
+        color: 0xf7fbfc,
+        flatShading: true
+      });
+      const cloudGroup = new THREE.Group();
+
+      function addCloud(x, y, z, w, d) {
+        for (let dx = 0; dx < w; dx++) {
+          for (let dz = 0; dz < d; dz++) {
+            if (noise(x + dx, z + dz) < 0.72) {
+              const puff = new THREE.Mesh(box, cloudMaterial);
+              puff.position.set(x + dx, y, z + dz);
+              puff.castShadow = false;
+              puff.receiveShadow = false;
+              cloudGroup.add(puff);
+            }
+          }
+        }
+      }
+
+      addCloud(-20, 18, -14, 5, 3);
+      addCloud(8, 20, 16, 6, 3);
+      addCloud(18, 19, -18, 5, 4);
+      addCloud(-12, 22, 8, 4, 3);
+
+      scene.add(cloudGroup);
+
+      world.build(scene);
+      renderer.shadowMap.needsUpdate = true;
+
+      const clock = new THREE.Clock();
+
+      function onResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+
+      window.addEventListener('resize', onResize);
+
+      function animate() {
+        const t = clock.getElapsedTime();
+
+        world.update(t);
+        updateCamera();
+
+        // Very slow cloud drift
+        cloudGroup.position.x = Math.sin(t * 0.02) * 1.5;
+
+        renderer.render(scene, camera);
+      }
+
+      renderer.setAnimationLoop(animate);
+    })();
+  </script>
+</body>
+</html>
+```

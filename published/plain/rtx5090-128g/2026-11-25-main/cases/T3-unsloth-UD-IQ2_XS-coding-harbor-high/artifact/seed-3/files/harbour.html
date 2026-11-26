@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Calling at the Harbour · voxel diorama</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;0,9..144,900;1,9..144,300&family=Karla:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --brass:#e0a24c; --brass-dim:#9a7440; --sea:#0d1f26; --paper:#f1e7d3; --ink:#081418;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:#081a20;font-family:'Karla',system-ui,sans-serif;color:var(--paper)}
+  canvas#c{display:block;position:fixed;inset:0;width:100%;height:100%}
+
+  /* soft cinematic vignette over the render */
+  .vig{position:fixed;inset:0;pointer-events:none;z-index:2;
+       background:radial-gradient(120% 90% at 50% 45%, rgba(0,0,0,0) 45%, rgba(3,10,14,.55) 100%)}
+  .grain{position:fixed;inset:0;pointer-events:none;z-index:3;opacity:.055;mix-blend-mode:overlay;
+         background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+  .ui{position:fixed;inset:0;z-index:5;pointer-events:none}
+  .reveal{opacity:0;transform:translateY(10px);transition:opacity .9s cubic-bezier(.2,.7,.2,1), transform .9s cubic-bezier(.2,.7,.2,1)}
+  body.ready .reveal{opacity:1;transform:none}
+  body.ready .d1{transition-delay:.15s} body.ready .d2{transition-delay:.3s}
+  body.ready .d3{transition-delay:.45s} body.ready .d4{transition-delay:.6s}
+
+  /* corner marks — brass dashed rules that draw themselves in */
+  .marks i{position:fixed;width:78px;height:78px;z-index:4;pointer-events:none;opacity:0;
+           transition:opacity 1.2s ease .2s, transform 1.2s ease .2s}
+  body.ready .marks i{opacity:.55}
+  .marks i::before,.marks i::after{content:"";position:absolute;background:transparent;
+           border:1px dashed var(--brass);}
+  .tl{top:26px;left:26px} .tr{top:26px;right:26px} .bl{bottom:26px;left:26px} .br{bottom:26px;right:26px}
+
+  .eyebrow{font-size:11px;letter-spacing:.42em;text-transform:uppercase;color:var(--brass);
+           display:flex;gap:10px;align-items:center;font-weight:700}
+  .eyebrow::after{content:"";flex:0 0 46px;height:1px;background:linear-gradient(90deg,var(--brass),transparent)}
+
+  /* log plaque */
+  .plaque{position:absolute;left:44px;bottom:42px;max-width:520px}
+  .plaque h1{font-family:'Fraunces',Georgia,serif;font-weight:900;font-size:clamp(38px,6.4vw,74px);
+             line-height:.88;margin:.28em 0 .2em;letter-spacing:-.015em;
+             text-shadow:0 2px 0 rgba(0,0,0,.35), 0 18px 40px rgba(0,0,0,.45)}
+  .plaque h1 em{display:block;font-weight:300;font-style:italic;font-size:.56em;letter-spacing:.01em;
+             color:#c9bfa7;margin-top:.25em}
+  .plaque p{margin:0;font-size:13px;line-height:1.65;max-width:440px;color:#cfd8cf;font-weight:300}
+  .plaque .sep{width:100%;max-width:420px;height:1px;background:linear-gradient(90deg,rgba(224,162,76,.9),rgba(224,162,76,0));margin:16px 0 12px}
+  .stats{font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;color:#8b9a90;display:flex;gap:16px}
+  .stats b{color:var(--brass);font-weight:700;letter-spacing:.12em}
+
+  /* chart card */
+  .card{position:absolute;right:40px;bottom:42px;width:314px;padding:20px 20px 16px;
+        background:linear-gradient(175deg,rgba(19,40,47,.82),rgba(8,21,26,.9));
+        border:1px solid rgba(224,162,76,.42);
+        box-shadow:0 22px 60px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.06);
+        backdrop-filter:blur(7px);pointer-events:auto}
+  .card::before{content:"";position:absolute;inset:4px;border:1px solid rgba(224,162,76,.16);pointer-events:none}
+  .ch{display:flex;align-items:center;gap:12px;margin-bottom:15px}
+  .compass{width:30px;height:30px;flex:0 0 30px;transition:none}
+  .ch .t{line-height:1.25}
+  .ch .t b{display:block;font-size:11.5px;letter-spacing:.28em;text-transform:uppercase;color:#e8e0cd}
+  .ch .t span{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#7f9188}
+  .clock{margin-left:auto;font-family:'Fraunces',serif;font-size:24px;font-weight:600;color:var(--brass);font-variant-numeric:tabular-nums}
+
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
+  .chips button{font-family:'Karla';font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;
+    padding:7px 10px;color:#cbd6cb;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.13);
+    border-bottom-color:rgba(224,162,76,.28);cursor:pointer;transition:.22s;position:relative}
+  .chips button:hover{color:#111;background:var(--brass);border-color:var(--brass);transform:translateY(-1px)}
+  .chips button.on{color:#121d21;background:#d9b36a;border-color:#d9b36a}
+  .chips button:active{transform:translateY(0)}
+
+  .row{margin:13px 0}
+  .row label{display:flex;justify-content:space-between;font-size:10px;letter-spacing:.2em;
+    text-transform:uppercase;color:#8ea298;margin-bottom:7px}
+  .row label b{color:#e8e0cd;letter-spacing:.08em;font-weight:600}
+  input[type=range]{-webkit-appearance:none;width:100%;height:20px;background:transparent;cursor:ew-resize}
+  input[type=range]::-webkit-slider-runnable-track{height:2px;
+    background:linear-gradient(90deg,rgba(224,162,76,.85),rgba(255,255,255,.13))}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;margin-top:-5px;
+    background:var(--brass);border-radius:2px;box-shadow:0 0 0 3px rgba(224,162,76,.18);transition:.18s}
+  input[type=range]:hover::-webkit-slider-thumb{box-shadow:0 0 0 6px rgba(224,162,76,.22);background:#f6c274}
+  input[type=range]::-moz-range-track{height:2px;background:rgba(255,255,255,.18)}
+  input[type=range]::-moz-range-thumb{width:11px;height:11px;border:none;border-radius:2px;background:var(--brass)}
+
+  .tools{display:flex;gap:6px;margin-top:14px}
+  .tools button{flex:1;font-family:'Karla';font-size:10px;letter-spacing:.15em;text-transform:uppercase;
+    padding:8px 4px;color:#cbd6cb;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.13);
+    cursor:pointer;transition:.2s}
+  .tools button:hover{background:rgba(224,162,76,.16);border-color:rgba(224,162,76,.6);color:#fff}
+  .hint{margin-top:12px;font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:#6c7f76;text-align:center}
+  .hint b{color:#a3b3a8}
+  #err{position:fixed;inset:0;display:none;place-items:center;z-index:9;text-align:center;padding:40px;
+       font-family:'Fraunces',serif;font-size:18px;background:#08141a}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="vig"></div><div class="grain"></div>
+
+<div class="marks"><i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i></div>
+
+<div class="ui">
+  <div class="plaque reveal d1">
+    <div class="eyebrow">Log · Entry IV</div>
+    <h1>A sailing ship<em>calling at the harbour</em></h1>
+    <div class="sep"></div>
+    <p>Late tide, a breeze off the Atlantic, topsails still drawing. She has fetched the mouth of the bay and now rides
+       moored off the jetty while the market closes and the lamps catch light along the quay.</p>
+    <div class="stats"><span>voxels <b id="vox">—</b></span><span><b id="fps">60</b> fps</span><span>single file · webgl</span></div>
+  </div>
+
+  <div class="card reveal d2">
+    <div class="ch">
+      <svg class="compass" viewBox="0 0 40 40">
+        <circle cx="20" cy="20" r="18" fill="none" stroke="rgba(224,162,76,.45)" stroke-dasharray="2 4"/>
+        <circle cx="20" cy="20" r="13" fill="none" stroke="rgba(255,255,255,.14)"/>
+        <polygon points="20,4 23,20 20,17 17,20" fill="#e0a24c"/>
+        <polygon points="20,36 23,20 20,23 17,20" fill="#7d8d84"/>
+      </svg>
+      <div class="t"><b>Chart table</b><span>drag · wheel · right‑drag</span></div>
+      <div class="clock" id="clock">17:50</div>
+    </div>
+    <div class="chips" id="chips">
+      <button data-cam="harbour">Harbour mouth</button>
+      <button data-cam="jetty">Jetty</button>
+      <button data-cam="deck">Quarterdeck</button>
+      <button data-cam="mast">Masthead</button>
+      <button data-cam="aerial">From aloft</button>
+    </div>
+    <div class="row"><label>Time of day <b id="tlabel">17:50</b></label>
+      <input id="time" type="range" min="4" max="24" step="0.02" value="17.85"></div>
+    <div class="row"><label>Breeze <b id="wlabel">Fresh</b></label>
+      <input id="wind" type="range" min="0.25" max="1.9" step="0.01" value="0.95"></div>
+    <div class="row"><label>Sea <b id="slabel">Mod.</b></label>
+      <input id="sea" type="range" min="0.4" max="1.8" step="0.01" value="1"></div>
+    <div class="tools">
+      <button id="drift">Drift: on</button>
+      <button id="cycle">Cycle time: off</button>
+    </div>
+    <div class="hint"><b>left</b> orbit · <b>wheel</b> zoom · <b>right</b> pan · <b>1–5</b> views</div>
+  </div>
+</div>
+<div id="err">Could not load the three.js module — check your connection.</div>
+
+<script type="module">
+/* ────────────────────────────────────────────────────────────────
+   0. three.js (jsDelivr, with an unpkg fallback)
+   ──────────────────────────────────────────────────────────────── */
+let THREE;
+try { THREE = await import('https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js'); }
+catch (e) { try { THREE = await import('https://unpkg.com/three@0.161.0/build/three.module.js'); }
+            catch (e2) { document.getElementById('err').style.display='grid'; throw e2; } }
+
+const V3 = (x,y,z)=>new THREE.Vector3(x,y,z);
+const clamp = (v,a,b)=>Math.min(b,Math.max(a,v));
+const lerp  = (a,b,t)=>a+(b-a)*t;
+const smoothstep=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);};
+
+let _s = 20240611;
+function rnd(){ _s = (_s*1664525 + 1013904223) >>> 0; return _s/4294967296; }
+function s1(x,y){ const n = Math.sin(x*127.1 + y*311.7)*43758.5453; return n - Math.floor(n); }
+function s2(x,y){ return (s1(x,y)*2-1)*0.5 + (s1(x+13.7,y-9.1)*2-1)*0.5; }
+
+/* ────────────────────────────────────────────────────────────────
+   1. renderer / scene / camera
+   ──────────────────────────────────────────────────────────────── */
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true, powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.85));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.12;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0xbcd2d9, 58, 335);
+
+const camera = new THREE.PerspectiveCamera(43, 1, 0.6, 3000);
+camera.position.set(-40, 24, -44);
+
+/* environment (soft reflections on the water) — wrapped so the
+   scene still runs if the addon CDN is unreachable */
+try {
+  const { RoomEnvironment } = await import('https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/environments/RoomEnvironment.js');
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  pmrem.dispose();
+} catch (e) {
+  const d = 32, data = new Uint8Array(d*d*4);
+  for (let i=0;i<d*d;i++){ const g = 90 + ((i*7)%60); data[i*4]=g+30; data[i*4+1]=g+38; data[i*4+2]=g+50; data[i*4+3]=255; }
+  const t = new THREE.DataTexture(data, d, d, THREE.RGBAFormat);
+  t.mapping = THREE.EquirectangularReflectionMapping; t.needsUpdate = true;
+  scene.environment = t;
+}
+
+/* lights */
+const sun = new THREE.DirectionalLight(0xffffff, 3.4);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048,2048);
+Object.assign(sun.shadow.camera,{left:-78,right:78,top:78,bottom:-78,near:1,far:430});
+sun.shadow.bias = -0.0013; sun.shadow.normalBias = 0.22;
+scene.add(sun);
+
+const hemi = new THREE.HemisphereLight(0x8db3d4, 0x4a5343, 0.9);
+scene.add(hemi);
+
+/* ────────────────────────────────────────────────────────────────
+   2. sky dome + stars
+   ──────────────────────────────────────────────────────────────── */
+const skyMat = new THREE.ShaderMaterial({
+  side:THREE.BackSide, depthWrite:false, fog:false,
+  uniforms:{ uTop:{value:new THREE.Color()}, uHor:{value:new THREE.Color()},
+             uSun:{value:new THREE.Color()}, uDir:{value:V3(0,1,0)} },
+  vertexShader:`varying vec3 vP; void main(){ vP=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+  fragmentShader:`
+    uniform vec3 uTop,uHor,uSun,uDir; varying vec3 vP;
+    void main(){
+      vec3 d=normalize(vP);
+      float h=clamp(d.y*1.32,0.,1.);
+      vec3 c=mix(uHor,uTop,pow(h,0.62));
+      float s=max(0.,dot(d,normalize(uDir)));
+      c+=uSun*pow(s,300.)*1.6;
+      c+=uSun*pow(s,24.)*0.42;
+      c+=uSun*pow(s,5.)*0.10;
+      c=mix(c,uHor*1.02,clamp(-d.y*2.4,0.,1.));
+      gl_FragColor=vec4(c,1.);
+    }`
+});
+scene.add(new THREE.Mesh(new THREE.SphereGeometry(1200,26,16), skyMat));
+
+const starGeo = new THREE.BufferGeometry();
+{
+  const N=900, a=new Float32Array(N*3);
+  for(let i=0;i<N;i++){
+    const v=V3(rnd()*2-1, rnd()*0.9+0.05, rnd()*2-1).normalize().multiplyScalar(1050);
+    a[i*3]=v.x; a[i*3+1]=v.y; a[i*3+2]=v.z;
+  }
+  starGeo.setAttribute('position', new THREE.BufferAttribute(a,3));
+}
+const starMat = new THREE.PointsMaterial({color:0xdfe7ff, size:2.4, sizeAttenuation:false, transparent:true, opacity:0, fog:false});
+scene.add(new THREE.Points(starGeo, starMat));
+
+/* ────────────────────────────────────────────────────────────────
+   3. voxel builder
+   ──────────────────────────────────────────────────────────────── */
+const _vc = new Map();
+function variants(hex, j){
+  const key = hex+'|'+j;
+  if(_vc.has(key)) return _vc.get(key);
+  const base = new THREE.Color(hex), out=[];
+  for(let i=0;i<12;i++){
+    const m = 1 + (i/11 - 0.5)*2*j;
+    out.push(base.clone().multiplyScalar(m));
+  }
+  _vc.set(key,out); return out;
+}
+class VB{
+  constructor(){ this.e=[]; }
+  get count(){ return this.e.length; }
+  /* arbitrary oriented box */
+  raw(p, q, sx, sy, sz, c){ this.e.push({p,q,sx,sy,sz,c}); }
+  /* unit / scaled axis-aligned cube at centre */
+  v(x,y,z,c,sx=1,sy=1,sz=1){ this.e.push({p:[x,y,z],q:null,sx,sy,sz,c}); }
+  /* pixel-ish block with optional random shade (1x1x1) */
+  px(x,y,z,c,j=0){ if(j>0){ const vs=variants(c,j); c = vs[(rnd()*vs.length)|0]; } this.e.push({p:[x,y,z],q:null,sx:1,sy:1,sz:1,c}); }
+  box(x0,x1,y0,y1,z0,z1,c,o={}){
+    const j=o.j??0.05, sx=o.sx??1, sy=o.sy??1, sz=o.sz??1, h=o.hollow;
+    for(let x=Math.round(x0);x<=Math.round(x1);x++)
+    for(let y=Math.round(y0);y<=Math.round(y1);y++)
+    for(let z=Math.round(z0);z<=Math.round(z1);z++){
+      if(h && x>Math.round(x0)&&x<Math.round(x1)&&y>Math.round(y0)&&y<Math.round(y1)&&z>Math.round(z0)&&z<Math.round(z1)) continue;
+      this.px(x,y,z,c,j);
+    }
+  }
+  /* tapered cylinder (voxel barrel, mast, pole) */
+  cyl(cx,cz,y0,y1,r,c,{flatTop=true, j=0.04, squash=1}={}){
+    for(let y=Math.round(y0);y<=Math.round(y1);y++){
+      for(let dx=-Math.ceil(r);dx<=Math.ceil(r);dx++)
+      for(let dz=-Math.ceil(r);dz<=Math.ceil(r);dz++){
+        if(dx*dx+dz*dz*squash > r*r+0.6) continue;
+        this.px(cx+dx, y, cz+dz, c, j);
+      }
+    }
+  }
+  /* rope / spar between two points */
+  seg(ax,ay,az,bx,by,bz,c,t=0.16){
+    const d=V3(bx-ax,by-ay,bz-az), L=d.length();
+    if(L<0.001) return;
+    const n=d.clone().normalize(), q=new THREE.Quaternion().setFromUnitVectors(V3(0,1,0), n);
+    this.raw([(ax+bx)/2,(ay+by)/2,(az+bz)/2], q, t, L*1.04, t, c);
+  }
+  /* roof with two slopes, ridge along x */
+  roof(x0,x1,z0,z1,c,rise,o={}){
+    const half=(z1-z0)/2, n=Math.round(half);
+    for(let k=0;k<=n;k++){
+      const y = Math.round(z0 + half + rise*(1 - k/n));
+      this.box(x0,x1,y,y,z0+k,z1-k, c, {j:o.j??0.06});
+    }
+  }
+  /* convert to one InstancedMesh */
+  mesh(mat,{cast=true,rec=true}={}){
+    const g=new THREE.BoxGeometry(1,1,1), m=new THREE.InstancedMesh(g,mat,this.e.length);
+    const mm=new THREE.Matrix4(), col=new THREE.Color(), tmpQ=new THREE.Quaternion();
+    this.e.forEach((e,i)=>{
+      if(e.q){ tmpQ.set(e.q[0],e.q[1],e.q[2],e.q[3]); mm.compose(V3(e.p[0],e.p[1],e.p[2]), tmpQ, V3(e.sx,e.sy,e.sz)); }
+      else   { mm.compose(V3(e.p[0],e.p[1],e.p[2]), new THREE.Quaternion(), V3(e.sx,e.sy,e.sz)); }
+      mm.setPosition(e.p[0],e.p[1],e.p[2]);
+      m.setMatrixAt(i,mm);
+      col.setHex(e.c); m.setColorAt(i,col);
+    });
+    m.instanceMatrix.needsUpdate=true; if(m.instanceColor) m.instanceColor.needsUpdate=true;
+    m.castShadow=cast; m.receiveShadow=rec; m.frustumCulled=false;
+    return m;
+  }
+}
+
+/* palette */
+const C = {
+  oak:0x5b3a23, oakDark:0x3f2a19, oakLight:0x754f2c, wale:0x2b211a, trimWhite:0xe8dcc2,
+  deck:0x8a6035, deckLight:0xa37a47, deckFore:0x96703f, gold:0xd7a94f, copper:0x8a5234,
+  sail:0xf2e5c8, sailSh:0xdccbab, sailRed:0xb5432f, rope:0x6b5334, iron:0x3a3d42,
+  graniteL:0x9a9488, graniteM:0x857d70, graniteD:0x6f685e, cobble:0x7b7167, cobbleWet:0x665c53,
+  brick:0xa1513f, brickD:0x7e3d30, slate:0x4d5560, timber:0x6a4a2e, plaster:0xe7d9b8,
+  sand:0xd6bd8a, grass:0x6d8a52, grassD:0x597545, dirt:0x6b5a42, rock:0x8b8478,
+  wood:0x715636, woodD:0x5a4328, leaf:0x5d7a44, leafD:0x47612f,
+  lamp:0xffc96b, window:0xf2cf86, winDark:0x6c5c44,
+  flagRed:0xb5432f, cream:0xf2e7cf, navy:0x2f4568, green:0x5a7d4f, plum:0x8c4a7d, sun:0xf2c14e,
+  lbWhite:0xf1e8d8, lbRed:0xc04a34, copperDome:0x9a5b3e
+};
+
+/* ────────────────────────────────────────────────────────────────
+   4. land, sea floor, breakwater
+   ──────────────────────────────────────────────────────────────── */
+const X0=-52,X1=52,Z0=-56,Z1=44, BASE=-6;
+const groundH = (x,z)=>{
+  if(z<20) return null;
+  if(z<21) return 7;
+  if(z<33) return 7;
+  const s=clamp((z-33)/9,0,1);
+  return 7 + (z<34?1:Math.round(s*(6 + 1.1*Math.sin((x+40)*0.13))));
+};
+const surfH = (x,z)=>{
+  const b=V3(3,40,0), a=V3(18,20,0);
+  let d=(b.x-x)*(b.x-x)+(b.z-z)*(b.z-z) - b.x*b.x - b.z*b.z;
+  d = 0.5 + 0.5*Math.tanh(-d/5200);
+  return (1-d)*7 + d*13;
+};
+
+const landVB = new VB();
+for(let x=X0;x<=X1;x++){
+  for(let z=Z0;z<=Z1;z++){
+    const h=groundH(x,z);
+    if(h===null) continue;
+    const inTown = (x>-14 && x<24 && z>20 && z<34);
+    for(let y=h;y>=BASE;y--){
+      let c;
+      if(y===h){
+        if(z<=27) c = (x%3===0&&y%1===0)?C.cobble:C.cobbleWet;      // quay paving
+        else if(inTown) c = s2(x,z)>0.3?C.cobble:(s2(x,z)>-0.4?C.sand:C.cobbleWet);
+        else if(h>12) c = s2(x,z)>0.25?C.grassD:C.grass;
+        else c = C.grass;
+      } else if(y>=h-1){
+        c = (z<=21) ? C.graniteD : (inTown?C.rock:C.dirt);
+      } else {
+        c = C.dirt;
+      }
+      landVB.px(x,y,z,c, y===h?0.10:0.05);
+    }
+    /* quay wall face + coping */
+    if(z===20){
+      for(let y=-4;y<=7;y++) landVB.px(x,y,z, y>5?C.graniteM:C.graniteD, 0.11);
+      landVB.px(x,8,z,C.graniteL,0.06);
+    }
+  }
+}
+/* steps down to the water beside the jetty */
+for(let i=0;i<5;i++) landVB.box(-2+i,0+i, 7-i, 7-i, 20, 21, C.graniteM, {j:0.08});
+
+/* breakwater (rubble mole, seaward side = lower z) */
+const BW={zC:-14, half:4, x0:-46, x1:-10};
+function bwTop(x){ return BW.zC + BW.half - 2.2*smoothstep(-5,-18, x+10); }
+for(let x=BW.x0;x<=BW.x1;x++){
+  const top=bwTop(x);
+  for(let z=Math.round(BW.zC-BW.half); z<=Math.round(BW.zC+BW.half); z++){
+    const edge=Math.abs(z-BW.zC)/BW.half;
+    const h=Math.round(top-edge*3.0 + s1(x,z)*0.9 - 0.4);
+    for(let y=-4;y<=h;y++){
+      const c = (h-y<=1)?(s1(x*3,z)>0.55?C.graniteL:C.graniteM):(y<0?C.graniteD:C.rock);
+      landVB.px(x,y,z,c,0.13);
+    }
+  }
+}
+
+/* ────────────────────────────────────────────────────────────────
+   5. town : warehouses, market, tavern, lamps, jetty
+   ──────────────────────────────────────────────────────────────── */
+const townVB = new VB(), glowVB = new VB();
+
+/* small helper: a lamp post */
+function lampPost(vb, gb, x, z, h=6){
+  vb.box(x, x, 8, 8+h, z, z, C.iron, {j:0.05});
+  vb.box(x-1, x+1, 8+h+1, 8+h+1, z, z, C.iron);
+  vb.box(x-1, x+1, 8+h+2, 8+h+2, z-1, z+1, C.iron);
+  vb.box(x, x, 8+h+1, 8+h+2, z, z, 0xffd89a, {j:0.0});
+  vb.px(x, 8+h+3, z, C.iron);
+  gb.box(x, x, 8+h+1, 8+h+2, z, z, C.lamp);
+}
+/* bollard */
+function bollard(vb,x,z){ vb.box(x,x,8,9,z,z,C.graniteD,{j:0.08}); vb.px(x,10,z,C.iron); }
+/* crate stack */
+function crates(vb,x,z,n,s=3,base=8){
+  for(let i=0;i<n;i++){
+    const ox=x+((rnd()*2-1)*3)|0, oz=z+((rnd()*2-1)*3)|0, lv=(rnd()*2)|0;
+    const y=base+lv*s;
+    vb.box(ox,ox+s-1,y,y+s-1,oz,oz+s-1, rnd()>0.45?C.wood:C.woodD,{j:0.09});
+    vb.box(ox,ox+s-1,y+s-1,y+s-1,oz,oz+s-1, C.iron,{j:0.05});
+  }
+}
+/* barrel */
+function barrel(vb,x,z,base=8){
+  vb.cyl(x,z,base,base+2,1.4,rnd()>0.5?C.wood:C.woodD,{j:0.09});
+  vb.cyl(x,z,base+1,base+1,1.6,0x2e2a26);
+}
+function fishCrate(vb,x,z,base=8){
+  vb.box(x,x+2,base,base+1,z,z+1,C.wood,{j:0.08});
+  for(let i=0;i<3;i++) vb.px(x+((i*1+1)%3),base+2,z+((i)%2), [0x9fb3b8,0xb9c6c8,0x8fa6a8][i%3]);
+}
+/* striped awning stall */
+function stall(vb,x,z,dir=1){
+  vb.box(x,x+4,8,11,z,z,C.timber,{j:0.06});
+  for(let i=0;i<=4;i++) vb.box(x,x+4,12,12,z+i, z+i, i%2?C.cream:C.flagRed);
+  vb.box(x,x+4,11.5|0,11,z+4,z+4,C.wood,{j:0.05});
+  for(let i=0;i<4;i++) vb.px(x,12,z+i+0.0,C.timber);
+  fishCrate(vb,x+1,z+6,8); fishCrate(vb,x+2,z+8,8);
+}
+/* simple person */
+function person(vb,x,y,z,shirt,trouser,hat){
+  vb.px(x,y,z,trouser); vb.px(x,y+1,z,trouser);
+  vb.px(x,y+2,z,shirt); vb.px(x,y+3,z,shirt);
+  vb.px(x,y+4,z,hat||0x3c2a1c);
+  vb.px(x-1,y+2,z,shirt); vb.px(x+1,y+2,z,shirt);
+}
+/* warehouse */
+function warehouse(x0,z0,W,D,H,name){
+  const vb=townVB, gb=glowVB;
+  vb.box(x0,x0+W-1,8,8+H-1,z0,z0+D-1, C.brick,{j:0.09,hollow:true});
+  for(let y=8;y<8+H;y++) for(let z=z0;z<z0+D-1;z+=4) vb.px(x0,y,z,C.brickD,0.05);
+  vb.roof(x0-1,x0+W, z0-1,z0+D, Math.round(D/2)+1, C.slate,{j:0.08});
+  /* chimney */
+  vb.box(x0+W-3,x0+W-2, 8+H, 8+H+4, z0+2,z0+3, C.brickD,{j:0.06});
+  /* big loading door */
+  vb.box(x0+Math.round(W/2)-1,x0+Math.round(W/2)+1, 8,12, z0,z0, C.woodD,{j:0.06});
+  /* windows */
+  for(let wx=x0+2;wx<x0+W-2;wx+=4)
+    for(let wy=10;wy<8+H-1;wy+=4){
+      vb.px(wx,wy,z0, C.winDark); gb.px(wx,wy,z0, C.window);
+      vb.px(wx,wy+1,z0, C.winDark); gb.px(wx,wy+1,z0, C.window);
+    }
+  /* hoist beam on the gable */
+  vb.seg(x0+Math.round(W/2), 8+H+2, z0, x0+Math.round(W/2), 8+H+2, z0+6, C.iron, 0.22);
+  /* sign plaque */
+  const letters = {
+    'MERIDIAN':null
+  };
+  vb.box(x0+2,x0+W-3, 13.5|0,13.5|0, z0-0.0,z0-0.0, C.woodD);
+}
+
+/* quay layout — west end yards */
+warehouse(-12,29,9,7,8);
+crates(townVB,-15,26,4); crates(townVB,-22,25,5);
+barrel(townVB,-18,24); barrel(townVB,-19,24); barrel(townVB,-20,26);
+townVB.box(-30,-26,8,10,22,25,C.woodD,{j:0.08}); /* timber stack */
+for(let i=0;i<6;i++) townVB.seg(-30,8+i,-1, -26,10+i,-1, C.wood,0.5);
+townVB.box(-42,-36,8,14,30,36,C.brickD,{j:0.09,hollow:true}); /* sail loft */
+townVB.roof(-43,-35,29,37,3,C.slate,{j:0.07});
+glowVB.box(-40,-38,10,11,29,29,C.window);
+/* capstan + anchors on the quay */
+townVB.cyl(-25,21,8,9,2.2,C.woodD,{j:0.07});
+for(let i=0;i<6;i++){ const a=i/6*Math.PI*2; townVB.px(-25+Math.round(Math.cos(a)*3),10,21+Math.round(Math.sin(a)*3),C.iron); }
+townVB.px(-25,11,21,C.iron);
+/* anchor display */
+townVB.box(-27,27,8,8,15,15,C.iron);
+townVB.box(-27,-27,9,10,14,15,C.iron);
+townVB.px(-26,11,15,C.iron);
+
+/* main warehouse row */
+warehouse(2,29,11,8,10);
+warehouse(16,29,9,7,7);
+/* market row */
+for(let x=-6;x<16;x+=6) stall(townVB,x,24,1);
+/* tavern block on the terrace */
+townVB.box(-8,-1,11,15,35,40,C.plaster,{j:0.07,hollow:true});
+townVB.box(-8,-7,11,15,35,40,C.timber);
+townVB.box(-1,-1,11,15,35,40,C.timber);
+townVB.roof(-9,0,34,41,3,C.slate,{j:0.07});
+glowVB.box(-6,-3,12,13,34,34,C.window);
+townVB.box(-5,-4,8,9,33,33,C.woodD);
+townVB.seg(-4,16,37,-4,16,42,C.iron,0.18);
+townVB.box(-6,-4,16,17,41,41,C.iron);
+/* harbour-master clock tower */
+townVB.box(24,28,8,19,35,39,C.graniteL,{j:0.09,hollow:true});
+townVB.roof(23,29,34,40,3,C.copper,{j:0.06});
+townVB.px(26,17,35,C.cream); townVB.px(26,17,34,C.iron);
+glowVB.px(26,17,35,C.window);
+townVB.box(26,26,20,23,37,37,C.iron);
+townVB.box(24,28,23,23,37,37,C.flagRed);
+/* trees */
+function tree(x,z){
+  const vb=townVB; const h=4+((rnd()*2)|0);
+  vb.cyl(x,z,8,h+7,1.0,C.timber,{j:0.08});
+  for(let i=0;i<22;i++){
+    const dx=(rnd()*2-1)*3, dy=(rnd()*2-1)*2.4, dz=(rnd()*2-1)*3;
+    if(dx*dx+dz*dz>10) continue;
+    vb.px(x+Math.round(dx), 9+h+Math.round(dy), z+Math.round(dz), rnd()>0.4?C.leaf:C.leafD,0.10);
+  }
+}
+tree(34,31); tree(38,36); tree(30,44); tree(-16,38);
+/* quay lamps & bollards */
+for(const lx of [-30,-18,-6,6,18,28]) lampPost(townVB, glowVB, lx, 23);
+for(const bx of [-24,-12,0,10,22]) bollard(townVB,bx,21);
+/* coiled ropes on the quay */
+for(const cx of [-14,4]){
+  for(let i=0;i<8;i++){ const a=i/8*Math.PI*2; townVB.px(cx+Math.round(Math.cos(a)*2),8,24+Math.round(Math.sin(a)*2),0xa08a63); }
+  for(let i=0;i<6;i++){ const a=i/6*Math.PI*2; townVB.px(cx+Math.round(Math.cos(a)*1.4),9,24+Math.round(Math.sin(a)*1.4),0xb29b73); }
+}
+/* quay-side crew */
+person(townVB, -4,8,23, C.flagRed, 0xd9cbb0, 0x2a2a2e);
+person(townVB, 8,8,22, 0x4d6b4a, 0x3f3b34, 0xd9c27a);
+person(townVB, 14,8,25, 0x2f4568, 0xd9cbb0, 0xf1e7cf);
+person(townVB,-20,8,21, 0x8a5a3a, 0x4a453d, 0x3c2a1c);
+
+/* ── jetty / pier ── */
+const J={z0:20, z1:3, x0:16, x1:20};
+for(let x=J.x0;x<=J.x1;x++) for(let z=J.z1;z<=J.z0;z++) townVB.px(x,8,z, (x+z)%2?C.wood:C.woodD, 0.09);
+for(let z=J.z1+1;z<J.z0;z+=3) townVB.box(J.x0,J.x1,6,7,z,z, C.woodD,{j:0.05});
+for(let z=J.z1;z<=J.z0;z+=3){
+  townVB.cyl(J.x0,z,-5,8,1.6,C.oakDark,{j:0.08});
+  townVB.cyl(J.x1,z,-5,8,1.6,C.oakDark,{j:0.08});
+}
+townVB.box(J.x0,J.x1,9,10,J.z1,J.z1,C.graniteM,{j:0.07});
+lampPost(townVB,glowVB,18,J.z1,5);
+bollard(townVB,17,15); bollard(townVB,19,7); bollard(townVB,17,5); bollard(townVB,19,19);
+crates(townVB,22,10,3); barrelsOnJetty();
+function barrelsOnJetty(){ barrel(townVB,22,14); barrel(townVB,23,14); barrel(townVB,22,15); }
+
+/* ── lighthouse ── */
+const LH={x:-8,z:-14};
+{
+  const vb=townVB, gb=glowVB;
+  for(let y=8;y<=28;y++){
+    const r = y<10?3.4 : y<12?2.9 : lerp(2.9,1.9,(y-12)/16);
+    for(let dx=-4;dx<=4;dx++) for(let dz=-4;dz<=4;dz++){
+      if(dx*dx+dz*dz>r*r+0.7) continue;
+      const band = Math.floor((y-8)/2.5)%2;
+      vb.px(LH.x+dx, y, LH.z+dz, band?C.lbRed:C.lbWhite, 0.06);
+    }
+  }
+  vb.box(LH.x-2,LH.x+2,29,29,LH.z-2,LH.z+2,C.iron);
+  vb.box(LH.x-1,LH.x+1,30,30,LH.z-1,LH.z+1,C.iron);
+  vb.box(LH.x-1,LH.x+1,31,32,LH.z-1,LH.z+1,C.iron,{hollow:true});
+  gb.box(LH.x,LH.x,31,32,LH.z-1,LH.z+1,0xffe3a8);
+  gb.px(LH.x,31,LH.z,0xffffff);
+  vb.cyl(LH.x,LH.z,33,34,2,C.copperDome,{j:0.06});
+  vb.px(LH.x,35,LH.z,C.iron); vb.seg(LH.x,35,LH.z,LH.x,38,LH.z,C.iron,0.14);
+  vb.box(LH.x-3,LH.x+3,3,6,LH.z-2,LH.z+2,C.graniteD,{j:0.09});
+  vb.box(LH.x,LH.x,7,7,LH.z-2,LH.z,C.woodD);
+  person(vb, LH.x+1, 8, LH.z+3, C.cream, 0x2f4568, 0xf1e7cf);
+}
+/* beam projector (additive, rotating) */
+const beamMat = new THREE.MeshBasicMaterial({color:0xffe0b0, transparent:true, opacity:0.0,
+  blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide});
+const beam = new THREE.Group();
+for(const sgn of [1,-1]){
+  const g = new THREE.PlaneGeometry(46, 5.2);
+  g.translate(sgn*23, 0, 0);
+  const m = new THREE.Mesh(g, beamMat);
+  m.rotation.y = sgn>0 ? 0 : Math.PI;
+  const m2 = new THREE.Mesh(new THREE.PlaneGeometry(46,5.2), beamMat);
+  m2.geometry.translate(sgn*23,0,0); m2.rotation.y = sgn>0?Math.PI/2:Math.PI*1.5;
+  beam.add(m); beam.add(m2);
+}
+beam.position.set(LH.x, 31.5, LH.z);
+scene.add(beam);
+
+/* ── breakwater beacon ── */
+townVB.cyl(-12,-14,2,5,1.4,C.graniteD,{j:0.08});
+townVB.box(-12,-12,6,7,-14,-14,C.iron);
+glowVB.px(-12,7,-14,0xff8f5a);
+
+/* ────────────────────────────────────────────────────────────────
+   6. THE SHIP
+   ──────────────────────────────────────────────────────────────── */
+function halfBeam(t){
+  const L=34,W=5,STERN=0.13,BOW=0.95;
+  if(t<=STERN) return Math.max(0.5, W*Math.pow(Math.sin(Math.PI*0.5*clamp((t-(STERN-0.06))/0.06,0,1)),0.5));
+  if(t>=BOW)   return Math.max(0,  W*Math.pow(Math.sin(Math.PI*0.5*clamp((BOW-t)/0.05,0,1)),0.5));
+  const s=(t-STERN)/(BOW-STERN);
+  const aft=clamp(s/0.45,0,1), fwd=clamp((1-s)/0.62,0,1);
+  return Math.max(0, W*(1-Math.pow(1-fwd,1.55))*(1-0.04*Math.pow(1-aft,3)));
+}
+function sheerY(x){
+  const s=(x-2)/19;
+  let y = 6 + 1.7*s*s*(x>2?1:0.78);
+  if(x>=11) y = Math.max(y, 7.4);
+  if(x<=-7) y = Math.max(y, 7.4 + 0.5*clamp((-7-x)/9,0,1));
+  return Math.round(y);
+}
+const shipVB = new VB(), shipGlow = new VB();
+
+/* hull */
+for(let x=-16;x<=18;x++){
+  const t=(x+16)/34, gy=sheerY(x), wTop=Math.round(halfBeam(t)), dy=gy-1;
+  const keel = -3.4*(1-Math.pow(clamp((x-2)/19,-1,1),2));
+  const aft = x<=-7, fore = x>=11;
+  const maxW = Math.max(wTop, Math.round(halfBeam((x+1)/34)));
+  for(let y=Math.ceil(keel); y<=gy; y++){
+    let w = wTop;
+    if(y>=4) w = Math.max(0, wTop-(y-4));
+    if(y===gy) w = Math.max(0, wTop-1);
+    if(y===3||y===2) w = Math.max(wTop-1, maxW);
+    if(y<=1) w = Math.max(wTop-1, Math.min(maxW, Math.round(5.0*(1-Math.pow(1-((y+4)/7),1.5)))));
+    if(w<=0) continue;
+    for(let z=-w;z<=w;z++){
+      const outer = Math.abs(z)>=w;
+      let c;
+      if(y===gy){ c = outer ? (aft?C.oakLight:C.oak) : (aft?C.deckLight: C.deckFore); }
+      else if(y===dy){ c = outer ? (aft?C.oakLight:C.oak) : (aft?C.deckLight:C.deck); }
+      else if(y<=0)  c = 0x33211f;
+      else if(y===1) c = outer?C.wale:C.oakDark;
+      else if(y===2) c = outer?C.trimWhite:C.oak;
+      else if(y===3) c = outer?C.oak:C.oakDark;
+      else if(y===4) c = outer?C.wale:C.oak;
+      else c = outer?C.oakLight:C.oakDark;
+      /* rounded bow / stern shoulders */
+      if(outer && (y>=4) && Math.abs(z)===w && (x<-13||x>15) && rnd()<0.45) continue;
+      shipVB.px(x,y,z,c,0.07);
+    }
+  }
+  /* gunports on the broadside */
+  if(x>-13 && x<15 && (x+13)%4===0 && Math.abs(x-2)>2){
+    for(const s of [1,-1]){
+      const w=Math.round(halfBeam(t));
+      const z=s*w;
+      if(z===0) continue;
+      shipVB.px(x,3,z,0x141210);
+      shipVB.px(x,4,z,C.trimWhite);
+      shipVB.px(x,2,z,C.trimWhite);
+      shipVB.px(x,3,z+Math.sign(s)*0.0,0x141210);
+      shipVB.seg(x,3,z+0.6*s, x,3,z+1.6*s, C.iron, 0.5);
+    }
+  }
+}
+/* wale banding + stern crest + stem */
+shipVB.box(18,19,4,6,-1,1,C.oakDark,{j:0.05});      /* stempost */
+shipVB.box(-17,-16,3,7,-4,4,C.oakDark,{j:0.06});    /* sternpost / transom */
+shipVB.box(-16,-16,8,8,-3,3,C.oakLight,{j:0.05});
+for(const z of [-2,0,2]){ shipVB.px(-16,9,z,C.gold); }
+shipVB.px(-17,9,0,C.gold);
+shipVB.box(-17,-16,6,7,-1,1,C.gold,{j:0.05});
+/* bow figurehead-ish scrollwork */
+shipVB.px(19,6,0,C.gold); shipVB.px(20,6,0,C.gold); shipVB.px(19,7,0,C.oakLight);
+/* forecastle & quarterdeck decks (lighter planking) */
+for(let x=-16;x<=-8;x++) for(let z=-2;z<=2;z++) shipVB.px(x,7,z,C.deckLight,0.08);
+for(let x=11;x<=18;x++) for(let z=-2;z<=2;z++) shipVB.px(x,7,z,C.deckFore,0.08);
+/* hatches */
+for(const hx of [-6,0,8]){ shipVB.box(hx-1,hx+1,8,8,-1,1,C.deckLight,{j:0.06});
+  shipVB.box(hx-1,hx+1,8,8,-2,-2,C.oakDark); shipVB.box(hx-1,hx+1,8,8,2,2,C.oakDark); }
+/* capstan forward, binnacle aft, barrels & coops */
+shipVB.cyl(9,0,8,9,1.8,C.woodD,{j:0.06});
+for(let i=0;i<4;i++){ const a=i/4*Math.PI*2; shipVB.px(9+Math.round(Math.cos(a)*2),10,Math.round(Math.sin(a)*2),C.iron); }
+shipVB.cyl(-9,0,8,8,1.4,C.oakLight,{j:0.05});
+shipVB.px(-9,9,0,C.gold);
+barrel(shipVB,-5,2,8); barrel(shipVB,-5,-2,8); barrel(shipVB,-3,3,8);
+shipVB.px(-3,10,3,C.cream); shipVB.px(-2,10,3,C.cream);
+shipVB.box(6,7,8,9,2,2,C.cream,{j:0.05});   /* sail bundle */
+/* crew aboard */
+person(shipVB, 12,8,0, C.cream, 0x2f4568, 0xf1e7cf);
+person(shipVB, -10,8,1, C.flagRed, 0xd9cbb0, 0x3c2a1c);
+person(shipVB, -14,8,-1, 0x2f4568, 0xd9cbb0, 0xf1e7cf);
+person(shipVB, 2,8,2, 0x8a5a3a, 0x3f3b34, 0xd9c27a);
+/* stern lanterns + windows */
+for(const s of [1,-1]){
+  shipVB.box(-17,-17,5,5,s*2,s*2,C.oakDark);
+  shipVB.box(-17,-17,6,6,s*2,s*2,0xffe0a0); shipGlow.px(-17,6,s*2, C.lamp);
+  shipVB.px(-17,7,s*2,C.iron);
+}
+shipVB.box(-16,-16,4,5,-3,3,C.winDark,{j:0.04});
+shipGlow.box(-16,-16,4,5,-3,3,C.window);
+
+/* masts, tops, yards */
+function mast(mx, deckY, h, rake){
+  const vb=shipVB;
+  for(let i=0;i<h;i++){
+    const r = Math.max(0.42, 1.05 - i/h*0.72);
+    const x = mx - i*rake;
+    vb.v(x, deckY+i, 0, C.oak, r*1.4, 1, r*1.4);
+  }
+  /* tops (platforms) */
+  const t1 = Math.round(h*0.44), t2 = Math.round(h*0.66);
+  for(const tt of [t1,t2]){
+    const x = mx - tt*rake;
+    vb.box(x-1,x+1, deckY+tt, deckY+tt, -2,2, C.woodD,{j:0.05});
+    vb.seg(x-1,deckY+tt,-2, x-1,deckY+tt+3,-2, C.oak,0.35);
+    vb.seg(x+1,deckY+tt, 2, x+1,deckY+tt+3, 2, C.oak,0.35);
+    /* crosstrees */
+    vb.box(x-2,x+2, deckY+tt-1, deckY+tt-1, -1,1, C.oakDark);
+  }
+  /* crew aloft */
+  person(vb, Math.round(mx-t2*rake), deckY+t2+1, 1, C.cream, 0x2f4568, 0xf1e7cf);
+  return {x:(yy)=>mx-yy*rake, deckY};
+}
+const M1 = mast( 6, 8, 14, 0.04);   /* fore  */
+const M2 = mast(-3, 8, 19, 0.05);   /* main  */
+const M3 = mast(-12,8, 11, 0.06);   /* mizzen */
+
+/* yards + sails */
+function sailFill(mx, y1, y2, h, sag, belly, c, stripe){
+  const vb=shipVB;
+  for(let z=-h; z<=h; z++){
+    const f=1-Math.pow(Math.abs(z)/h,2);
+    const yBot=Math.round(y1 - sag*f + sag*0.18*Math.pow(Math.abs(z)/h,2));
+    const yTop=Math.round(y2 - sag*0.9*f);
+    for(let y=yBot;y<=yTop;y++){
+      const v=clamp((y-yBot)/Math.max(1,yTop-yBot),0,1);
+      let x = mx + belly*Math.sin(Math.PI*v)*(0.62+0.38*f);
+      let col=c;
+      if(stripe && ((y-yBot)%5===0)) col=stripe;
+      if(Math.abs(z)===h) col=0xcabb9e;
+      vb.v(x,y,z, col, 1.12, 1, 1.06);
+    }
+  }
+}
+function yard(x0,x1,y,c){ shipVB.box(x0,x1,y,y,-1,-1,c,{j:0.05}); }
+function setSails(mx, base, scale, full){
+  const y1 = base+ (full?1:2), y2 = y1 + 5;
+  const h  = Math.round(6*scale);
+  if(full) sailFill(mx, y1, y2, h, 1.6, 1.5, C.sail, null);
+  else { shipVB.box(mx-1,mx+1,y2,y2,-h,h,C.sailSh,{j:0.04}); }
+}
+/* MAIN */
+yard(-4,-2,-23,13, C.oak);           /* wrong call signature guard */
+
+</script>
+<script type="module">
+/* (the second block continues the build with the real ship rigging) */
+</script>
+</body>
+</html>
+

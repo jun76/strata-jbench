@@ -1,0 +1,1 @@
+Strata 0.2.21 で全モデル（27 build、Gyro-S v2 と Inkling 2 Mini を含む）の Tier 0〜5 を測り直した（1835 ケース中 1813 完了）。Gyro-S v2 の 256K・1M は jbench が起動できず、NVFP4 の prefill chunk は設定がエンジンに渡らず、Hy4-Flash SQ-128 と Inkling SQ-20 の長文 256K は文書が窓を超えて測れなかった

@@ -1,0 +1,574 @@
+Save this as a single `.html` file, e.g. `voxel-harbor.html`, then open it in Chrome. It uses Three.js from a CDN, so keep your internet connection on.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Voxel Harbor — Sailing Ship Calling at a Harbor</title>
+<style>
+  html, body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: #8ecdf7;
+  }
+  canvas { display: block; }
+  #ui {
+    position: fixed;
+    left: 12px;
+    bottom: 12px;
+    color: #0b3b52;
+    font: 12px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background: rgba(255,255,255,.74);
+    padding: 7px 10px;
+    border-radius: 9px;
+    user-select: none;
+  }
+</style>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+  <div id="ui">Mouse: drag orbit · scroll zoom · right-drag pan</div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x8ecdf7);
+    scene.fog = new THREE.Fog(0x9edcff, 70, 190);
+
+    const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 500);
+    camera.position.set(46, 26, 44);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+    document.body.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(13, 5, 3);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.07;
+    controls.minDistance = 12;
+    controls.maxDistance = 150;
+    controls.maxPolarAngle = Math.PI * 0.49;
+
+    // Lights
+    const hemi = new THREE.HemisphereLight(0xcfe8ff, 0x75533c, 1.15);
+    scene.add(hemi);
+
+    const sun = new THREE.DirectionalLight(0xfff3cc, 1.7);
+    sun.position.set(34, 50, 24);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.near = 1;
+    sun.shadow.camera.far = 170;
+    sun.shadow.camera.left = -52;
+    sun.shadow.camera.right = 52;
+    sun.shadow.camera.top = 52;
+    sun.shadow.camera.bottom = -52;
+    sun.shadow.bias = -0.00045;
+    sun.target.position.set(13, 3, 4);
+    scene.add(sun);
+    scene.add(sun.target);
+
+    // Voxel instancing system
+    const CAP = 70000;
+    const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+    const voxMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.82,
+      metalness: 0.02,
+      flatShading: true
+    });
+
+    const vox = new THREE.InstancedMesh(boxGeo, voxMat, CAP);
+    vox.castShadow = true;
+    vox.receiveShadow = true;
+    vox.frustumCulled = false;
+    vox.count = 0;
+    scene.add(vox);
+
+    const dummy = new THREE.Object3D();
+    const tmpColor = new THREE.Color();
+    let voxelCount = 0;
+
+    function addVox(x, y, z, c) {
+      if (voxelCount >= CAP) return;
+      dummy.position.set(x + 0.5, y + 0.5, z + 0.5);
+      dummy.quaternion.identity();
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      vox.setMatrixAt(voxelCount, dummy.matrix);
+      vox.setColorAt(voxelCount, tmpColor.set(c));
+      voxelCount++;
+    }
+
+    function addOriented(cx, cy, cz, sx, sy, sz, c, q) {
+      if (voxelCount >= CAP) return;
+      dummy.position.set(cx, cy, cz);
+      dummy.quaternion.copy(q);
+      dummy.scale.set(sx, sy, sz);
+      dummy.updateMatrix();
+      vox.setMatrixAt(voxelCount, dummy.matrix);
+      vox.setColorAt(voxelCount, tmpColor.set(c));
+      voxelCount++;
+      dummy.quaternion.identity();
+      dummy.scale.set(1, 1, 1);
+    }
+
+    function fill(xmin, xmax, zmin, zmax, ymin, ymax, c) {
+      for (let x = xmin; x <= xmax; x++) {
+        for (let z = zmin; z <= zmax; z++) {
+          for (let y = ymin; y <= ymax; y++) addVox(x, y, z, c);
+        }
+      }
+    }
+
+    function rope(x1, y1, z1, x2, y2, z2) {
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const dz = z2 - z1;
+      const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (len < 0.12) return;
+      const v = new THREE.Vector3(dx, dy, dz).normalize();
+      const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), v);
+      addOriented((x1 + x2) / 2, (y1 + y2) / 2, (z1 + z2) / 2, len, 0.13, 0.13, 0x2b2118, q);
+    }
+
+    const C = {
+      deep: 0x11487a,
+      mid: 0x1967b5,
+      light: 0x3f92d6,
+      wave: 0x79c6e4,
+      shore: 0x166fa0,
+      stone: 0x6d737b,
+      stoneDark: 0x444a53,
+      earth: 0x4c3b2c,
+      wood: 0x8d5e3a,
+      woodDark: 0x5b3620,
+      deck: 0xc7a166,
+      sail: 0xf5f1e6,
+      mast: 0x734a2e,
+      hull: 0x85532e,
+      hullBottom: 0x3f2917,
+      crate: 0x9a704d,
+      crateDark: 0x6d4c31,
+      white: 0xf6f6f6,
+      red: 0xc43a3a,
+      glass: 0x92d7e8,
+      lamp: 0xffe58a
+    };
+
+    // Sea
+    for (let x = -34; x <= 15; x++) {
+      for (let z = -34; z <= 34; z++) {
+        for (let y = -3; y <= -1; y++) {
+          let c;
+          if (y === -1) {
+            const w = Math.sin(x * 0.34 + z * 0.28) + 0.45 * Math.cos(x * 0.19 - z * 0.42);
+            if (x >= 13) c = C.shore;
+            else if (w > 0.75) c = C.wave;
+            else if (w > 0.15) c = C.light;
+            else if (w > -0.45) c = C.mid;
+            else c = C.deep;
+          } else if (y === -2) {
+            c = C.deep;
+          } else {
+            c = 0x0b3559;
+          }
+          addVox(x, y, z, c);
+        }
+      }
+    }
+
+    // Land, quay, dock
+    for (let x = 16; x <= 29; x++) {
+      for (let z = -14; z <= 14; z++) {
+        for (let y = -3; y <= 1; y++) {
+          let c;
+          if (y === 1) {
+            if (x <= 18 && Math.abs(z) <= 7) c = C.wood;
+            else c = C.stone;
+          } else if (y === 0) {
+            c = (x <= 18 ? C.stoneDark : C.stone);
+          } else if (y === -1) {
+            c = C.stone;
+          } else if (y === -2) {
+            c = C.stoneDark;
+          } else {
+            c = C.earth;
+          }
+
+          if (x === 16 && y < 1) c = C.stoneDark;
+          if (x === 16 && y === 1) c = C.woodDark;
+          addVox(x, y, z, c);
+        }
+      }
+    }
+
+    // Houses
+    function house(xmin, xmax, zmin, zmax, ybase, height, wall, roof) {
+      fill(xmin, xmax, zmin, zmax, ybase, ybase + height - 1, wall);
+
+      for (let x = xmin + 1; x <= xmax - 1; x++) {
+        for (let z = zmin + 1; z <= zmax - 1; z++) addVox(x, ybase + height, z, roof);
+      }
+      for (let x = xmin + 2; x <= xmax - 2; x++) {
+        for (let z = zmin + 2; z <= zmax - 2; z++) addVox(x, ybase + height + 1, z, roof);
+      }
+
+      for (let x = xmin + 1; x <= xmax - 1; x += 2) {
+        addVox(x, ybase + 1, zmin - 1, C.glass);
+        if (height >= 3) addVox(x, ybase + 3, zmin - 1, C.glass);
+      }
+
+      for (let z = zmin + 1; z <= zmax - 1; z += 2) {
+        addVox(xmin - 1, ybase + 1, z, C.glass);
+      }
+
+      const doorX = Math.floor((xmin + xmax) / 2);
+      addVox(doorX, ybase + 1, zmin - 1, 0x452e22);
+      addVox(doorX, ybase + 2, zmin - 1, 0x452e22);
+      addVox(doorX + 1, ybase + height + 2, zmax - 2, 0x915833);
+    }
+
+    house(17, 19, -13, -10, 2, 3, 0xc29568, 0x6f4a39);
+    house(20, 23, 4, 7, 2, 3, 0xb58c62, 0x8f4343);
+    house(24, 26, 9, 12, 2, 4, 0xd5b893, 0x915050);
+
+    // Warehouse
+    function warehouse(xmin, xmax, zmin, zmax, ybase, roof) {
+      fill(xmin, xmax, zmin, zmax, ybase, ybase + 2, 0x9aa2ab);
+
+      for (let x = xmin + 1; x <= xmax - 1; x++) {
+        for (let z = zmin + 1; z <= zmax - 1; z++) addVox(x, ybase + 3, z, roof);
+      }
+      for (let x = xmin + 2; x <= xmax - 2; x++) {
+        for (let z = zmin + 2; z <= zmax - 2; z++) addVox(x, ybase + 4, z, roof);
+      }
+
+      for (let x = xmin + 1; x <= xmax - 1; x += 3) {
+        addVox(x, ybase + 1, zmin - 1, C.glass);
+      }
+
+      const doorX = Math.floor((xmin + xmax) / 2);
+      addVox(doorX, ybase + 1, zmin - 1, 0x523929);
+      addVox(doorX, ybase + 2, zmin - 1, 0x523929);
+    }
+
+    warehouse(19, 22, -2, 1, 2, 0x5e6d78);
+
+    // Lighthouse
+    fill(20, 22, -11, -9, 2, 3, C.stone);
+    for (let y = 4; y <= 10; y++) {
+      for (let x = 20; x <= 22; x++) {
+        for (let z = -11; z <= -9; z++) {
+          addVox(x, y, z, (y % 2 === 0 ? C.white : C.red));
+        }
+      }
+    }
+    for (let x = 20; x <= 22; x++) {
+      for (let z = -11; z <= -9; z++) addVox(x, 11, z, C.glass);
+    }
+    addVox(21, 12, -10, 0x383838);
+    addVox(21, 13, -10, C.red);
+
+    const beacon = new THREE.Mesh(
+      new THREE.BoxGeometry(2.2, 1.35, 2.2),
+      new THREE.MeshStandardMaterial({
+        color: 0x3a2200,
+        emissive: 0xffd24d,
+        emissiveIntensity: 1.2,
+        flatShading: true
+      })
+    );
+    beacon.position.set(21.5, 11.8, -10.5);
+    beacon.castShadow = false;
+    scene.add(beacon);
+
+    const beaconLight = new THREE.PointLight(0xffd24d, 2.3, 58, 2);
+    beaconLight.position.set(21.5, 12.0, -10.5);
+    scene.add(beaconLight);
+
+    // Lanterns
+    function lantern(x, z) {
+      for (let y = 2; y <= 5; y++) addVox(x, y, z, 0x323232);
+      addVox(x, 5, z, 0x676767);
+      addVox(x - 1, 6, z, C.lamp);
+      addVox(x + 1, 6, z, C.lamp);
+      addVox(x, 6, z, C.lamp);
+      addVox(x, 7, z, 0x323232);
+
+      const lamp = new THREE.PointLight(0xffe58a, 1.15, 28, 2);
+      lamp.position.set(x + 0.5, 6.6, z + 0.5);
+      scene.add(lamp);
+    }
+
+    lantern(18, 3);
+    lantern(22, 7);
+    lantern(26, -10);
+
+    // Crates, barrels, bollards
+    function crate(x, z, ybase, size) {
+      fill(x, x + size - 1, z, z + size - 1, ybase, ybase + size - 1, C.crate);
+      fill(x, x + size - 1, z, z + size - 1, ybase + size - 1, ybase + size - 1, C.crateDark);
+
+      for (let y = ybase; y <= ybase + size - 1; y++) {
+        addVox(x, y, z, C.crateDark);
+        addVox(x, y, z + size - 1, C.crateDark);
+        addVox(x + size - 1, y, z, C.crateDark);
+        addVox(x + size - 1, y, z + size - 1, C.crateDark);
+      }
+    }
+
+    crate(18, 3, 2, 2);
+    crate(20, 2, 2, 2);
+    crate(20, 7, 2, 1);
+    crate(18, 8, 2, 1);
+
+    for (let z = 5; z <= 7; z += 2) {
+      addVox(17, 2, z, 0x7b4d2c);
+      addVox(17, 3, z, 0x8d5b33);
+      addVox(17, 4, z, 0x7b4d2c);
+    }
+
+    for (const z of [-12, -8, -4, 0, 8, 12]) {
+      addVox(16, 2, z, 0x2c2c2c);
+      addVox(16, 3, z, 0x4d4d4d);
+    }
+
+    // Gangway to ship
+    for (let x = 12; x <= 15; x++) addVox(x, 1, 4, C.wood);
+    for (let x = 12; x <= 15; x++) {
+      addVox(x, 2, 3, C.woodDark);
+      addVox(x, 2, 5, C.woodDark);
+    }
+
+    // Ship
+    function buildShip() {
+      for (let z = 1; z <= 8; z++) {
+        let xMin, xMax;
+        if (z === 1) {
+          xMin = 7; xMax = 10;
+        } else if (z >= 2 && z <= 6) {
+          xMin = 6; xMax = 11;
+        } else if (z === 7) {
+          xMin = 7; xMax = 10;
+        } else {
+          xMin = 8; xMax = 9;
+        }
+
+        for (let y = -2; y <= 1; y++) {
+          for (let x = xMin; x <= xMax; x++) {
+            let c;
+            if (y === 1) c = C.deck;
+            else if (y === 0) c = C.hull;
+            else c = C.hullBottom;
+            addVox(x, y, z, c);
+          }
+        }
+      }
+
+      // Rail
+      for (let z = 2; z <= 6; z++) {
+        addVox(6, 2, z, 0x4e2f1e);
+        addVox(11, 2, z, 0x4e2f1e);
+      }
+      for (let x = 7; x <= 10; x++) {
+        addVox(x, 2, 1, 0x4e2f1e);
+        addVox(x, 2, 7, 0x4e2f1e);
+      }
+      addVox(8, 2, 8, 0x4e2f1e);
+
+      // Gun ports
+      for (let z = 3; z <= 5; z++) {
+        addVox(6, 0, z, 0x1a120e);
+        addVox(11, 0, z, 0x1a120e);
+      }
+
+      // Keel
+      for (let z = 2; z <= 7; z++) {
+        addVox(8, -2, z, C.hullBottom);
+        addVox(9, -2, z, C.hullBottom);
+      }
+
+      // Stern cabin
+      for (let x = 7; x <= 9; x++) {
+        for (let z = 1; z <= 2; z++) {
+          addVox(x, 2, z, 0xac835b);
+          addVox(x, 3, z, 0x7c4e2f);
+        }
+      }
+      addVox(8, 3, 0, C.glass);
+      addVox(7, 2, 0, 0x222222);
+      addVox(9, 2, 0, 0x222222);
+
+      // Bowsprit
+      for (let z = 9; z <= 12; z++) addVox(8, 2, z, C.mast);
+      for (let z = 10; z <= 11; z++) addVox(8, 3, z, C.mast);
+
+      // Masts
+      for (let y = 2; y <= 13; y++) addVox(8, y, 6, C.mast); // main
+      for (let y = 2; y <= 10; y++) addVox(8, y, 3, C.mast); // fore
+      for (let y = 2; y <= 7; y++) addVox(8, y, 1, C.mast);  // stern flag mast
+
+      // Yards
+      for (let x = 3; x <= 13; x++) addVox(x, 11, 6, C.woodDark);
+      for (let x = 4; x <= 12; x++) addVox(x, 8, 6, C.woodDark);
+      for (let x = 3; x <= 12; x++) addVox(x, 9, 3, C.woodDark);
+
+      // Sails
+      for (let y = 9; y <= 10; y++) {
+        for (let x = 4; x <= 12; x++) addVox(x, y, 6, C.sail);
+      }
+      for (let y = 6; y <= 7; y++) {
+        for (let x = 5; x <= 11; x++) addVox(x, y, 6, C.sail);
+      }
+      for (let y = 7; y <= 8; y++) {
+        for (let x = 4; x <= 11; x++) addVox(x, y, 3, C.sail);
+      }
+    }
+
+    buildShip();
+
+    // Rope rigging
+    rope(8.5, 2.5, 12.5, 8.5, 9.5, 3.5);
+
+    const mainTop = [8.5, 13.5, 6.5];
+    const mainAnchors = [
+      [6.5, 2.5, 4.5], [11.5, 2.5, 4.5],
+      [6.5, 2.5, 6.5], [11.5, 2.5, 6.5],
+      [6.5, 2.5, 7.5], [11.5, 2.5, 7.5]
+    ];
+    for (const a of mainAnchors) rope(mainTop[0], mainTop[1], mainTop[2], a[0], a[1], a[2]);
+
+    const foreTop = [8.5, 10.5, 3.5];
+    const foreAnchors = [
+      [6.5, 2.5, 2.5], [11.5, 2.5, 2.5],
+      [6.5, 2.5, 4.5], [11.5, 2.5, 4.5]
+    ];
+    for (const a of foreAnchors) rope(foreTop[0], foreTop[1], foreTop[2], a[0], a[1], a[2]);
+
+    // Yard braces
+    rope(3.5, 11.5, 6.5, 7.5, 2.5, 5.5);
+    rope(12.5, 11.5, 6.5, 11.5, 2.5, 5.5);
+    rope(3.5, 9.5, 3.5, 7.5, 2.5, 3.5);
+    rope(11.5, 9.5, 3.5, 11.5, 2.5, 3.5);
+
+    // Mooring lines
+    rope(11.5, 2.5, 1.5, 16.5, 2.5, -3.5);
+    rope(11.5, 2.5, 7.5, 16.5, 2.5, 9.5);
+
+    // Animated flag
+    const flag = new THREE.Mesh(
+      new THREE.BoxGeometry(2.4, 1.25, 0.13),
+      new THREE.MeshStandardMaterial({ color: 0xc62828, roughness: 0.8, flatShading: true })
+    );
+    flag.position.set(10.7, 7.35, 1.5);
+    flag.castShadow = true;
+    scene.add(flag);
+
+    // Finalize instanced voxels
+    vox.count = voxelCount;
+    vox.instanceMatrix.needsUpdate = true;
+    if (vox.instanceColor) vox.instanceColor.needsUpdate = true;
+
+    // Birds
+    const birds = [];
+
+    function makeBird(cx, cz, radius, height, speed, phase) {
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0xf9f9f9,
+        flatShading: true,
+        roughness: 0.85
+      });
+
+      const g = new THREE.Group();
+
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.42, 0.65), mat);
+      g.add(body);
+
+      const tail = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.15, 0.35), mat);
+      tail.position.set(0, 0, -0.55);
+      g.add(tail);
+
+      const leftPivot = new THREE.Group();
+      const leftWing = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.11, 0.85), mat);
+      leftWing.position.set(0, 0, 0.52);
+      leftPivot.add(leftWing);
+      g.add(leftPivot);
+
+      const rightPivot = new THREE.Group();
+      const rightWing = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.11, 0.85), mat);
+      rightWing.position.set(0, 0, -0.52);
+      rightPivot.add(rightWing);
+      g.add(rightPivot);
+
+      g.userData = { cx, cz, radius, height, speed, phase, leftPivot, rightPivot };
+      scene.add(g);
+      birds.push(g);
+    }
+
+    makeBird(12, 4, 18, 17, 0.26, 0);
+    makeBird(8, 10, 14, 20, 0.21, 1.7);
+    makeBird(16, -6, 22, 15, 0.17, 3.3);
+
+    // Animation
+    function animate(tMs) {
+      const t = tMs * 0.001;
+      controls.update();
+
+      beacon.material.emissiveIntensity = 1.05 + Math.sin(t * 3.0) * 0.45;
+      beaconLight.intensity = 1.9 + Math.sin(t * 3.0) * 0.55;
+
+      flag.rotation.y = Math.sin(t * 1.8) * 0.22;
+      flag.rotation.z = Math.sin(t * 2.7) * 0.1;
+
+      for (const bird of birds) {
+        const d = bird.userData;
+        const a = t * d.speed + d.phase;
+
+        bird.position.set(
+          d.cx + Math.cos(a) * d.radius,
+          d.height + Math.sin(t * 0.9 + d.phase) * 0.9,
+          d.cz + Math.sin(a) * d.radius
+        );
+        bird.rotation.y = -a;
+
+        const flap = Math.sin(t * 6.5 + d.phase) * 0.45;
+        d.leftPivot.rotation.x = flap;
+        d.rightPivot.rotation.x = -flap;
+      }
+
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
+
+    requestAnimationFrame(animate);
+
+    window.addEventListener('resize', () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+  </script>
+</body>
+</html>
+```

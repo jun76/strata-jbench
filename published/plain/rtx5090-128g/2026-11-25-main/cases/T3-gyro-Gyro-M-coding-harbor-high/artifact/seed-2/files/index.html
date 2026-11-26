@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Voxel Harbor: Sailing Ship Calling at Harbor</title>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #9ad1f0;
+    }
+    canvas {
+      display: block;
+    }
+    #info {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      color: #ffffff;
+      font: 12px/1.45 system-ui, sans-serif;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
+      pointer-events: none;
+      opacity: 0.92;
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="info">
+    <strong>Voxel Harbor</strong><br>
+    drag: orbit<br>
+    scroll: zoom<br>
+    right-drag: pan
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+    const SKY = 0x9ad1f0;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(SKY);
+    scene.fog = new THREE.Fog(SKY, 70, 190);
+
+    const camera = new THREE.PerspectiveCamera(
+      55,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      600
+    );
+    camera.position.set(36, 28, 46);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(14, 3, 16);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.07;
+    controls.maxPolarAngle = Math.PI * 0.49;
+    controls.minDistance = 10;
+    controls.maxDistance = 170;
+    controls.update();
+
+    const material = new THREE.MeshLambertMaterial({ color: 0xffffff });
+
+    scene.add(new THREE.HemisphereLight(0xcfe8ff, 0x394b60, 1.15));
+
+    const sun = new THREE.DirectionalLight(0xfff3d8, 1.25);
+    sun.position.set(34, 55, -18);
+    scene.add(sun);
+
+    const lamp = new THREE.PointLight(0xfff0a6, 1.0, 38, 2);
+    lamp.position.set(-14, 10, 6);
+    scene.add(lamp);
+
+    const C = {
+      sea: 0x1f5d94,
+      seaShallow: 0x4fa5cf,
+      seaDeep: 0x154977,
+
+      sand: 0xe6ca95,
+      grass: 0x74b457,
+
+      stone: 0x9c9c96,
+      darkStone: 0x6f6f69,
+
+      deck: 0xb47a43,
+      wood: 0x8b5a33,
+      darkWood: 0x5b3a20,
+
+      hull: 0x6b3a24,
+      hullStripe: 0x321e14,
+
+      sail: 0xf7f3e4,
+      mast: 0x8c6a46,
+
+      cream: 0xd8c39c,
+      roofRed: 0xc54f3f,
+      roofBlue: 0x3b6ea8,
+      brick: 0xb0523f,
+
+      white: 0xffffff,
+      red: 0xc9342c,
+      yellow: 0xffd76b,
+      green: 0x5f9a44
+    };
+
+    function makeColor(color, jitter = 0.05) {
+      const c = new THREE.Color(color);
+      if (jitter > 0) {
+        const hsl = { h: 0, s: 0, l: 0 };
+        c.getHSL(hsl);
+
+        hsl.h = (hsl.h + (Math.random() - 0.5) * jitter * 0.08 + 1) % 1;
+        hsl.s = Math.max(0, Math.min(1, hsl.s + (Math.random() - 0.5) * jitter));
+        hsl.l = Math.max(0, Math.min(1, hsl.l + (Math.random() - 0.5) * jitter));
+
+        c.setHSL(hsl.h, hsl.s, hsl.l);
+      }
+      return c;
+    }
+
+    class Batch {
+      constructor() {
+        this.pos = [];
+        this.col = [];
+      }
+
+      add(x, y, z, color, jitter = 0.05) {
+        this.pos.push(x, y, z);
+        this.col.push(makeColor(color, jitter));
+      }
+
+      build(parentScene, sharedMaterial) {
+        const count = this.pos.length / 3;
+        if (count === 0) return null;
+
+        const geometry = new THREE.BoxGeometry(1, 1, 1);
+        const mesh = new THREE.InstancedMesh(geometry, sharedMaterial, count);
+
+        const dummy = new THREE.Object3D();
+
+        for (let i = 0; i < count; i++) {
+          const i3 = i * 3;
+
+          dummy.position.set(this.pos[i3], this.pos[i3 + 1], this.pos[i3 + 2]);
+          dummy.scale.set(1, 1, 1);
+          dummy.rotation.set(0, 0, 0);
+          dummy.updateMatrix();
+
+          mesh.setMatrixAt(i, dummy.matrix);
+          mesh.setColorAt(i, this.col[i]);
+        }
+
+        mesh.instanceMatrix.needsUpdate = true;
+        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+
+        if (parentScene) parentScene.add(mesh);
+        return mesh;
+      }
+    }
+
+    function addBox(batch, x, y, z, sx, sy, sz, color, jitter = 0.05) {
+      for (let dx = 0; dx < sx; dx++) {
+        for (let dy = 0; dy < sy; dy++) {
+          for (let dz = 0; dz < sz; dz++) {
+            batch.add(x + dx, y + dy, z + dz, color, jitter);
+          }
+        }
+      }
+    }
+
+    // --------------------------------------------------------------------
+    // Static harbor voxels
+    // --------------------------------------------------------------------
+    const staticBatch = new Batch();
+
+    // Land / shore
+    for (let x = -34; x <= 47; x++) {
+      for (let z = -36; z <= -2; z++) {
+        let color;
+
+        if (z >= -9 && x >= -10 && x <= 42) {
+          color = C.stone;
+        } else if (z <= -26) {
+          color = C.grass;
+        } else if (z <= -18 && (x < -8 || x > 24)) {
+          color = C.grass;
+        } else if (z <= -12 && x < -5) {
+          color = C.stone;
+        } else {
+          color = C.sand;
+        }
+
+        staticBatch.add(x, 1, z, color, 0.07);
+      }
+    }
+
+    // Quay wall edge
+    addBox(staticBatch, -32, 1, -1, 78, 1, 1, C.stone, 0.04);
+    addBox(staticBatch, -32, 0, -1, 78, 1, 1, C.darkStone, 0.04);
+
+    // Breakwater
+    addBox(staticBatch, -26, 1, 0, 15, 1, 8, C.stone, 0.08);
+
+    // Lighthouse on breakwater
+    addBox(staticBatch, -15, 2, 5, 3, 2, 3, C.stone, 0.06);
+
+    for (let y = 4; y <= 9; y++) {
+      const color = (y % 2 === 0) ? C.white : C.red;
+      staticBatch.add(-14, y, 6, color, 0.02);
+    }
+
+    staticBatch.add(-14, 10, 6, C.yellow, 0.03);
+    staticBatch.add(-14, 11, 6, C.red, 0.02);
+
+    // Wooden pier deck, with plank pattern
+    for (let x = 8; x <= 22; x++) {
+      for (let z = 0; z <= 11; z++) {
+        const color = ((x + z) % 2 === 0) ? C.deck : C.darkWood;
+        staticBatch.add(x, 1, z, color, 0.04);
+      }
+    }
+
+    // Pilings
+    for (const x of [8, 13, 22]) {
+      for (const z of [11, 9, 7, 5, 3, 1]) {
+        staticBatch.add(x, 0, z, C.darkWood, 0.03);
+        staticBatch.add(x, -1, z, C.darkWood, 0.03);
+      }
+    }
+
+    // Cargo crates and barrels on pier
+    addBox(staticBatch, 10, 2, 2, 2, 2, 2, C.wood, 0.10);
+    addBox(staticBatch, 13, 2, 7, 2, 1, 2, C.darkWood, 0.08);
+    addBox(staticBatch, 18, 2, 3, 3, 2, 2, C.wood, 0.10);
+
+    addBox(staticBatch, 11, 2, 6, 1, 2, 1, C.darkWood, 0.06);
+    addBox(staticBatch, 19, 2, 7, 1, 2, 1, C.darkWood, 0.06);
+
+    // Bollards
+    for (const x of [9, 18, 21]) {
+      staticBatch.add(x, 2, 11, C.darkWood, 0.02);
+    }
+
+    // Gangplank to ship
+    addBox(staticBatch, 14, 2, 10, 3, 1, 2, C.deck, 0.04);
+    addBox(staticBatch, 14, 3, 12, 3, 1, 1, C.deck, 0.03);
+
+    addBox(staticBatch, 13, 2, 10, 1, 1, 2, C.darkWood, 0.03);
+    addBox(staticBatch, 17, 2, 10, 1, 1, 2, C.darkWood, 0.03);
+    addBox(staticBatch, 13, 3, 12, 1, 1, 1, C.darkWood, 0.02);
+    addBox(staticBatch, 17, 3, 12, 1, 1, 1, C.darkWood, 0.02);
+
+    // Small cargo on quay
+    addBox(staticBatch, 5, 2, -5, 2, 2, 2, C.wood, 0.10);
+    addBox(staticBatch, 25, 2, -6, 3, 1, 2, C.darkWood, 0.08);
+    addBox(staticBatch, 31, 2, -5, 2, 2, 2, C.wood, 0.10);
+
+    // Small crane on pier
+    addBox(staticBatch, 20, 2, 5, 1, 3, 1, C.darkWood, 0.04);
+    staticBatch.add(20, 5, 5, C.darkWood, 0.03);
+
+    for (let i = 0; i < 6; i++) {
+      const x = 20 + i;
+      const y = 5 - Math.floor(i / 2);
+      const z = 5 + i;
+      staticBatch.add(x, y, z, C.wood, 0.05);
+    }
+
+    addBox(staticBatch, 22, 2, 8, 2, 2, 2, C.wood, 0.08);
+
+    // Warehouse helper
+    function addBuilding(batch, x, z, w, d, h, bodyColor, roofColor) {
+      const front = z + d - 1;
+      const doorX = Math.floor(x + w / 2) - 1;
+
+      const winA = x + 2;
+      const winB = x + Math.min(w - 3, Math.floor(w / 2) + 3);
+
+      for (let bx = 0; bx < w; bx++) {
+        for (let by = 0; by < h; by++) {
+          const wy = 2 + by;
+
+          for (let bz = 0; bz < d; bz++) {
+            const wx = x + bx;
+            const wz = z + bz;
+            let color = bodyColor;
+
+            if (wz === front) {
+              if (
+                by === 1 &&
+                wx !== doorX &&
+                wx !== doorX + 1 &&
+                (wx === winA || wx === winB)
+              ) {
+                color = C.sail;
+              }
+
+              if (by <= 1 && wx >= doorX && wx <= doorX + 1) {
+                color = C.darkWood;
+              }
+            }
+
+            batch.add(wx, wy, wz, color, 0.05);
+          }
+        }
+      }
+
+      addBox(batch, x + 1, 2 + h, z, w - 2, 1, d, roofColor, 0.04);
+      if (w >= 6) {
+        addBox(batch, x + 2, 2 + h + 1, z, w - 4, 1, d, roofColor, 0.03);
+      }
+    }
+
+    addBuilding(staticBatch, 0, -14, 10, 6, 3, C.brick, C.roofRed);
+    addBuilding(staticBatch, 12, -14, 11, 6, 4, C.cream, C.roofBlue);
+    addBuilding(staticBatch, 26, -14, 10, 6, 3, C.stone, C.roofRed);
+
+    // Trees
+    function addTree(x, z) {
+      addBox(staticBatch, x, 2, z, 1, 3, 1, C.darkWood, 0.04);
+      addBox(staticBatch, x - 1, 5, z - 1, 3, 1, 3, C.green, 0.12);
+      addBox(staticBatch, x - 1, 6, z - 1, 3, 1, 2, 0x72b056, 0.12);
+      addBox(staticBatch, x, 7, z, 1, 1, 1, C.green, 0.10);
+    }
+
+    addTree(-26, -30);
+    addTree(-18, -28);
+    addTree(28, -32);
+    addTree(34, -26);
+    addTree(-6, -30);
+
+    // Buoys in the harbor mouth
+    staticBatch.add(-30, 1, 30, C.red, 0.02);
+    staticBatch.add(-30, 2, 30, C.white, 0.02);
+
+    staticBatch.add(-8, 1, 34, C.yellow, 0.02);
+    staticBatch.add(-8, 2, 34, C.darkWood, 0.02);
+
+    staticBatch.add(32, 1, 28, C.white, 0.02);
+    staticBatch.add(32, 2, 28, C.red, 0.02);
+
+    const staticMesh = staticBatch.build(scene, material);
+
+    // --------------------------------------------------------------------
+    // Water
+    // --------------------------------------------------------------------
+    const waterBatch = new Batch();
+
+    for (let x = -46; x <= 48; x++) {
+      for (let z = 0; z <= 44; z++) {
+        const shallow = z < 5 || (x > -20 && x < 35 && z < 16);
+        const color = shallow ? C.seaShallow : (z > 28 ? C.seaDeep : C.sea);
+        waterBatch.add(x, 0, z, color, 0.08);
+      }
+    }
+
+    const waterMesh = waterBatch.build(scene, material);
+    const waterPos = waterBatch.pos;
+    const waterCount = waterPos.length / 3;
+
+    function seaWave(x, z, t) {
+      let w =
+        Math.sin(t * 0.7 + x * 0.12 + z * 0.14) * 0.25 +
+        Math.sin(t * 1.3 + x * 0.07 - z * 0.17) * 0.12;
+
+      const near = Math.max(0, Math.min(1, (z - 1) / 5));
+      w *= 0.45 + 0.55 * near;
+
+      if (x > 3 && x < 28 && z < 22) {
+        w *= 0.55;
+      }
+
+      return w;
+    }
+
+    // --------------------------------------------------------------------
+    // Ship
+    // --------------------------------------------------------------------
+    const shipBatch = new Batch();
+
+    function beamAt(x) {
+      const a = Math.abs(x);
+      if (a <= 3) return 3;
+      if (a <= 5) return 2;
+      if (a <= 7) return 1;
+      return 0;
+    }
+
+    // Hull
+    for (let x = -7; x <= 7; x++) {
+      const b = beamAt(x);
+      if (b <= 0) continue;
+
+      for (let z = -b; z <= b; z++) {
+        const isGunport = Math.abs(z) === b && b >= 3 && ((x % 4) === 0);
+        const midColor = isGunport ? C.darkWood : C.hull;
+
+        shipBatch.add(x, 1, z, C.hullStripe, 0.03);
+        shipBatch.add(x, 2, z, midColor, 0.05);
+        shipBatch.add(x, 3, z, C.deck, 0.06);
+      }
+    }
+
+    // Stern cabin
+    addBox(shipBatch, -6, 4, -2, 3, 1, 5, C.cream, 0.04);
+    addBox(shipBatch, -6, 5, -1, 3, 1, 3, C.roofRed, 0.03);
+
+    // Masts, yards, sails
+    function mast(x, height) {
+      for (let y = 4; y <= height; y++) {
+        shipBatch.add(x, y, 0, C.mast, 0.03);
+      }
+    }
+
+    function yard(x, y, w) {
+      const minX = Math.round(x - w / 2);
+      addBox(shipBatch, minX, y, 1, w, 1, 1, C.mast, 0.03);
+    }
+
+    function sail(x, y, w, h) {
+      const minX = Math.round(x - w / 2);
+      addBox(shipBatch, minX, y, 1, w, h, 1, C.sail, 0.03);
+    }
+
+    // Mizzen mast
+    mast(-3, 12);
+    yard(-3, 9, 5);
+    sail(-3, 6, 5, 3);
+    yard(-3, 12, 3);
+    sail(-3, 10, 3, 2);
+
+    // Main mast
+    mast(0, 15);
+    yard(0, 10, 7);
+    sail(0, 6, 7, 4);
+    yard(0, 14, 5);
+    sail(0, 11, 5, 3);
+
+    // Fore mast
+    mast(5, 13);
+    yard(5, 9, 5);
+    sail(5, 6, 5, 3);
+    yard(5, 12, 3);
+    sail(5, 10, 3, 2);
+
+    // Bowsprit
+    addBox(shipBatch, 8, 4, 0, 3, 1, 1, C.darkWood, 0.03);
+
+    // Jib sail, stepped triangular approximation
+    for (let x = 8; x <= 10; x++) {
+      const y0 = 5 + (x - 8);
+      const y1 = 9 + (x - 8);
+      addBox(shipBatch, x, y0, 1, 1, y1 - y0 + 1, 1, C.sail, 0.03);
+    }
+
+    // Flagstaff and flag
+    for (let y = 4; y <= 13; y++) {
+      shipBatch.add(-7, y, 1, C.mast, 0.03);
+    }
+
+    addBox(shipBatch, -8, 12, 1, 1, 2, 1, C.red, 0.02);
+
+    const shipMesh = shipBatch.build(scene, material);
+    shipMesh.position.set(14, 0, 16);
+
+    // --------------------------------------------------------------------
+    // Clouds
+    // --------------------------------------------------------------------
+    const cloudBatch = new Batch();
+
+    function addCloud(cx, cy, cz) {
+      for (let dx = -3; dx <= 3; dx++) {
+        for (let dz = -2; dz <= 2; dz++) {
+          const dist = Math.abs(dx) + Math.abs(dz);
+          const h = 3 - dist;
+
+          for (let dy = 0; dy < h; dy++) {
+            if (Math.random() < 0.75) {
+              cloudBatch.add(cx + dx, cy + dy, cz + dz, C.white, 0.02);
+            }
+          }
+        }
+      }
+    }
+
+    addCloud(-8, 0, 0);
+    addCloud(5, 2, -4);
+    addCloud(-2, 1, 5);
+    addCloud(8, 0, 2);
+    addCloud(-14, 1, 3);
+
+    const cloudMesh = cloudBatch.build(scene, material);
+    cloudMesh.position.set(0, 22, 5);
+
+    // --------------------------------------------------------------------
+    // Animation
+    // --------------------------------------------------------------------
+    const clock = new THREE.Clock();
+    const waterDummy = new THREE.Object3D();
+
+    function updateWater(t) {
+      for (let i = 0; i < waterCount; i++) {
+        const i3 = i * 3;
+        const x = waterPos[i3];
+        const z = waterPos[i3 + 2];
+        const y = seaWave(x, z, t);
+
+        waterDummy.position.set(x, y, z);
+        waterDummy.updateMatrix();
+        waterMesh.setMatrixAt(i, waterDummy.matrix);
+      }
+
+      waterMesh.instanceMatrix.needsUpdate = true;
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const t = clock.getElapsedTime();
+
+      updateWater(t);
+
+      shipMesh.position.y = Math.sin(t * 0.9) * 0.05;
+      shipMesh.rotation.y = Math.sin(t * 0.45) * 0.03;
+
+      cloudMesh.position.x = Math.sin(t * 0.07) * 35;
+      cloudMesh.position.z = 5 + Math.cos(t * 0.05) * 12;
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    animate();
+
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
