@@ -109,15 +109,21 @@ def bench_checks(steps, env_id):
                 bad.append(f'{fam}:{model} {why}')
                 continue
             sfam, smodel = own_build.target(fam, model)
-            rc, out = run(['strata', 'launch', '--plan', '--family', sfam, '--model', smodel, '--context', '128k',
-                           '--vision', 'off', '--parallel', '1', '--tune', 'skip', '--port', '18600', '--drafting', 'mtp',
-                           '--gpu', card, '--output', 'json'], timeout=180, cwd='/tmp', env=own_build.env(fam, model))
-            try:
-                plan = json.loads(out[out.index('{'):])['plan']
-                if plan['download']['gb']:
-                    bad.append(f'{fam}:{model} would download {plan["download"]["gb"]} GB')
-            except (ValueError, KeyError) as e:
-                bad.append(f'{fam}:{model} plan failed ({e}): {out[-200:]}')
+            # a build with files of its own: every context of its cases (a launch at another context than the run config's
+            # runs Strata's setup, which is where the known model's file would be fetched)
+            ctxs = sorted({r['context'] for r in rows if (r['family'], r['model']) == (fam, model)}) \
+                if own_build.own(fam, model) else [131072]
+            for ctx in ctxs:
+                rc, out = run(['strata', 'launch', '--plan', '--family', sfam, '--model', smodel, '--context', str(ctx),
+                               '--vision', 'off', '--parallel', '1', '--tune', 'skip', '--port', '18600', '--drafting', 'mtp',
+                               '--gpu', card, '--output', 'json', *own_build.launch_extra(fam, model)], timeout=180, cwd='/tmp',
+                              env=own_build.env(fam, model))
+                try:
+                    plan = json.loads(out[out.index('{'):])['plan']
+                    if plan['download']['gb']:
+                        bad.append(f'{fam}:{model} at {ctx} would download {plan["download"]["gb"]} GB')
+                except (ValueError, KeyError) as e:
+                    bad.append(f'{fam}:{model} plan at {ctx} failed ({e}): {out[-200:]}')
         check(f'strata launch --plan: {len(models)} models need no download', not bad, '; '.join(bad))
         # "mtp": false in a model's installed config (left by an earlier --mtp off / --drafting off that ran setup) keeps
         # the draft layer off at every launch, --mtp on included; only setup's own --mtp on writes --mtp <data>/mtp/rt back
@@ -134,6 +140,11 @@ def bench_checks(steps, env_id):
                 pass
         check('installed configs: no model has the MTP draft layer switched off ("mtp": false)', not off,
               '; '.join(off) + ' - run Control setup.py --yes --no-start --family F --model M --mtp on (AGENTS.md 5)')
+        # a saved tuning active for a model's choices is put over every start of it (strata presets effective)
+        tuned = [f'{fam}:{model} {t}' for fam, model in models
+                 if (t := engines.get(engines.DEFAULT, gpu=int(card), dry=True).saved_tuning(own_build.config_path(fam, model)))]
+        check('saved tunings: no preset of Strata\'s tuner changes a measuring launch', not tuned,
+              '; '.join(tuned) + ' - strata presets off <run config> switches it off (Strata\'s saved settings: ask first)')
         # The DFlash2 cases: the drafter must be on disk before, not fetched in the middle of a measurement.
         dflash = sorted({(r['family'], r['model']) for r in rows if '--drafting dflash2' in r['launch_opts']})
         if dflash:
@@ -141,7 +152,7 @@ def bench_checks(steps, env_id):
             sfam, smodel = own_build.target(fam, model)
             rc, out = run(['strata', 'launch', '--plan', '--family', sfam, '--model', smodel, '--context', '128k', '--vision', 'off',
                            '--parallel', '1', '--tune', 'skip', '--port', '18600', '--drafting', 'dflash2', '--gpu', card,
-                           '--output', 'json'],
+                           '--output', 'json', *own_build.launch_extra(fam, model)],
                           timeout=180, cwd='/tmp', env=own_build.env(fam, model))
             try:
                 gb = json.loads(out[out.index('{'):])['plan']['download']['gb']

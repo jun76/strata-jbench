@@ -42,9 +42,15 @@
 - An unknown name in `--set` only gives a warning. The runner checks that the launch choices (`--context`, `--kv`,
   `--parallel`, `--pool-cores`, `--vision gpu`, the `--set` values, `--drafting off`) are on the engine's command line
   (`engine started` in engine.log), and fails the cases with `setting not applied` if not.
-- Tier 5's `--tune quick / thorough` saves its result as a Strata preset, active for its choices (vision on and others,
-  which overlap the desktop app's). It does not affect the measuring launches (vision off) but can affect the app. The
-  runner keeps the presets made in `tune-presets.json`.
+- Tier 5's `--tune quick / thorough` saves its result as a Strata preset, active for its choices (the model, the
+  context, vision and others; the desktop app shares the store). Strata puts an active preset over every later start
+  with the same choices, the `--set` values included, so it does affect the measuring launches when the choices match:
+  NVFP4 (no picture reader, so vision off like the bench) ran at 128K with `--prefill auto:32768` from the tune of
+  2026-11-04 until the tune of 2026-11-27 replaced it, and its `--set prefill=N` launches never got their N (on this
+  card a bare `auto` has the same 32768 ceiling, so the numbers are the same setting in effect). Preflight asks
+  `strata presets effective <run config>` for every model and stops when a preset changes a launch; the runner fails a
+  launch a preset changed (`saved tuning`). `strata presets off <run config>` switches one off: it is one of Strata's
+  saved settings, so ask first (section 3). The runner keeps the presets a tune made in `tune-presets.json`.
 - State thinking and sampling in every request; left out, they are filled from the shared Chat settings or the config
   (docs/SCOUTING.md section 2).
 - With thinking on and no `reasoning_budget_tokens`, answer_room fills in 3/4 of the cap. The runner states the same

@@ -53,5 +53,8 @@ free for the old results. Fetch the file into a folder of its own at a pinned re
 record the folder (`python3 -I scripts/provision.py set-models <install> --path DIR --sha256 ...`), then
 `python3 -I scripts/own_build.py prepare <family> <model>` builds its pack with Strata's own tool and writes its run
 config under `tools/strata-install/`. Strata's saved run configs are not changed. Add the build to env.json "models",
-rebuild the plan, and run one case under a `test-` RUN_ID: the runner fails a launch whose engine was not started on
-jbench's file. Gyro-S v2 (2026-11-25) is the example.
+rebuild the plan, and run under a `test-` RUN_ID one case at every context the build has cases for: a launch at
+another context than the run config's runs Strata's setup, which takes the model Strata knows unless the launch names
+the file (`--model-path`, with `--data-dir` for the pack and the drafter; the adapter adds both). The runner fails a
+launch whose engine was not started on jbench's file. Gyro-S v2 (2026-11-25) is the example: before the adapter named
+the file, its 256K launch in 2026-11-25-main fetched Gyro-S (58.5 GB) into the build's data folder and was failed.

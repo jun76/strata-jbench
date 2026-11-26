@@ -69,7 +69,7 @@ class Adapter(Engine):
         fam, model = own_build.target(row['family'], row['model'])   # a build with files of jbench's own: the model Strata knows
         args = ['strata', 'launch', '--family', fam, '--model', model, '--context', str(row['context']),
                 '--vision', 'off', '--parallel', '1', '--tune', 'skip', '--access', 'local', '--port', str(self.port),
-                '--no-tui', '--restart', '--gpu', str(self.gpu)]
+                '--no-tui', '--restart', '--gpu', str(self.gpu), *own_build.launch_extra(row['family'], row['model'])]
         # The drafter is pinned to MTP: since 0.2.10, Auto picks DFlash2 for some families and MTP for others, which would
         # mix two drafters across the models. Tier 5 changes it with its own --drafting.
         # --mtp on as well: when a launch runs setup (a changed choice), --drafting off makes it pass --mtp off, which saves
@@ -125,6 +125,7 @@ class Adapter(Engine):
         return [f'{f} {v}' if v is not None else f for f, v in want if not has(f, v)] + extra
 
     def start(self, row, session_dir):
+        own_build.before_launch(row['family'], row['model'])
         args = self.launch_args(row)
         timeout = self.ctx.get('launch_timeout', 3 * 3600)
         t0 = time.time()
@@ -170,6 +171,14 @@ class Adapter(Engine):
             info['error'] = 'MTP asked for (--drafting mtp) but the engine log has no "strata mtp: draft layer loaded"'
             info['mtp_missing'] = True
             return False
+        # a saved tuning (a preset the tuner made active for these choices, Tier 5's --tune or the app's) is put over every
+        # start with the same choices, the --set values included: NVFP4 128K ran with --prefill auto:32768 from the tune
+        # of 2026-11-04 through 2026-11-25-main, and its --set prefill=N launches never got their N
+        tuned = None if self.tunes(row) else self.saved_tuning(Path(info['engine_log'].replace('.engine.log', '.json')))
+        if tuned:
+            info['error'] = f'a saved tuning changed this launch: {tuned} (strata presets off, AGENTS.md 5)'
+            info['setting_missing'] = ['saved tuning']
+            return False
         missing = self.not_applied(args, part)
         if missing:
             info['error'] = 'launch choices not in the engine command line: ' + ', '.join(missing)
@@ -177,8 +186,29 @@ class Adapter(Engine):
             return False
         return True
 
+    @staticmethod
+    def tunes(row):
+        return '--tune' in row['launch_opts'] and 'skip' not in row['launch_opts']
+
+    @staticmethod
+    def saved_tuning(config):
+        """What Strata's saved tuning changes in a start from this run config (strata presets effective), or None: the
+        preset's name and the options it sets. A preset that changes nothing (the tuner found no faster setting) is None."""
+        if not Path(config).is_file():
+            return None
+        r = subprocess.run(['strata', 'presets', 'effective', str(config), '--output', 'json'], capture_output=True, text=True,
+                           timeout=120, cwd='/tmp')
+        try:
+            d = json.loads(r.stdout[r.stdout.index('{'):])
+        except ValueError:
+            return None
+        what = {k: d[k] for k in ('changed', 'env', 'sampling', 'per_request') if d.get(k)}
+        if not d.get('applied') or not what:
+            return None
+        return f'preset {(d.get("preset") or {}).get("name")!r} sets {json.dumps(what, ensure_ascii=False)}'
+
     def after_launch(self, row, info, session_dir):
-        if '--tune' in row['launch_opts'] and 'skip' not in row['launch_opts']:
+        if self.tunes(row):
             return f'the tuner saved preset(s) {self.save_tune_presets(session_dir, time.time() - info["launch_s"])}'
         return None
 

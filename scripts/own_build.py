@@ -70,6 +70,31 @@ def env(fam, model):
     return dict(os.environ, STRATA_INSTALL_DIR=str(install_dir(fam, model))) if own(fam, model) else None
 
 
+def launch_extra(fam, model):
+    """What a strata launch of this build adds: --model-path, the file to use where it is, and --data-dir, the build's
+    data folder (its pack and the link to the drafter). A launch that runs Strata's setup (any context but the one the
+    run config was written for) otherwise takes the known model's file: on 2026-11-26 it fetched Gyro-S (58.5 GB) into
+    the build's data folder and started that. With --model-path alone the pack is built again in a folder Strata
+    derives from the file's path, where no drafter is."""
+    f = model_file(fam, model) if own(fam, model) else None
+    return ['--model-path', str(f), '--data-dir', str(data_dir(fam, model))] if f else []
+
+
+def before_launch(fam, model):
+    """A launch that runs Strata's setup rewrites the run config it starts from. With --model-path and --data-dir it
+    writes this build's paths again; should the config name another file all the same, it is written again here."""
+    if own(fam, model) and state(fam, model) and not state_files(fam, model):
+        prepare(fam, model, quiet=True)
+
+
+def state_files(fam, model):
+    """What is missing of the build's files (the model file, the pack), or None."""
+    f = model_file(fam, model)
+    if not f or not f.is_file():
+        return state(fam, model)
+    return None if (pack_dir(fam, model) / 'native_experts.txt').is_file() else 'no pack'
+
+
 def model_file(fam, model):
     o = own(fam, model)
     where = provision.models(o['install']).get('path')
@@ -110,7 +135,7 @@ def control():
     return CONTROL / json.loads((CONTROL / 'active.json').read_text())['folder']
 
 
-def prepare(fam, model):
+def prepare(fam, model, quiet=False):
     o = own(fam, model)
     if not o:
         raise SystemExit(f'{fam} {model} is not a build with "own" in the catalog')
@@ -125,10 +150,15 @@ def prepare(fam, model):
     old_file, old_pack = args[args.index('--native') + 1], args[args.index('--pack') + 1]
     pack, ctl = pack_dir(fam, model), control()
     pack.parent.mkdir(parents=True, exist_ok=True)
-    shared = Path(old_pack).parent.parent / 'dflash2'      # the DFlash2 drafter is the model's, not the build's
-    link = data_dir(fam, model) / 'dflash2'
-    if shared.is_dir() and not link.exists():
-        link.symlink_to(shared)
+    # the drafters are the model's, not the build's: links to Strata's, or a launch that runs setup with --data-dir
+    # fetches them again (the MTP draft layer, 5.2 GB, at the 1M launch of test-gyro-v2-ctx2)
+    shared = [Path(old_pack).parent.parent / 'dflash2']
+    if '--mtp' in args:
+        shared.append(Path(args[args.index('--mtp') + 1]).parent)
+    for src in shared:
+        link = data_dir(fam, model) / src.name
+        if src.is_dir() and not link.exists():
+            link.symlink_to(src)
     if not (pack / 'native_experts.txt').is_file():
         pack_args = ['--compat-bf16'] if '--compat-bf16' in (o.get('pack_args') or ['--compat-bf16']) else []
         r = subprocess.run([str(ctl / 'python/bin/python3.12'), str(ctl / 'tools/iq_pack.py'), '--gguf', str(f), '--out', str(pack),
@@ -154,7 +184,8 @@ def prepare(fam, model):
     cfg['log'] = str(conf.with_suffix('.log'))
     conf.write_text(json.dumps(cfg, indent=1) + '\n')
     provision.put('models', o['install'], pack=str(pack), install=str(conf.parent), prepared_with=f'Control {ctl.name} tools/iq_pack.py')
-    print(f'{fam} {model}: {conf.relative_to(ROOT)} (file {f}, pack {pack})')
+    if not quiet:
+        print(f'{fam} {model}: {conf.relative_to(ROOT)} (file {f}, pack {pack})')
 
 
 def main():
