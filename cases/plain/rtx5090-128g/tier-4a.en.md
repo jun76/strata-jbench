@@ -111,7 +111,7 @@ GeForce RTX 5090 · 128 GB RAM · 99 cases / 297 requests. The other parameters 
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | planned | `T4a-sync-Sync-XS-ctxcost-128K` | sync Sync-XS | 128K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 |  |  |
 | planned | `T4a-sync-Sync-XS-ctxcost-256K` | sync Sync-XS | 256K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 |  |  |
-| planned | `T4a-sync-Sync-S-ctxcost-128K` | sync Sync-S | 128K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 |  |  |
-| planned | `T4a-sync-Sync-S-ctxcost-256K` | sync Sync-S | 256K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 |  |  |
-| planned | `T4a-sync-Sync-M-ctxcost-128K` | sync Sync-M | 128K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 |  |  |
-| planned | `T4a-sync-Sync-M-ctxcost-256K` | sync Sync-M | 256K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 |  |  |
+| done | `T4a-sync-Sync-S-ctxcost-128K` | sync Sync-S | 128K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 | prefill 2610.4 / decode 252.1 / TTFT ms 1585.2 / acceptance 0.64 | [2026-11-27-sync](../../../published/plain/rtx5090-128g/2026-11-27-sync/cases/T4a-sync-Sync-S-ctxcost-128K/) |
+| done | `T4a-sync-Sync-S-ctxcost-256K` | sync Sync-S | 256K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 | prefill 2523.7 / decode 245.4 / TTFT ms 1640.8 / acceptance 0.662 | [2026-11-27-sync](../../../published/plain/rtx5090-128g/2026-11-27-sync/cases/T4a-sync-Sync-S-ctxcost-256K/) |
+| done | `T4a-sync-Sync-M-ctxcost-128K` | sync Sync-M | 128K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 | prefill 2574.7 / decode 223.3 / TTFT ms 1607.6 / acceptance 0.642 | [2026-11-27-sync](../../../published/plain/rtx5090-128g/2026-11-27-sync/cases/T4a-sync-Sync-M-ctxcost-128K/) |
+| done | `T4a-sync-Sync-M-ctxcost-256K` | sync Sync-M | 256K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 | prefill 2443.9 / decode 220.0 / TTFT ms 1697.2 / acceptance 0.653 | [2026-11-27-sync](../../../published/plain/rtx5090-128g/2026-11-27-sync/cases/T4a-sync-Sync-M-ctxcost-256K/) |

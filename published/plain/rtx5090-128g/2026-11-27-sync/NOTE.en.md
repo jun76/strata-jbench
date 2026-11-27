@@ -1,0 +1,1 @@
+Tiers 1, 3 and 4a for Sync-S and Sync-M on Sync-Strata 0.1.4 at R10 (tail skip off); 58 cases done. Sync-XS is not measured: in this environment the launcher of Sync-Strata 0.1.4 computes a RAM budget of 0.0 GiB and the engine does not start

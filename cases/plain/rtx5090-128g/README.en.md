@@ -18,7 +18,7 @@ One table of cases per Tier (a row per case). Every parameter and result: the CS
 | Motherboard | MSI Z790 GAMING PLUS WIFI (MS-7E06) |
 | Model storage | Fanxiang S880E 2TB (NVMe) |
 | OS | Ubuntu 26.10 (Linux 7.3.0-10-generic) |
-| Inference engine | strata 0.2.21 (build 0.1.67) |
+| Inference engine | strata 0.2.21 (build 0.1.67) · Sync-Strata 0.1.4 |
 
 The Strata desktop app is not used. The CLI (<code>strata launch --no-tui</code>) starts the engine on a dedicated port (18600), and <code>scripts/bench_runner.py</code> calls its OpenAI-compatible HTTP API (<code>POST /v1/chat/completions</code>, streaming) directly. Only Tier 2 runs Strata's bundled benchmark, <code>strata bench run --suite standard-v1</code>, against the same engine.
 
@@ -31,7 +31,7 @@ environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-27-fix (
 - engine launches: 193
 - estimate: 37 h
 - reference model: qwen IQ3_S (env.json "ref", else the model Strata recommends for this RAM + VRAM)
-- done: 2,134
+- done: 2,192
 - failed: 8
 
 
@@ -40,10 +40,10 @@ environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-27-fix (
 | Tier | what | models | cases | requests | est. h | done |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
 | [0](tier-0.en.md) | validating the harness (the reference model × 3 launches, Gyro-S against the author's figures, unpacking the coding result) | 2 | 25 | 183 | 0.5 | 25 |
-| [1](tier-1.en.md) | base speed of every model (5 decode kinds × 3 temperatures, prefill 4K / 32K / 128K); decode also with DFlash2 on the models that have it | 35 | 915 | 2,745 | 4.0 | 861 |
+| [1](tier-1.en.md) | base speed of every model (5 decode kinds × 3 temperatures, prefill 4K / 32K / 128K); decode also with DFlash2 on the models that have it | 35 | 915 | 2,745 | 4.0 | 897 |
 | [2](tier-2.en.md) | the official standard-v1 (thinking xhigh, temperature 1.0), the whole suite 3 times | 32 | 480 | 1,440 | 4.9 | 480 |
-| [3](tier-3.en.md) | reasoning effort none / high × 4 tasks, the coding task (sailing ship) at high only (every model) | 35 | 298 | 894 | 10.1 | 271 |
-| [4a](tier-4a.en.md) | the cost of reserving context (the same 4K input at 128K / 256K / 1M) | 35 | 99 | 297 | 2.2 | 93 |
+| [3](tier-3.en.md) | reasoning effort none / high × 4 tasks, the coding task (sailing ship) at high only (every model) | 35 | 298 | 894 | 10.1 | 289 |
+| [4a](tier-4a.en.md) | the cost of reserving context (the same 4K input at 128K / 256K / 1M) | 35 | 99 | 297 | 2.2 | 97 |
 | [4b](tier-4b.en.md) | long inputs within the trained length (32K / 128K / 256K; the reference model, the largest of each family, the smallest) | 8 | 96 | 288 | 2.5 | 88 |
 | [4c](tier-4c.en.md) | long inputs in the extended range (512K / 1M; the reference model, the smallest and the largest) | 3 | 24 | 72 | 7.7 | 24 |
 | [4d](tier-4d.en.md) | the effect of YaRN (the reference model, same input, only the setting changes) | 1 | 16 | 48 | 1.1 | 16 |
@@ -81,8 +81,8 @@ environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-27-fix (
 | Strata | nvfp4 | NVFP4-NVIDIA | 128.0 | quantized from the original weights (RTN) | [Maximilian228/Qwen3.8-Flash-Next-NVIDIA-NVFP4-Strata @ `cca8f7f`](https://huggingface.co/Maximilian228/Qwen3.8-Flash-Next-NVIDIA-NVFP4-Strata/tree/cca8f7fee5ce0af932097340a75e06df25c4e57d) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
 | Strata | nvfp4 | NVFP4-QAD | 102.3 | retrained for FP4 | [nvidia/Qwen3.8-Flash-Next-FP4-Local @ `b9ce18a`](https://huggingface.co/nvidia/Qwen3.8-Flash-Next-FP4-Local/tree/b9ce18a6887e18c089fdea8509a33e63429a3300) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
 | Sync-Strata | sync | Sync-XS | 24.1 | Sync-Strata's quantization (for 24 GB of RAM or less) | – |
-| Sync-Strata | sync | Sync-S | 28.1 | Sync-Strata's quantization (for 32 GB of RAM) | – |
-| Sync-Strata | sync | Sync-M | 34.6 | Sync-Strata's quantization (for 48 GB of RAM or more) | – |
+| Sync-Strata | sync | Sync-S | 28.1 | Sync-Strata's quantization (for 32 GB of RAM) | not recorded (2026-11-27-sync) |
+| Sync-Strata | sync | Sync-M | 34.6 | Sync-Strata's quantization (for 48 GB of RAM or more) | not recorded (2026-11-27-sync) |
 | Strata | hy4-flash | SQ-64 | 62.0 | Strata's quantization (another model, Hy4-Flash; for 64 GB of RAM) | [strata-engine/Hy4-Flash-Strata @ `995bac2`](https://huggingface.co/strata-engine/Hy4-Flash-Strata/tree/995bac227ab7e0d221772be641e2b5954a9fac06) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
 | Strata | hy4-flash | SQ-96 | 89.6 | Strata's quantization (another model, Hy4-Flash; for 96 GB of RAM) | [strata-engine/Hy4-Flash-Strata @ `995bac2`](https://huggingface.co/strata-engine/Hy4-Flash-Strata/tree/995bac227ab7e0d221772be641e2b5954a9fac06) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
 | Strata | hy4-flash | SQ-128 | 113.7 | Strata's quantization (another model, Hy4-Flash; for 128 GB of RAM, the closest to the original weights) | [strata-engine/Hy4-Flash-Strata @ `995bac2`](https://huggingface.co/strata-engine/Hy4-Flash-Strata/tree/995bac227ab7e0d221772be641e2b5954a9fac06) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |

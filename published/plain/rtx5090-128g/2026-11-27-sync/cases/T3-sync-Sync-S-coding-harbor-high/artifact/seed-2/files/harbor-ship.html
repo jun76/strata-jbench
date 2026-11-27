@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Voxel Harbor — A Sailing Ship Calling at a Harbor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    html, body { margin: 0; height: 100%; background: #7ca8cf; overflow: hidden; }
+    canvas { display: block; }
+    #info {
+      position: absolute; top: 10px; left: 12px; font: 12px/1.35 system-ui, sans-serif;
+      color: rgba(255,255,255,.72); pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,.45);
+    }
+    #info b { color: rgba(255,255,255,.92); font-weight: 650; }
+    #err {
+      position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+      font: 16px/1.4 system-ui, sans-serif; color: #fff; background: #123457; padding: 20px; text-align: center;
+    }
+  </style>
+
+  <!-- Works in current Chrome with import maps -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="info">
+    <b>A sailing ship calling at a harbor</b><br>
+    Drag to orbit · Scroll to zoom · Right-drag to pan
+  </div>
+  <div id="err">Could not load Three.js from the CDN. If you are offline, the scene cannot load.</div>
+
+  <script type="module">
+    let renderer, scene, camera, controls;
+
+    const showErr = () => {
+      const e = document.getElementById('err');
+      e.style.display = 'flex';
+    };
+
+    try {
+      init();
+      animate();
+    } catch (err) {
+      console.error(err);
+      showErr();
+    }
+
+    function init() {
+      importTHREE();
+    }
+
+    async function importTHREE() {
+      try {
+        const THREE = await import('three');
+        const { OrbitControls } = await import('three/addons/controls/OrbitControls.js');
+        buildScene(THREE, OrbitControls);
+      } catch (err) {
+        console.error(err);
+        showErr();
+      }
+    }
+
+    function buildScene(THREE, OrbitControls) {
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+      renderer.setSize(innerWidth, innerHeight);
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.02;
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      document.body.appendChild(renderer.domElement);
+
+      scene = new THREE.Scene();
+      const sky = 0x83b1d9;
+      const fogCol = 0x97c2e5;
+      scene.background = new THREE.Color(sky);
+      scene.fog = new THREE.Fog(fogCol, 44, 145);
+
+      camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 400);
+      camera.position.set(-22, 13.5, 9);
+
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.target.set(4, 6, 3);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.06;
+      controls.minDistance = 12;
+      controls.maxDistance = 110;
+      controls.maxPolarAngle = Math.PI * 0.49;
+
+      addLights(THREE);
+      addSkyElements(THREE);
+
+      const staticVoxels = [];
+      const shipVoxels = [];
+
+      const geo = new THREE.BoxGeometry(1, 1, 1);
+      const blockMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+
+      const addV = (x, y, z, color, w = 1, h = 1, d = 1, dest = staticVoxels) => {
+        dest.push({ x, y, z, color, w, h, d });
+      };
+
+      const addB = (x, bottom, z, color, w = 1, h = 1, d = 1, dest = staticVoxels) => {
+        addV(x, bottom + h / 2, z, color, w, h, d, dest);
+      };
+
+      // ---------- Deterministic tiny pseudo-random ----------
+      let seed = 0x8d3f7e21;
+      const rand = () => {
+        seed = (seed * 1664525 + 1013904223) >>> 0;
+        return (seed & 0xffff) / 0xffff;
+      };
+
+      // ---------- Terrain / harbor ----------
+      function heightAt(x, z) {
+        // flat quay / harbor yard near shore, hills farther inland
+        if (x >= 11 && x <= 29 && z <= 14) {
+          return 3.25 + Math.sin(x * 0.12 + z * 0.09) * 0.06;
+        }
+        return 3.1 + Math.sin(x * 0.26) * 0.28 + Math.sin(z * 0.22) * 0.24 + Math.sin((x + z) * 0.42) * 0.16;
+      }
+
+      const landMinX = 8, landMaxX = 34;
+      const landMinZ = 6, landMaxZ = 26;
+
+      const grass = [0x6f9a56, 0x7a9957, 0x678a4e];
+      const stone = [0x827865, 0x8a7d6b, 0x766d5b];
+      const road  = [0x706b62, 0x68645b, 0x7d7266];
+
+      for (let z = landMinZ; z <= landMaxZ; z++) {
+        for (let x = landMinX; x <= landMaxX; x++) {
+          const h = heightAt(x, z);
+
+          let color;
+          if (z <= 7) {
+            color = stone[(x + z) % 3];
+          } else if (x >= 12 && x <= 28 && z >= 8 && z <= 14) {
+            color = road[(x + z) % 3];
+          } else if (z > 18 && x > 20) {
+            color = grass[(x + z * 2) % 3];
+          } else {
+            color = grass[(x + z) % 3];
+          }
+
+          addB(x, 0, z, color, 0.99, h, 0.99);
+        }
+      }
+
+      // ---------- Pier / dock ----------
+      const pierDeckTop = 3.0;
+      const pierMinX = -5, pierMaxX = 22;
+      const pierCenterZ = 4.0;
+      const pierHalfDepth = 1.4;
+
+      for (let x = pierMinX; x <= pierMaxX; x += 1) {
+        addB(x, pierDeckTop - 0.4, pierCenterZ, 0x9b7452, 0.98, 0.4, pierHalfDepth * 2);
+      }
+
+      // wooden piles below the pier
+      for (let x = pierMinX + 1; x <= pierMaxX - 1; x += 3) {
+        for (let zz = pierCenterZ - pierHalfDepth + 0.4; zz <= pierCenterZ + pierHalfDepth - 0.4; zz += 1.2) {
+          addB(x + (rand() - 0.5) * 0.3, -1.2, zz + (rand() - 0.5) * 0.25, 0x674d37, 0.72, 3.7, 0.72);
+        }
+      }
+
+      // mooring posts
+      for (let x = -4; x <= 16; x += 2) {
+        addB(x, pierDeckTop, pierCenterZ - 0.7, 0x836647, 0.5, 0.9, 0.5);
+        addB(x, pierDeckTop + 0.85, pierCenterZ - 0.7, 0xa38b62, 0.62, 0.15, 0.62);
+      }
+
+      // cargo on the dock
+      const crateColors = [0xb67f45, 0x8f5b35, 0xa64c35, 0x708b4c];
+      for (let i = 0; i < 18; i++) {
+        const x = pierMinX + 2 + rand() * 15;
+        const z = pierCenterZ + 0.2 + rand() * 1.0;
+        const s = 0.7 + rand() * 0.5;
+        addB(x, pierDeckTop, z, crateColors[i % crateColors.length], s, s, s);
+      }
+
+      for (let i = 0; i < 10; i++) {
+        const x = pierMinX + 3 + rand() * 13;
+        const z = pierCenterZ + 0.2 + rand() * 1.0;
+        addB(x, pierDeckTop, z, 0x7d5237, 0.8, 1.1, 0.8);
+      }
+
+      // gangplank stepping from ship rail to dock
+      for (let i = 0; i < 5; i++) {
+        const z = 2.25 + i * 0.22;
+        const y = 4.30 - i * 0.28;
+        addB(0, y - 0.1, z, 0x9f7a58, 1.6, 0.22, 0.8);
+      }
+      for (let i = 0; i < 2; i++) {
+        addB(-0.6, 4.1, 2.35, 0x8d6b49, 0.18, 0.7, 0.18);
+        addB(0.6, 4.1, 2.35, 0x8d6b49, 0.18, 0.7, 0.18);
+      }
+
+      // ---------- Warehouses and town buildings ----------
+      function hipRoof(x, bottomTop, z, w, d, roofColor, steps = 5) {
+        let y = bottomTop - 0.12;
+        for (let i = 1; i <= steps; i++) {
+          const rw = Math.max(0.35, w - i * 0.7);
+          const rd = Math.max(0.35, d - i * 0.55);
+          addV(x, y + i * 0.24, z, roofColor, rw, 0.3, rd);
+        }
+      }
+
+      function addBuilding(x, z, w, d, h, wall, roof, front = true) {
+        const b = heightAt(x, z) + 0.03;
+        addB(x, b, z, wall, w * 0.98, h, d * 0.98);
+        hipRoof(x, b + h, z, w * 0.98, d * 0.98, roof, h > 3 ? 6 : 5);
+
+        if (front) {
+          const seaFace = z - d * 0.5 - 0.08;
+          addV(x, b + 1.1, seaFace, 0x2a2a2b, Math.min(1.8, w * 0.45), 2.0, 0.18);
+
+          for (let i = 0; i < 3; i++) {
+            const xx = x + (i - 1) * (w * 0.32);
+            addV(xx, b + h - 1.2, seaFace, 0x334155, 0.8, 0.8, 0.18);
+          }
+
+          const backFace = z + d * 0.5 + 0.08;
+          for (let i = 0; i < 2; i++) {
+            const xx = x + (i - 0.5) * (w * 0.36);
+            addV(xx, b + h - 1.1, backFace, 0x334155, 0.75, 0.75, 0.18);
+          }
+        }
+
+        // chimney
+        if (rand() > 0.45) {
+          addB(x + (rand() - 0.5) * (w * 0.5), b + h + 0.7, z, 0x8f5a47, 0.6, 1.4, 0.6);
+        }
+      }
+
+      // dock warehouses
+      addBuilding(13, 10.3, 4.8, 3.0, 3.2, 0x7f8b94, 0x8c3f31, true);
+      addBuilding(19, 11.4, 5.2, 3.2, 3.4, 0x6d7c87, 0x4b5b66, true);
+      addBuilding(24.5, 12.2, 4.6, 3.0, 3.0, 0x868f84, 0x674238, true);
+
+      // small town buildings further inland
+      const housePalette = [0xd38a5d, 0xe2bf82, 0xa36655, 0x7a8f73, 0xc7a182];
+      for (let x = 14; x <= 30; x += 4) {
+        addBuilding(x, 16.5, 2.6, 2.3, 2.5, housePalette[(x / 4 | 0) % housePalette.length], 0x764b3c, false);
+        addBuilding(x + 2, 20.0, 2.2, 2.1, 2.3, housePalette[(x / 2 | 0) % housePalette.length], 0x804e40, false);
+      }
+
+      // trees
+      function addTree(x, z) {
+        const b = heightAt(x, z) + 0.03;
+        addB(x, b, z, 0x7c573b, 0.5, 1.7, 0.5);
+        addV(x, b + 2.3, z, 0x4f7446, 1.6, 0.9, 1.6);
+        addV(x, b + 3.1, z, 0x5f8052, 1.1, 0.8, 1.1);
+        addV(x + 0.45, b + 2.5, z - 0.3, 0x4c6f42, 0.7, 0.5, 0.7);
+      }
+
+      for (let i = 0; i < 14; i++) {
+        addTree(26 + rand() * 6, 18 + rand() * 7);
+      }
+
+      // breakwater + rocks in the harbor mouth
+      function addRockCluster(cx, cz) {
+        for (let i = 0; i < 22; i++) {
+          const x = cx + (rand() - 0.5) * 6.0;
+          const z = cz + (rand() - 0.5) * 5.5;
+          const s = 0.8 + rand() * 1.0;
+          const y = -0.2 + rand() * 0.6;
+          addB(x, y, z, (rand() > 0.45 ? 0x6f7265 : 0x837f70), s, 1.7 + rand() * 1.4, s);
+        }
+      }
+
+      // breakwater
+      for (let x = 18; x <= 24; x += 0.9) {
+        const zz = -8 + (x - 18) * 0.45;
+        addB(x, -0.2, zz, 0x757264, 1.1, 2.5, 1.1);
+        addB(x + (rand() - 0.5) * 0.4, -0.4, zz + (rand() - 0.5) * 0.8, 0x857e6e, 0.8, 1.6, 0.8);
+      }
+      addRockCluster(22.4, -8.2);
+
+      // central rock platform for the lighthouse
+      addB(22.4, -0.2, -8.2, 0x837e6e, 5.4, 3.3, 5.4);
+
+      // lighthouse
+      function addLighthouse(x, z) {
+        let y = 3.1;
+        addB(x, y, z, 0x767b72, 2.9, 1.5, 2.9);
+        y += 1.5;
+
+        const stripe = [0xf2e9d8, 0xc94a3b];
+        for (let i = 0; i < 10; i++) {
+          const w = 2.7 - i * 0.16;
+          addB(x, y, z, stripe[i % 2], w, 0.9, w);
+          y += 0.9;
+        }
+
+        // gallery + lantern room
+        addV(x, y + 0.25, z, 0xe2dcc5, 2.4, 0.3, 2.4);
+        addB(x, y + 0.4, z, 0x3b4250, 2.8, 0.28, 2.8);
+        addB(x, y + 0.72, z, 0xf3d98b, 2.0, 1.1, 2.0);
+        y += 1.8;
+
+        // cap
+        addV(x, y, z, 0x505765, 1.2, 0.5, 1.2);
+
+        // beacon
+        const beaconMat = new THREE.MeshBasicMaterial({ color: 0xffd87f, fog: false });
+        const beacon = new THREE.Mesh(geo, beaconMat);
+        beacon.position.set(x, y - 1.05, z);
+        beacon.frustumCulled = false;
+        scene.add(beacon);
+
+        const light = new THREE.PointLight(0xffcf77, 1.2, 36, 1.6);
+        light.position.set(x, y - 1.05, z);
+        scene.add(light);
+
+        return { beacon, light };
+      }
+
+      const lighthouse = addLighthouse(22.4, -8.2);
+
+      // ---------- Water ----------
+      const waterMinX = -30, waterMaxX = 34;
+      const waterMinZ = -30, waterMaxZ = 5;
+      const waterCols = waterMaxX - waterMinX + 1;
+      const waterRows = waterMaxZ - waterMinZ + 1;
+      const waterCount = waterCols * waterRows;
+
+      const waterMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+      const waterMesh = new THREE.InstancedMesh(geo, waterMat, waterCount);
+      waterMesh.frustumCulled = false;
+      waterMesh.castShadow = false;
+      waterMesh.receiveShadow = false;
+
+      const waterInfo = new Array(waterCount);
+      const dummy = new THREE.Object3D();
+      const c = new THREE.Color();
+
+      const deep = new THREE.Color(0x1b5577);
+      const mid = new THREE.Color(0x2b7891);
+      const shallow = new THREE.Color(0x4299a4);
+
+      let wi = 0;
+      for (let z = waterMinZ; z <= waterMaxZ; z++) {
+        for (let x = waterMinX; x <= waterMaxX; x++) {
+          const baseY = -0.66;
+          waterInfo[wi] = { x, z, baseY, phase: rand() * Math.PI * 2 };
+
+          const tShore = Math.max(0, Math.min(1, (z + 26) / 31));
+          const tLand  = Math.max(0, Math.min(1, (x + 8) / 42));
+          const t = tShore * 0.72 + tLand * 0.28 + rand() * 0.10;
+
+          if (t < 0.45) c.copy(deep).lerp(mid, t / 0.45);
+          else c.copy(mid).lerp(shallow, (t - 0.45) / 0.55);
+
+          c.offsetHSL(0, rand() * 0.08 - 0.04, rand() * 0.04 - 0.02);
+          waterMesh.setColorAt(wi, c);
+
+          dummy.position.set(x, baseY, z);
+          dummy.scale.set(0.98, 1.22, 0.98);
+          dummy.updateMatrix();
+          waterMesh.setMatrixAt(wi, dummy.matrix);
+
+          wi++;
+        }
+      }
+
+      waterMesh.instanceColor.needsUpdate = true;
+      scene.add(waterMesh);
+
+      // ---------- Sailing ship ----------
+      const shipGroup = new THREE.Group();
+      shipGroup.position.set(0, 0, 0);
+      scene.add(shipGroup);
+
+      const hullProfile = [
+        [-9, 4.4], [-8, 4.8], [-7, 5.0], [-6, 5.0], [-5, 5.0], [-4, 5.0], [-3, 5.0],
+        [-2, 5.0], [-1, 5.0], [0, 5.0], [1, 5.0], [2, 5.0], [3, 4.8], [4, 4.4],
+        [5, 3.9], [6, 3.4], [7, 2.9], [8, 2.3], [9, 1.6]
+      ];
+
+      const woodDark = 0x663d24;
+      const woodMid  = 0x895433;
+      const deckWood = 0xc5a26d;
+      const railWood = 0xd4bd86;
+      const mastWood = 0xb89062;
+      const yardWood = 0xa77d51;
+      const sailCream = 0xf3e9c6;
+      const riggingGray = 0xd8d3c4;
+      const cabinWood = 0xc6a072;
+      const cabinRoof = 0x5c4231;
+
+      // lower hull
+      for (const [x, w] of hullProfile) {
+        addB(x, -0.45, 0, woodDark, 0.98, 2.6, w * 0.97, shipVoxels);
+      }
+
+      // upper hull
+      for (const [x, w] of hullProfile) {
+        addB(x, 1.95, 0, woodMid, 0.98, 2.35, w * 0.97, shipVoxels);
+      }
+
+      // deck
+      for (const [x, w] of hullProfile) {
+        addB(x, 4.30, 0, deckWood, 0.97, 0.32, w * 0.94, shipVoxels);
+      }
+
+      // side rail along deck
+      for (const [x, w] of hullProfile) {
+        const side = w * 0.49;
+        addV(x, 4.70, side, railWood, 0.97, 0.22, 0.22, shipVoxels);
+        addV(x, 4.70, -side, railWood, 0.97, 0.22, 0.22, shipVoxels);
+      }
+
+      // gun ports on harbor side
+      for (const [x, w] of hullProfile) {
+        if (w > 3.2 && x >= -6 && x <= 4) {
+          const side = w * 0.49;
+          addV(x, 3.35, side + 0.04, 0x222222, 0.92, 0.8, 0.18, shipVoxels);
+        }
+      }
+
+      // stern cabin / quarterdeck
+      const cabinX = -8;
+      const cabinZ = 0;
+      const cabinW = 2.4;
+      const cabinD = 2.0;
+      const cabinH = 2.1;
+      const cabinBottom = 4.58;
+
+      addB(cabinX, cabinBottom, cabinZ, cabinWood, cabinW, cabinH, cabinD, shipVoxels);
+      hipRoofLocal(cabinX, cabinBottom + cabinH, cabinZ, cabinW, cabinD, cabinRoof, shipVoxels);
+
+      function hipRoofLocal(x, bottomTop, z, w, d, roofColor, dest) {
+        let y = bottomTop - 0.12;
+        for (let i = 1; i <= 5; i++) {
+          const rw = Math.max(0.35, w - i * 0.55);
+          const rd = Math.max(0.35, d - i * 0.42);
+          addV(x, y + i * 0.22, z, roofColor, rw, 0.28, rd, dest);
+        }
+      }
+
+      // stern gallery windows toward harbor side
+      const cabinFaceZ = cabinZ + cabinD * 0.5 + 0.07;
+      for (let i = -1; i <= 1; i++) {
+        addV(cabinX + i * 0.75, cabinBottom + 1.25, cabinFaceZ, 0x34445e, 0.65, 0.85, 0.18, shipVoxels);
+        addV(cabinX + i * 0.75, cabinBottom + 1.85, cabinFaceZ, 0x34445e, 0.55, 0.6, 0.18, shipVoxels);
+      }
+
+      // figurehead
+      addV(9.2, 2.35, 0.25, 0xf0ddbd, 0.55, 0.85, 0.55, shipVoxels);
+
+      // bowsprit
+      addV(12.3, 4.95, 0, mastWood, 5.8, 0.28, 0.28, shipVoxels);
+      addV(13.8, 5.55, 0, mastWood, 0.24, 0.4, 0.24, shipVoxels);
+
+      // masts and yards
+      function mast(x, topY, shaftY, shaftH) {
+        addV(x, shaftY, 0, mastWood, 0.75, shaftH, 0.75, shipVoxels);
+        addV(x, topY + 0.25, 0, mastWood, 0.32, 0.5, 0.32, shipVoxels);
+        addV(x, topY + 0.9, 0, mastWood, 0.2, 0.7, 0.2, shipVoxels);
+      }
+
+      function yard(x, y, len) {
+        addV(x, y, 0, yardWood, len, 0.25, 0.25, shipVoxels);
+      }
+
+      // main mast
+      mast(0, 11.2, 8.1, 6.3);
+      yard(0, 7.25, 6.5);
+      yard(0, 9.05, 5.7);
+      yard(0, 10.45, 4.6);
+
+      // foremast
+      mast(4, 9.45, 7.2, 5.0);
+      yard(4, 6.55, 4.8);
+      yard(4, 8.35, 4.0);
+
+      // mizzenmast
+      mast(-5, 9.15, 7.0, 4.7);
+      yard(-5, 6.25, 4.2);
+      yard(-5, 7.85, 3.4);
+
+      // sails: cream rectangles above deck, oriented to face the harbor side
+      function sail(x, y, h, len) {
+        addV(x, y, 0.0, sailCream, len, h, 0.22, shipVoxels);
+        addV(x, y + h * 0.25, 0.0, sailCream, len * 0.85, h * 0.45, 0.18, shipVoxels);
+        addV(x, y - h * 0.22, 0.0, 0xdcc99f, len * 0.92, h * 0.32, 0.18, shipVoxels);
+      }
+
+      // main sails set
+      sail(0, 6.05, 2.3, 6.2);
+      sail(0, 8.15, 1.9, 5.5);
+      sail(0, 9.85, 1.35, 4.2);
+
+      // fore sails
+      sail(4, 5.8, 1.75, 4.4);
+      sail(4, 7.6, 1.35, 3.7);
+
+      // mizzen sails, smaller
+      sail(-5, 5.45, 1.5, 3.6);
+      sail(-5, 7.1, 1.15, 2.8);
+
+      // furled top yards for a moored ship feel
+      addV(0, 11.35, 0, sailCream, 3.2, 0.22, 0.22, shipVoxels);
+      addV(4, 9.55, 0, sailCream, 3.0, 0.22, 0.22, shipVoxels);
+      addV(-5, 9.25, 0, sailCream, 2.6, 0.22, 0.22, shipVoxels);
+
+      // rigging lines
+      const linePts = [];
+      const line = (a, b) => linePts.push(a[0], a[1], a[2], b[0], b[1], b[2]);
+
+      line([14, 5.6, 0], [4, 9.45, 0]);       // bowsprit to foremast top
+      line([13, 5.0, 0], [0, 11.2, 0]);       // bowsprit to main top
+      line([4, 9.45, 0], [0, 11.2, 0]);       // forestay
+      line([0, 11.2, 0], [-5, 9.15, 0]);      // main stay
+      line([-5, 9.15, 0], [-8.4, 7.0, 1.1]);  // mizzen stay to stern cabin side
+
+      // lower braces from yards to deck side
+      line([0 - 3.25, 7.25, 0], [0 - 2.4, 4.65, 2.2]);
+      line([0 + 3.25, 7.25, 0], [0 + 2.4, 4.65, 2.2]);
+      line([4 - 2.4, 6.55, 0], [4 - 1.6, 4.65, 2.0]);
+      line([4 + 2.4, 6.55, 0], [4 + 1.6, 4.65, 2.0]);
+      line([-5 - 2.1, 6.25, 0], [-5 - 1.4, 4.65, 1.8]);
+      line([-5 + 2.1, 6.25, 0], [-5 + 1.4, 4.65, 1.8]);
+
+      // upper braces
+      line([0 - 2.85, 9.05, 0], [0 - 1.8, 4.65, 2.2]);
+      line([0 + 2.85, 9.05, 0], [0 + 1.8, 4.65, 2.2]);
+      line([4 - 2.0, 8.35, 0], [4 - 1.2, 4.65, 2.0]);
+      line([4 + 2.0, 8.35, 0], [4 + 1.2, 4.65, 2.0]);
+
+      const rigGeom = new THREE.BufferGeometry();
+      rigGeom.setAttribute('position', new THREE.Float32BufferAttribute(linePts, 3));
+      const rigMat = new THREE.LineBasicMaterial({ color: riggingGray, transparent: true, opacity: 0.82 });
+      const rigging = new THREE.LineSegments(rigGeom, rigMat);
+      rigging.frustumCulled = false;
+      shipGroup.add(rigging);
+
+      // mooring lines, fixed in world space near the ship side
+      const moorPts = [];
+      moorPts.push(-3, 4.15, 2.25, -3, 3.4, 3.2);
+      moorPts.push( 0, 4.15, 2.25,  0, 3.4, 3.2);
+      moorPts.push( 4, 4.05, 2.0,   4, 3.4, 3.2);
+      moorPts.push( 6, 3.95, 1.8,   6, 3.4, 3.2);
+      moorPts.push(-6, 4.15, 2.3,  -6, 3.4, 3.2);
+
+      const moorGeom = new THREE.BufferGeometry();
+      moorGeom.setAttribute('position', new THREE.Float32BufferAttribute(moorPts, 3));
+      const moorLine = new THREE.LineSegments(moorGeom, new THREE.LineBasicMaterial({ color: 0x8b6f45, transparent: true, opacity: 0.9 }));
+      scene.add(moorLine);
+
+      // flag on mizzenmast (separate animated pieces)
+      const flagGroup = new THREE.Group();
+      flagGroup.position.set(-5, 9.65, 0);
+      shipGroup.add(flagGroup);
+
+      const flagPieces = [];
+      function addFlagPiece(x, y, z, color, s = 1) {
+        const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color }));
+        m.scale.set(1.7 * s, 0.34 * s, 0.2 * s);
+        m.position.set(x, y, z);
+        m.userData.base = { x, y, z };
+        m.userData.phase = flagPieces.length * 0.8;
+        flagPieces.push(m);
+        flagGroup.add(m);
+      }
+
+      addFlagPiece(0.1, 0.0, 0.0, 0x2d587e);
+      addFlagPiece(0.1, -0.35, 0.0, 0xf6f0e2);
+      addFlagPiece(0.1, -0.65, 0.0, 0xc0433d);
+
+      // build ship instanced voxels
+      const shipMesh = new THREE.InstancedMesh(geo, blockMat, shipVoxels.length);
+      shipMesh.frustumCulled = false;
+      shipMesh.castShadow = true;
+      shipMesh.receiveShadow = false;
+
+      for (let i = 0; i < shipVoxels.length; i++) {
+        const v = shipVoxels[i];
+        dummy.position.set(v.x, v.y, v.z);
+        dummy.scale.set(v.w, v.h, v.d);
+        dummy.updateMatrix();
+        shipMesh.setMatrixAt(i, dummy.matrix);
+
+        c.set(v.color);
+        shipMesh.setColorAt(i, c);
+      }
+
+      shipMesh.instanceMatrix.needsUpdate = true;
+      shipMesh.instanceColor.needsUpdate = true;
+      shipGroup.add(shipMesh);
+
+      // build static harbor instanced voxels
+      const harborMesh = new THREE.InstancedMesh(geo, blockMat, staticVoxels.length);
+      harborMesh.frustumCulled = false;
+      harborMesh.castShadow = true;
+      harborMesh.receiveShadow = true;
+
+      for (let i = 0; i < staticVoxels.length; i++) {
+        const v = staticVoxels[i];
+        dummy.position.set(v.x, v.y, v.z);
+        dummy.scale.set(v.w, v.h, v.d);
+        dummy.updateMatrix();
+        harborMesh.setMatrixAt(i, dummy.matrix);
+
+        c.set(v.color);
+        harborMesh.setColorAt(i, c);
+      }
+
+      harborMesh.instanceMatrix.needsUpdate = true;
+      harborMesh.instanceColor.needsUpdate = true;
+      scene.add(harborMesh);
+
+      // ---------- Small boats ----------
+      function addBoat(x, z, withSail = false) {
+        const group = new THREE.Group();
+        group.position.set(x, -0.02, z);
+
+        const hull = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0x7c573d }));
+        hull.scale.set(3.0, 0.55, 1.2);
+        hull.position.set(0, 0.18, 0);
+        hull.frustumCulled = false;
+        hull.castShadow = false;
+        group.add(hull);
+
+        const deck = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0xb88f5f }));
+        deck.scale.set(2.6, 0.12, 0.95);
+        deck.position.set(0, 0.44, 0);
+        deck.frustumCulled = false;
+        group.add(deck);
+
+        if (withSail) {
+          const mast = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0xa9845b }));
+          mast.scale.set(0.2, 1.3, 0.2);
+          mast.position.set(-0.7, 1.1, 0);
+          mast.frustumCulled = false;
+          group.add(mast);
+
+          const sail = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0xf1e6c5 }));
+          sail.scale.set(1.2, 1.1, 0.18);
+          sail.position.set(-0.45, 1.35, 0);
+          sail.frustumCulled = false;
+          group.add(sail);
+        }
+
+        scene.add(group);
+        return group;
+      }
+
+      const boats = [
+        addBoat(-12.5, 3.0, true),
+        addBoat(-17.0, 2.2, false),
+        addBoat(12.5, 2.1, false)
+      ];
+
+      // ---------- Clouds ----------
+      const clouds = [];
+      const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, fog: false });
+
+      function addCloud(x, z, y, scale = 1) {
+        const group = new THREE.Group();
+        group.position.set(x, y, z);
+        group.userData.speed = 0.55 + rand() * 0.75;
+
+        const n = 4 + Math.floor(rand() * 6);
+        for (let i = 0; i < n; i++) {
+          const m = new THREE.Mesh(geo, cloudMat);
+          m.scale.set(
+            (2.0 + rand() * 4.2) * scale,
+            (1.0 + rand() * 1.8) * scale,
+            (2.2 + rand() * 3.5) * scale
+          );
+          m.position.set(
+            (rand() - 0.5) * 8 * scale,
+            (rand() - 0.5) * 2.2 * scale,
+            (rand() - 0.5) * 7 * scale
+          );
+          m.castShadow = false;
+          m.frustumCulled = false;
+          group.add(m);
+        }
+
+        scene.add(group);
+        clouds.push(group);
+      }
+
+      for (let i = 0; i < 10; i++) {
+        addCloud(-40 + rand() * 80, -30 + rand() * 70, 26 + rand() * 12, 0.7 + rand() * 0.8);
+      }
+
+      // sun disc
+      const sunMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(3.4, 3.4, 3.4),
+        new THREE.MeshBasicMaterial({ color: 0xffe3a8, fog: false })
+      );
+      sunMesh.position.set(42, 43, 18);
+      sunMesh.frustumCulled = false;
+      scene.add(sunMesh);
+
+      // ---------- Gulls ----------
+      const birdMat = new THREE.MeshLambertMaterial({ color: 0xe6e6e6 });
+      const wingMat = new THREE.MeshLambertMaterial({ color: 0xc7ccd4 });
+      const birds = [];
+
+      function addBird(x, z, y) {
+        const group = new THREE.Group();
+        group.position.set(x, y, z);
+
+        const body = new THREE.Mesh(geo, birdMat);
+        body.scale.set(0.22, 0.14, 0.42);
+        body.frustumCulled = false;
+        group.add(body);
+
+        const wingL = new THREE.Mesh(geo, wingMat);
+        wingL.scale.set(0.55, 0.06, 0.22);
+        wingL.position.set(-0.28, 0.03, 0);
+        wingL.frustumCulled = false;
+        group.add(wingL);
+
+        const wingR = new THREE.Mesh(geo, wingMat);
+        wingR.scale.set(0.55, 0.06, 0.22);
+        wingR.position.set(0.28, 0.03, 0);
+        wingR.frustumCulled = false;
+        group.add(wingR);
+
+        group.userData.base = { x, y, z };
+        group.userData.phase = Math.random() * Math.PI * 2;
+        group.userData.speed = 0.28 + Math.random() * 0.34;
+        group.userData.wings = [wingL, wingR];
+
+        scene.add(group);
+        birds.push(group);
+      }
+
+      for (let i = 0; i < 8; i++) {
+        addBird(-8 + Math.random() * 22, -4 + Math.random() * 14, 9 + Math.random() * 7);
+      }
+
+      // ---------- Lights ----------
+      function addLights(THREE) {
+        const amb = new THREE.AmbientLight(0x9fc2df, 0.55);
+        scene.add(amb);
+
+        const hemi = new THREE.HemisphereLight(0xd8efff, 0x634b32, 0.92);
+        scene.add(hemi);
+
+        const sun = new THREE.DirectionalLight(0xffcf9d, 2.15);
+        sun.position.set(34, 42, 20);
+        sun.target.position.set(6, 7, 0);
+        sun.castShadow = true;
+
+        sun.shadow.mapSize.set(2048, 2048);
+        sun.shadow.camera.left = -44;
+        sun.shadow.camera.right = 46;
+        sun.shadow.camera.top = 38;
+        sun.shadow.camera.bottom = -8;
+        sun.shadow.camera.near = 1;
+        sun.shadow.camera.far = 220;
+        sun.shadow.bias = -0.00025;
+        sun.shadow.normalBias = 0.02;
+
+        scene.add(sun);
+        scene.add(sun.target);
+      }
+
+      // ---------- Resize ----------
+      addEventListener('resize', () => {
+        camera.aspect = innerWidth / innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(innerWidth, innerHeight);
+        renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+      });
+
+      // ---------- Animation ----------
+      const clock = new THREE.Clock();
+
+      function animate() {
+        requestAnimationFrame(animate);
+
+        const dt = Math.min(clock.getDelta(), 0.08);
+        const t = clock.elapsedTime;
+
+        controls.update();
+
+        // water waves
+        for (let i = 0; i < waterCount; i++) {
+          const w = waterInfo[i];
+          const wave =
+            Math.sin(t * 1.15 + w.x * 0.22 + w.z * 0.31 + w.phase) * 0.13 +
+            Math.sin(t * 0.70 + w.x * 0.11 - w.z * 0.22) * 0.08;
+
+          dummy.position.set(w.x, w.baseY + wave, w.z);
+          dummy.scale.set(0.98, 1.22, 0.98);
+          dummy.updateMatrix();
+          waterMesh.setMatrixAt(i, dummy.matrix);
+        }
+        waterMesh.instanceMatrix.needsUpdate = true;
+
+        // ship gently bobbing
+        shipGroup.position.y = 0.03 + Math.sin(t * 0.55) * 0.045 + Math.sin(t * 0.93) * 0.015;
+        shipGroup.rotation.z = Math.sin(t * 0.42) * 0.005;
+
+        // flag flutter
+        for (const m of flagPieces) {
+          const b = m.userData.base;
+          const ph = m.userData.phase;
+          m.position.set(
+            b.x + Math.sin(t * 6 + ph) * 0.10,
+            b.y + Math.sin(t * 6 + ph * 0.7) * 0.12,
+            b.z + Math.sin(t * 4 + ph) * 0.18
+          );
+          m.scale.z = 0.16 + Math.sin(t * 5 + ph) * 0.05;
+        }
+
+        // boats rocking
+        for (let i = 0; i < boats.length; i++) {
+          const g = boats[i];
+          g.position.y = -0.02 + Math.sin(t * 0.9 + i * 1.7) * 0.05;
+          g.rotation.x = Math.sin(t * 0.7 + i) * 0.025;
+          g.rotation.z = Math.sin(t * 0.55 + i * 1.3) * 0.03;
+        }
+
+        // clouds drift
+        for (const g of clouds) {
+          g.position.x += g.userData.speed * dt;
+          if (g.position.x > 90) g.position.x = -90;
+        }
+
+        // beacon pulse
+        const pulse = 0.78 + Math.sin(t * 2.2) * 0.16;
+        lighthouse.light.intensity = pulse;
+        lighthouse.beacon.material.color.setHSL(0.12, 0.85, 0.55 + pulse * 0.12);
+
+        // birds
+        for (const g of birds) {
+          const u = g.userData;
+          u.phase += u.speed * dt;
+          const bx = u.base.x;
+          const bz = u.base.z;
+
+          g.position.set(
+            bx + Math.sin(u.phase * 0.55) * 7.0,
+            u.base.y + Math.sin(u.phase * 0.4) * 1.2,
+            bz + Math.cos(u.phase * 0.45) * 5.0
+          );
+
+          const flap = Math.sin(u.phase * 6.0);
+          const [wl, wr] = u.wings;
+          wl.rotation.x = flap * 0.7;
+          wr.rotation.x = -flap * 0.7;
+          g.rotation.y = Math.cos(u.phase * 0.45) * 0.25;
+        }
+
+        renderer.render(scene, camera);
+      }
+
+      // add initial scene setup helpers that use THREE captured inside module scope
+      // (this closure already has everything)
+      window.scene = scene;
+      window.renderer = renderer;
+      window.camera = camera;
+      window.controls = controls;
+    }
+  </script>
+</body>
+</html>

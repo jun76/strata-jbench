@@ -1,0 +1,26 @@
+~/strata-jbench/tools/engines/sync-strata/0.1.4/SyncStrata/app/launcher/sync.sh up --api-only --json --port 18600 --model sync-m --context 131072 --kv k8v4 --ram-squeeze off --tail-skip 10
+
+  ！この GPU（NVIDIA GeForce RTX 5090）は動く見込みですが、まだ確認していません。
+1/5 PC を調べています（10 秒ほど）...
+  ・空き RAM 115.9 GiB（エンジンに 2.7，余白 2.25 を除くと専門家に 110.9 GiB），VRAM の席 約 23.3 GiB，画面はこの GPU（予約 768 MiB）
+  ・ほかのアプリの RAM は追い出していません（設定 ram_squeeze が off）
+  ・pack は指定どおり Sync-M
+  ・RAM の枠 6.75 GiB，輪なし
+  ・起動時の tail skip は R10（省かない）（指定どおり）．API を別のソフトから使うときだけ効く（dsh の会話は会話ごとのモデルに従う）
+  ！画面をこの GPU が映している（内蔵 GPU は見つからない／無効）: VRAM の予約は 768 MiB．ブラウザーの描画は decode と同じ GPU を使う．
+  ・文脈の長さが前回の 262144 から 131072 に変わっています。
+2/5 dsh は起こしません（--api-only）
+3/5 Sync-M を読み込んでいます（30 秒〜2 分）...
+  読み込み 25 秒，RAM の写し 6.75 GiB（GPU から読める固定 5.40 GiB）
+4/5 落ち着くのを待って，温めています...
+  1 窓 10.694 ms = GPU の待ち 6.124 + CPU 側 3.312（計画 0.15・量子化 0.198・SSD の待ち 0.01・専門家 2.738）+ 下書き 0.78 + ほか 0.48．1 窓で 1.672 トークン（下書きの当たり 51.9%）→ 156.7 tok/s．
+API: http://127.0.0.1:18600/v1   モデル名: qwen3.8-flash-next-sync-m
+  OpenAI 互換: POST http://127.0.0.1:18600/v1/chat/completions（stream 可），POST /v1/responses，GET /v1/models
+  Anthropic 互換: POST http://127.0.0.1:18600/v1/messages（stream 可）
+  鍵: なし（何を入れても通る）．送り方は Authorization: Bearer <鍵> か x-api-key: <鍵>
+  多くのハーネスは環境変数で: OPENAI_BASE_URL=http://127.0.0.1:18600/v1  OPENAI_API_KEY=<鍵>（Anthropic 形式なら ANTHROPIC_BASE_URL=http://127.0.0.1:18600）
+  curl の例: curl http://127.0.0.1:18600/v1/chat/completions -H "Content-Type: application/json" -d "{\"model\": \"qwen3.8-flash-next-sync-m\", \"messages\": [{\"role\": \"user\", \"content\": \"Hello\"}]}"
+  日本語を curl で送るとき（Windows）: 本文を UTF-8 のファイルに書いて --data-binary @body.json（端末に直接書くと文字コードが合わず断られる）
+  速さと品質を依頼ごとに変える: 本文に "strata_tune": {"tail_skip": 4}（速度重視）／7（品質重視）／0（切）．無ければ起動のときの preset
+5/5 API だけ起こしました．止めるのは: sync down --engine
+{"ok": true, "mode": "api-only", "settings": {"model": "sync-m", "preset": null, "tail_skip": 10, "ram_max_gib": null, "vram_reserve_mib": null, "ram_squeeze": "off", "ui_lang": "auto", "refusal_reduction": "off", "expert_learning": "off", "context": 131072, "kv_format": "k8v4", "api_port": 18600, "api_host": "127.0.0.1", "lan_remote": "off", "dsh_port": 3080, "relay_port": 3081, "proxy_port": 8081, "dsh_home": "~/strata-jbench/results/plain/rtx5090-128g/2026-11-27-sync/sync-home/dsh-home", "models_dir": "/mnt/data/strata-jbench/models/sync-strata", "update_feed": null, "sessions_dir": "~/strata-jbench/results/plain/rtx5090-128g/2026-11-27-sync/sync-home/engine-sessions", "gui_gpu": "auto", "sessions_max_gib": null}, "squeeze": {"ran": false, "before_gib": null, "after_gib": null, "freed_gib": 0.0, "seconds": 0.0, "detail": "設定 ram_squeeze が off なので，ほかのアプリの RAM は追い出しません"}, "pick": {"model": "sync-m", "r": 10, "ram_budget_gib": 6.75, "vram_reserve_mib": 768, "why": ["空き RAM 115.9 GiB（エンジンに 2.7，余白 2.25 を除くと専門家に 110.9 GiB），VRAM の席 約 23.3 GiB，画面はこの GPU（予約 768 MiB）", "ほかのアプリの RAM は追い出していません（設定 ram_squeeze が off）", "pack は指定どおり Sync-M", "RAM の枠 6.75 GiB，輪なし", "起動時の tail skip は R10（省かない）（指定どおり）．API を別のソフトから使うときだけ効く（dsh の会話は会話ごとのモデルに従う）", "文脈の長さが前回の 262144 から 131072 に変わっています。"]}, "code": 0}
