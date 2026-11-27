@@ -22,16 +22,16 @@ Tier ごとにケースの表がある（1行が1ケース）。全パラメー�
 
 Strata のデスクトップアプリは使っていない。CLI の <code>strata launch --no-tui</code> でエンジンを専用ポート（18600）に起動し、OpenAI 互換の HTTP API（<code>POST /v1/chat/completions</code>、ストリーミング）を <code>scripts/bench_runner.py</code> から直接呼んで測る。Tier 2 だけは Strata 同梱のベンチ <code>strata bench run --suite standard-v1</code> を同じエンジンに向けて実行する。
 
-環境 <code>rtx5090-128g</code> · RUN_ID 2026-11-27-fix の記録（machine.json）
+環境 <code>rtx5090-128g</code> · RUN_ID 2026-11-27-inkling の記録（machine.json）
 
 ## 概要
 
-- ケース: 2,229
-- 本計測リクエスト: 7,377
+- ケース: 2,241
+- 本計測リクエスト: 7,413
 - エンジン起動: 193
-- 見積もり: 37 時間
+- 見積もり: 38 時間
 - 基準モデル: qwen IQ3_S （env.json の ref、なければ Strata がこの RAM + VRAM に勧めるモデル）
-- 完了: 2,192
+- 完了: 2,204
 - 失敗: 8
 
 
@@ -42,7 +42,7 @@ Strata のデスクトップアプリは使っていない。CLI の <code>strat
 | [0](tier-0.md) | 計測器の検証（基準モデル × 起動3回、Gyro-S で作者の値と照合、コーディングの成果物の展開確認） | 2 | 25 | 183 | 0.5 | 25 |
 | [1](tier-1.md) | 全モデルの基礎速度（decode 5種 × temperature 3水準、prefill 4K / 32K / 128K）。decode は DFlash2 対応のモデルで DFlash2 でも測る | 35 | 915 | 2,745 | 4.0 | 897 |
 | [2](tier-2.md) | 公式 standard-v1（thinking xhigh、temperature 1.0）をスイートごと3回 | 32 | 480 | 1,440 | 4.9 | 480 |
-| [3](tier-3.md) | 推論エフォート none / high × 4問、コーディング（帆船）は high のみ（全モデル） | 35 | 298 | 894 | 10.1 | 289 |
+| [3](tier-3.md) | 推論エフォート none / high × 4問、コーディング（帆船）は high のみ（全モデル） | 35 | 310 | 930 | 10.8 | 301 |
 | [4a](tier-4a.md) | 容量の確保コスト（128K / 256K / 1M に同じ 4K 入力） | 35 | 99 | 297 | 2.2 | 97 |
 | [4b](tier-4b.md) | 学習範囲の長文（32K / 128K / 256K。基準モデル、系列ごとに最大のモデル、最小のモデル） | 8 | 96 | 288 | 2.5 | 88 |
 | [4c](tier-4c.md) | 拡張範囲の長文（512K / 1M。基準モデル、最小と最大のモデル） | 3 | 24 | 72 | 7.7 | 24 |
@@ -86,9 +86,9 @@ Strata のデスクトップアプリは使っていない。CLI の <code>strat
 | Strata | hy4-flash | SQ-64 | 62.0 | Strata の量子化 (別モデル Hy4-Flash、64 GB RAM 向け) | [strata-engine/Hy4-Flash-Strata @ `995bac2`](https://huggingface.co/strata-engine/Hy4-Flash-Strata/tree/995bac227ab7e0d221772be641e2b5954a9fac06) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
 | Strata | hy4-flash | SQ-96 | 89.6 | Strata の量子化 (別モデル Hy4-Flash、96 GB RAM 向け) | [strata-engine/Hy4-Flash-Strata @ `995bac2`](https://huggingface.co/strata-engine/Hy4-Flash-Strata/tree/995bac227ab7e0d221772be641e2b5954a9fac06) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
 | Strata | hy4-flash | SQ-128 | 113.7 | Strata の量子化 (別モデル Hy4-Flash、128 GB RAM 向け、元重みに最も近い) | [strata-engine/Hy4-Flash-Strata @ `995bac2`](https://huggingface.co/strata-engine/Hy4-Flash-Strata/tree/995bac227ab7e0d221772be641e2b5954a9fac06) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
-| Strata | inkling-2-mini | SQ-10 | 10.5 | Strata の量子化 (別モデル Inkling-2-Mini、小さく速い) | [strata-engine/Inkling-2-Mini-Strata @ `04996a1`](https://huggingface.co/strata-engine/Inkling-2-Mini-Strata/tree/04996a1e2c45009b6a04f2af126cb6bdb2ba3587) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
-| Strata | inkling-2-mini | SQ-15 | 14.3 | Strata の量子化 (別モデル Inkling-2-Mini、作者の推奨) | [strata-engine/Inkling-2-Mini-Strata @ `04996a1`](https://huggingface.co/strata-engine/Inkling-2-Mini-Strata/tree/04996a1e2c45009b6a04f2af126cb6bdb2ba3587) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
-| Strata | inkling-2-mini | SQ-20 | 19.3 | Strata の量子化 (別モデル Inkling-2-Mini、元重みと同じ) | [strata-engine/Inkling-2-Mini-Strata @ `04996a1`](https://huggingface.co/strata-engine/Inkling-2-Mini-Strata/tree/04996a1e2c45009b6a04f2af126cb6bdb2ba3587) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
+| Strata | inkling-2-mini | SQ-10 | 10.5 | Strata の量子化 (別モデル Inkling-2-Mini、小さく速い) | [strata-engine/Inkling-2-Mini-Strata @ `04996a1`](https://huggingface.co/strata-engine/Inkling-2-Mini-Strata/tree/04996a1e2c45009b6a04f2af126cb6bdb2ba3587) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json), [2026-11-27-inkling](../../../published/plain/rtx5090-128g/2026-11-27-inkling/models.json)) |
+| Strata | inkling-2-mini | SQ-15 | 14.3 | Strata の量子化 (別モデル Inkling-2-Mini、作者の推奨) | [strata-engine/Inkling-2-Mini-Strata @ `04996a1`](https://huggingface.co/strata-engine/Inkling-2-Mini-Strata/tree/04996a1e2c45009b6a04f2af126cb6bdb2ba3587) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json), [2026-11-27-inkling](../../../published/plain/rtx5090-128g/2026-11-27-inkling/models.json)) |
+| Strata | inkling-2-mini | SQ-20 | 19.3 | Strata の量子化 (別モデル Inkling-2-Mini、元重みと同じ) | [strata-engine/Inkling-2-Mini-Strata @ `04996a1`](https://huggingface.co/strata-engine/Inkling-2-Mini-Strata/tree/04996a1e2c45009b6a04f2af126cb6bdb2ba3587) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json), [2026-11-27-inkling](../../../published/plain/rtx5090-128g/2026-11-27-inkling/models.json)) |
 
 
 ## 全ケース共通の条件

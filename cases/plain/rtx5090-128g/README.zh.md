@@ -22,16 +22,16 @@
 
 未使用 Strata 桌面应用。用 CLI <code>strata launch --no-tui</code> 在专用端口（18600）启动引擎，由 <code>scripts/bench_runner.py</code> 直接调用其 OpenAI 兼容的 HTTP API（<code>POST /v1/chat/completions</code>，流式）进行测量。只有 Tier 2 是对同一引擎运行 Strata 自带的基准测试 <code>strata bench run --suite standard-v1</code>。
 
-环境 <code>rtx5090-128g</code> · RUN_ID 2026-11-27-fix 的记录（machine.json）
+环境 <code>rtx5090-128g</code> · RUN_ID 2026-11-27-inkling 的记录（machine.json）
 
 ## 概要
 
-- 用例: 2,229
-- 正式测量请求: 7,377
+- 用例: 2,241
+- 正式测量请求: 7,413
 - 引擎启动: 193
-- 预估: 37 小时
+- 预估: 38 小时
 - 基准模型: qwen IQ3_S （env.json 的 ref，否则为 Strata 针对此 RAM + VRAM 推荐的模型）
-- 完成: 2,192
+- 完成: 2,204
 - 失败: 8
 
 
@@ -42,7 +42,7 @@
 | [0](tier-0.zh.md) | 验证测量工具（基准模型 × 启动 3 次、用 Gyro-S 对照作者的数值、确认编程成果的展开） | 2 | 25 | 183 | 0.5 | 25 |
 | [1](tier-1.zh.md) | 所有模型的基础速度（decode 5 种 × temperature 3 档，prefill 4K / 32K / 128K）；支持 DFlash2 的模型的 decode 也用 DFlash2 测量 | 35 | 915 | 2,745 | 4.0 | 897 |
 | [2](tier-2.zh.md) | 官方 standard-v1（thinking xhigh，temperature 1.0），整个套件 3 次 | 32 | 480 | 1,440 | 4.9 | 480 |
-| [3](tier-3.zh.md) | 推理 effort none / high × 4 题，编程（帆船）仅 high（所有模型） | 35 | 298 | 894 | 10.1 | 289 |
+| [3](tier-3.zh.md) | 推理 effort none / high × 4 题，编程（帆船）仅 high（所有模型） | 35 | 310 | 930 | 10.8 | 301 |
 | [4a](tier-4a.zh.md) | 预留上下文的代价（128K / 256K / 1M 下相同的 4K 输入） | 35 | 99 | 297 | 2.2 | 97 |
 | [4b](tier-4b.zh.md) | 训练长度内的长文本（32K / 128K / 256K；基准模型、各系列最大的模型、最小的模型） | 8 | 96 | 288 | 2.5 | 88 |
 | [4c](tier-4c.zh.md) | 扩展范围的长文本（512K / 1M；基准模型、最小与最大的模型） | 3 | 24 | 72 | 7.7 | 24 |
@@ -86,9 +86,9 @@
 | Strata | hy4-flash | SQ-64 | 62.0 | Strata 的量化（另一模型 Hy4-Flash，面向 64 GB 内存） | [strata-engine/Hy4-Flash-Strata @ `995bac2`](https://huggingface.co/strata-engine/Hy4-Flash-Strata/tree/995bac227ab7e0d221772be641e2b5954a9fac06) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
 | Strata | hy4-flash | SQ-96 | 89.6 | Strata 的量化（另一模型 Hy4-Flash，面向 96 GB 内存） | [strata-engine/Hy4-Flash-Strata @ `995bac2`](https://huggingface.co/strata-engine/Hy4-Flash-Strata/tree/995bac227ab7e0d221772be641e2b5954a9fac06) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
 | Strata | hy4-flash | SQ-128 | 113.7 | Strata 的量化（另一模型 Hy4-Flash，面向 128 GB 内存，最接近原始权重） | [strata-engine/Hy4-Flash-Strata @ `995bac2`](https://huggingface.co/strata-engine/Hy4-Flash-Strata/tree/995bac227ab7e0d221772be641e2b5954a9fac06) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
-| Strata | inkling-2-mini | SQ-10 | 10.5 | Strata 的量化（另一模型 Inkling-2-Mini，小而快） | [strata-engine/Inkling-2-Mini-Strata @ `04996a1`](https://huggingface.co/strata-engine/Inkling-2-Mini-Strata/tree/04996a1e2c45009b6a04f2af126cb6bdb2ba3587) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
-| Strata | inkling-2-mini | SQ-15 | 14.3 | Strata 的量化（另一模型 Inkling-2-Mini，作者推荐） | [strata-engine/Inkling-2-Mini-Strata @ `04996a1`](https://huggingface.co/strata-engine/Inkling-2-Mini-Strata/tree/04996a1e2c45009b6a04f2af126cb6bdb2ba3587) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
-| Strata | inkling-2-mini | SQ-20 | 19.3 | Strata 的量化（另一模型 Inkling-2-Mini，与原权重相同） | [strata-engine/Inkling-2-Mini-Strata @ `04996a1`](https://huggingface.co/strata-engine/Inkling-2-Mini-Strata/tree/04996a1e2c45009b6a04f2af126cb6bdb2ba3587) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
+| Strata | inkling-2-mini | SQ-10 | 10.5 | Strata 的量化（另一模型 Inkling-2-Mini，小而快） | [strata-engine/Inkling-2-Mini-Strata @ `04996a1`](https://huggingface.co/strata-engine/Inkling-2-Mini-Strata/tree/04996a1e2c45009b6a04f2af126cb6bdb2ba3587) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json), [2026-11-27-inkling](../../../published/plain/rtx5090-128g/2026-11-27-inkling/models.json)) |
+| Strata | inkling-2-mini | SQ-15 | 14.3 | Strata 的量化（另一模型 Inkling-2-Mini，作者推荐） | [strata-engine/Inkling-2-Mini-Strata @ `04996a1`](https://huggingface.co/strata-engine/Inkling-2-Mini-Strata/tree/04996a1e2c45009b6a04f2af126cb6bdb2ba3587) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json), [2026-11-27-inkling](../../../published/plain/rtx5090-128g/2026-11-27-inkling/models.json)) |
+| Strata | inkling-2-mini | SQ-20 | 19.3 | Strata 的量化（另一模型 Inkling-2-Mini，与原权重相同） | [strata-engine/Inkling-2-Mini-Strata @ `04996a1`](https://huggingface.co/strata-engine/Inkling-2-Mini-Strata/tree/04996a1e2c45009b6a04f2af126cb6bdb2ba3587) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json), [2026-11-27-inkling](../../../published/plain/rtx5090-128g/2026-11-27-inkling/models.json)) |
 
 
 ## 所有用例的共同条件

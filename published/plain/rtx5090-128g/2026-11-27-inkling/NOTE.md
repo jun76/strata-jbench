@@ -1,0 +1,1 @@
+Inkling-2-Mini（SQ-10 / 15 / 20）の Tier 3 を思考ありで測った（15 完了）。Strata 0.2.21 は Inkling の思考レベルを受け付けるので、ほかのモデルと同じ条件の math-1 / code-1 / reason-ja-1 / reason-en-1 / coding-harbor の high を足した。思考なしで測っていた coding-harbor は計画から外した

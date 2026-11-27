@@ -22,16 +22,16 @@ One table of cases per Tier (a row per case). Every parameter and result: the CS
 
 The Strata desktop app is not used. The CLI (<code>strata launch --no-tui</code>) starts the engine on a dedicated port (18600), and <code>scripts/bench_runner.py</code> calls its OpenAI-compatible HTTP API (<code>POST /v1/chat/completions</code>, streaming) directly. Only Tier 2 runs Strata's bundled benchmark, <code>strata bench run --suite standard-v1</code>, against the same engine.
 
-environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-27-fix (machine.json)
+environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-27-inkling (machine.json)
 
 ## Overview
 
-- cases: 2,229
-- measured requests: 7,377
+- cases: 2,241
+- measured requests: 7,413
 - engine launches: 193
-- estimate: 37 h
+- estimate: 38 h
 - reference model: qwen IQ3_S (env.json "ref", else the model Strata recommends for this RAM + VRAM)
-- done: 2,192
+- done: 2,204
 - failed: 8
 
 
@@ -42,7 +42,7 @@ environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-27-fix (
 | [0](tier-0.en.md) | validating the harness (the reference model × 3 launches, Gyro-S against the author's figures, unpacking the coding result) | 2 | 25 | 183 | 0.5 | 25 |
 | [1](tier-1.en.md) | base speed of every model (5 decode kinds × 3 temperatures, prefill 4K / 32K / 128K); decode also with DFlash2 on the models that have it | 35 | 915 | 2,745 | 4.0 | 897 |
 | [2](tier-2.en.md) | the official standard-v1 (thinking xhigh, temperature 1.0), the whole suite 3 times | 32 | 480 | 1,440 | 4.9 | 480 |
-| [3](tier-3.en.md) | reasoning effort none / high × 4 tasks, the coding task (sailing ship) at high only (every model) | 35 | 298 | 894 | 10.1 | 289 |
+| [3](tier-3.en.md) | reasoning effort none / high × 4 tasks, the coding task (sailing ship) at high only (every model) | 35 | 310 | 930 | 10.8 | 301 |
 | [4a](tier-4a.en.md) | the cost of reserving context (the same 4K input at 128K / 256K / 1M) | 35 | 99 | 297 | 2.2 | 97 |
 | [4b](tier-4b.en.md) | long inputs within the trained length (32K / 128K / 256K; the reference model, the largest of each family, the smallest) | 8 | 96 | 288 | 2.5 | 88 |
 | [4c](tier-4c.en.md) | long inputs in the extended range (512K / 1M; the reference model, the smallest and the largest) | 3 | 24 | 72 | 7.7 | 24 |
@@ -86,9 +86,9 @@ environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-27-fix (
 | Strata | hy4-flash | SQ-64 | 62.0 | Strata's quantization (another model, Hy4-Flash; for 64 GB of RAM) | [strata-engine/Hy4-Flash-Strata @ `995bac2`](https://huggingface.co/strata-engine/Hy4-Flash-Strata/tree/995bac227ab7e0d221772be641e2b5954a9fac06) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
 | Strata | hy4-flash | SQ-96 | 89.6 | Strata's quantization (another model, Hy4-Flash; for 96 GB of RAM) | [strata-engine/Hy4-Flash-Strata @ `995bac2`](https://huggingface.co/strata-engine/Hy4-Flash-Strata/tree/995bac227ab7e0d221772be641e2b5954a9fac06) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
 | Strata | hy4-flash | SQ-128 | 113.7 | Strata's quantization (another model, Hy4-Flash; for 128 GB of RAM, the closest to the original weights) | [strata-engine/Hy4-Flash-Strata @ `995bac2`](https://huggingface.co/strata-engine/Hy4-Flash-Strata/tree/995bac227ab7e0d221772be641e2b5954a9fac06) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
-| Strata | inkling-2-mini | SQ-10 | 10.5 | Strata's quantization (another model, Inkling-2-Mini, small and fast) | [strata-engine/Inkling-2-Mini-Strata @ `04996a1`](https://huggingface.co/strata-engine/Inkling-2-Mini-Strata/tree/04996a1e2c45009b6a04f2af126cb6bdb2ba3587) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
-| Strata | inkling-2-mini | SQ-15 | 14.3 | Strata's quantization (another model, Inkling-2-Mini, the author's pick) | [strata-engine/Inkling-2-Mini-Strata @ `04996a1`](https://huggingface.co/strata-engine/Inkling-2-Mini-Strata/tree/04996a1e2c45009b6a04f2af126cb6bdb2ba3587) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
-| Strata | inkling-2-mini | SQ-20 | 19.3 | Strata's quantization (another model, Inkling-2-Mini, lossless) | [strata-engine/Inkling-2-Mini-Strata @ `04996a1`](https://huggingface.co/strata-engine/Inkling-2-Mini-Strata/tree/04996a1e2c45009b6a04f2af126cb6bdb2ba3587) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
+| Strata | inkling-2-mini | SQ-10 | 10.5 | Strata's quantization (another model, Inkling-2-Mini, small and fast) | [strata-engine/Inkling-2-Mini-Strata @ `04996a1`](https://huggingface.co/strata-engine/Inkling-2-Mini-Strata/tree/04996a1e2c45009b6a04f2af126cb6bdb2ba3587) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json), [2026-11-27-inkling](../../../published/plain/rtx5090-128g/2026-11-27-inkling/models.json)) |
+| Strata | inkling-2-mini | SQ-15 | 14.3 | Strata's quantization (another model, Inkling-2-Mini, the author's pick) | [strata-engine/Inkling-2-Mini-Strata @ `04996a1`](https://huggingface.co/strata-engine/Inkling-2-Mini-Strata/tree/04996a1e2c45009b6a04f2af126cb6bdb2ba3587) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json), [2026-11-27-inkling](../../../published/plain/rtx5090-128g/2026-11-27-inkling/models.json)) |
+| Strata | inkling-2-mini | SQ-20 | 19.3 | Strata's quantization (another model, Inkling-2-Mini, lossless) | [strata-engine/Inkling-2-Mini-Strata @ `04996a1`](https://huggingface.co/strata-engine/Inkling-2-Mini-Strata/tree/04996a1e2c45009b6a04f2af126cb6bdb2ba3587) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json), [2026-11-27-inkling](../../../published/plain/rtx5090-128g/2026-11-27-inkling/models.json)) |
 
 
 ## Conditions shared by every case

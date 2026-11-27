@@ -1,0 +1,1 @@
+以开启思考的方式测量了 Inkling-2-Mini（SQ-10 / 15 / 20）的 Tier 3（完成 15 个）。Strata 0.2.21 接受 Inkling 的思考级别，因此按与其他模型相同的条件加入了 math-1、code-1、reason-ja-1、reason-en-1、coding-harbor 的 high 用例。关闭思考测量的 coding-harbor 已从计划中移除

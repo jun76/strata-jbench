@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harbor Call — Voxel Scene</title>
+<style>
+  :root { --panel: rgba(12,16,26,0.62); }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; overflow: hidden; background: #0a0f22; font-family: Georgia, 'Times New Roman', serif; color: #f5f1e6; }
+  #c { position: fixed; inset: 0; display: block; width: 100vw; height: 100vh; touch-action: none; cursor: grab; }
+  #c:active { cursor: grabbing; }
+  .panel { position: fixed; z-index: 2; background: var(--panel); border: 1px solid rgba(255,255,255,0.14); border-radius: 14px; padding: 12px 18px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+  #title h1 { margin: 0; font-size: 24px; letter-spacing: 1px; font-weight: 700; }
+  #title p { margin: 5px 0 0; font-size: 12px; font-style: italic; opacity: 0.75; }
+  #hint { bottom: 18px; left: 18px; font-size: 11px; letter-spacing: 0.6px; font-family: ui-monospace, 'SFMono-Regular', monospace; opacity: 0.8; }
+  #btns { top: 18px; right: 18px; display: flex; gap: 8px; padding: 8px; }
+  button { font: 600 11px ui-monospace, 'SFMono-Regular', monospace; color: #f5f1e6; background: rgba(255,255,255,0.09); border: 1px solid rgba(255,255,255,0.22); border-radius: 10px; padding: 9px 13px; cursor: pointer; letter-spacing: 0.5px; transition: background 0.15s; }
+  button:hover { background: rgba(255,255,255,0.2); }
+  button.on { background: #e8c25a; color: #241a08; border-color: #e8c25a; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="panel" id="title"><h1>⚓ Harbor Call</h1><p>a voxel sailing ship at its harbor</p></div>
+<div class="panel" id="hint">drag to orbit · scroll to zoom</div>
+<div class="panel" id="btns">
+  <button id="rot" class="on">Auto-rotate</button>
+  <button id="day">Night</button>
+  <button id="gulls" class="on">Gulls</button>
+</div>
+<script>
+'use strict';
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0;
+function resize(){ W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+resize();
+window.addEventListener('resize', resize);
+
+// ---- math
+const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]];
+const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+const norm=a=>{const l=Math.hypot(a[0],a[1],a[2])||1;return [a[0]/l,a[1]/l,a[2]/l];};
+const lightDir = norm([0.35,0.9,0.45]);
+
+// ---- palette
+const C = {
+  hull:[122,79,53], hullDark:[86,54,36], deck:[184,138,90], trim:[232,194,90],
+  mast:[74,51,32], sail:[242,233,216], cabin:[229,217,192], window:[38,49,60],
+  flag:[217,79,61],
+  waterDeep:[43,88,141], waterLight:[79,158,196],
+  grass:[95,158,78], sand:[216,198,154], rock:[141,138,128],
+  wood:[138,107,74], woodDark:[107,79,51],
+  brick:[162,80,63], steel:[91,102,112], craneY:[232,180,74],
+  lighthouse:[232,226,212], lighthouseRed:[217,79,61], cap:[48,48,54],
+  light:[255,224,130], gull:[242,242,238],
+  boat:[122,79,53], boatTrim:[232,194,90],
+  container:[[217,79,61],[63,127,217],[79,174,95],[232,176,74]],
+};
+function mix(a,b,t){ return [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t]; }
+function shade(c,n,night){
+  const f = 0.62 + 0.38*Math.max(0, dot(n, lightDir));
+  const m = night ? 0.55 : 1;
+  return `rgb(${Math.round(c[0]*f*m)},${Math.round(c[1]*f*m)},${Math.round(c[2]*f*m)})`;
+}
+
+// ---- state
+const state = { theta: 0.9, phi: 0.62, dist: 34, autoRotate: true, night: false, gulls: true, target: [0, 2.5, 0] };
+
+// ---- static scene
+const staticVoxels = [];
+const staticMap = new Map();
+function addStatic(x,y,z,c,w=1,h=1,d=1){
+  const ix=Math.round(x), iy=Math.round(y), iz=Math.round(z);
+  staticVoxels.push({x,y,z,c,w,h,d,ix,iy,iz});
+  staticMap.set(`${ix},${iy},${iz}`, true);
+}
+// land with dirt strip along the pier
+for(let x=-14;x<=-8;x++) for(let z=-7;z<=7;z++){
+  addStatic(x,0,z,(z>=-3&&z<=-1)?C.sand:C.grass);
+}
+addStatic(-13,1,6,C.rock);
+addStatic(-9,1,-6,C.rock);
+// wooden pier extending into the water
+for(let x=-8;x<=-2;x++) for(let z=-3;z<=-1;z++){
+  addStatic(x,1,z,((x+z)%2===0)?C.wood:C.woodDark);
+}
+addStatic(-2,2,-3,C.woodDark);
+addStatic(-2,2,-1,C.woodDark);
+// lighthouse at the end of the pier
+for(let y=2;y<=7;y++) addStatic(-2,y,-2,(y%2===0)?C.lighthouse:C.lighthouseRed);
+addStatic(-2,8,-2,C.cap);
+addStatic(-2,9,-2,C.light);
+// crane
+addStatic(-11,1,-4,C.steel); addStatic(-10,1,-4,C.steel);
+addStatic(-11,1,-3,C.steel); addStatic(-10,1,-3,C.steel);
+for(let y=2;y<=6;y++) addStatic(-11,y,-4,C.steel);
+// warehouse
+for(let x=-13;x<=-11;x++) for(let z=2;z<=5;z++) for(let y=1;y<=3;y++) addStatic(x,y,z,C.brick);
+addStatic(-10.5,2,3,C.window,0.4,0.8,0.8);
+addStatic(-10.5,2,4,C.window,0.4,0.8,0.8);
+// containers
+const contSpots=[[-9,1,3,0],[-8,1,3,1],[-7,1,3,2],[-9,1,4,3],[-8,1,4,0],[-7,1,4,1],[-9,1,5,2],[-8,1,5,3],[-7,1,5,0],[-9,2,3,1],[-8,2,3,2],[-9,2,4,0],[-8,2,4,3]];
+for(const [x,y,z,i] of contSpots) addStatic(x,y,z,C.container[i]);
+
+// ---- water (animated waves)
+const waterLocal=[];
+const waterMap=new Map();
+for(let x=-16;x<=16;x++) for(let z=-10;z<=10;z++){
+  waterLocal.push({ix:x,iy:-1,iz:z});
+  waterMap.set(`${x},${-1},${z}`, true);
+}
+
+// ---- ship
+const shipLocal=[];
+const shipMap=new Map();
+function shipAdd(x,y,z,c){ shipLocal.push({ix:x,iy:y,iz:z,c}); shipMap.set(`${x},${y},${z}`, true); }
+for(let x=-5;x<=4;x++) for(let z=-1;z<=0;z++) shipAdd(x,0,z,C.hullDark);        // keel
+for(let x=-6;x<=5;x++) for(let z=-2;z<=1;z++) shipAdd(x,1,z,C.hull);            // mid hull
+for(let x=-6;x<=5;x++) for(let z=-2;z<=1;z++) shipAdd(x,2,z,C.hull);
+for(let x=-6;x<=5;x++) for(let z=-2;z<=1;z++) shipAdd(x,3,z,(z===-2||z===1)?C.trim:C.deck);  // deck with gold trim
+for(let x=-6;x<=-4;x++) for(let z=0;z<=1;z++) for(let y=4;y<=5;y++) shipAdd(x,y,z,(y===4&&z===1)?C.window:C.cabin); // stern cabin
+shipAdd(6,2,0,C.hullDark);   // prow
+shipAdd(6,3,0,C.trim);
+for(let y=4;y<=10;y++) shipAdd(2,y,0,C.mast);    // fore mast
+for(let y=4;y<=10;y++) shipAdd(-2,y,0,C.mast);   // main mast
+for(let z=-2;z<=2;z++) if(z!==0) shipAdd(2,8,z,C.mast);    // fore yard
+for(let z=-2;z<=2;z++) if(z!==0) shipAdd(-2,9,z,C.mast);   // main yard
+// culling entries for the sails (kept proud of the masts)
+for(let z=-2;z<=2;z++) for(let y=4;y<=7;y++) shipMap.set(`3,${y},${z}`, true);
+for(let z=-2;z<=2;z++) for(let y=4;y<=8;y++) shipMap.set(`-1,${y},${z}`, true);
+
+// ---- rowboat
+const rowboatLocal=[];
+for(let x=8;x<=10;x++) for(let z=-5;z<=-4;z++) rowboatLocal.push([x,0,z,C.boat]);
+for(let x=8;x<=10;x++) rowboatLocal.push([x,1,-4,C.boatTrim]);
+
+// ---- sky decor
+const stars=[];
+for(let i=0;i<90;i++) stars.push({x:Math.random(),y:Math.random()*0.55,s:Math.random()*2+1.2,a:Math.random()*0.5+0.3});
+const clouds=[{x:0.12,y:0.16,s:1.1,spd:0.00012},{x:0.55,y:0.09,s:1.5,spd:0.00007},{x:0.82,y:0.24,s:0.8,spd:0.00016}];
+
+// ---- faces
+const FACES=[
+  {n:[1,0,0],  dx:1,dy:0,dz:0, corners:v=>[[v.x+v.w/2,v.y-v.h/2,v.z-v.d/2],[v.x+v.w/2,v.y-v.h/2,v.z+v.d/2],[v.x+v.w/2,v.y+v.h/2,v.z+v.d/2],[v.x+v.w/2,v.y+v.h/2,v.z-v.d/2]]},
+  {n:[-1,0,0], dx:-1,dy:0,dz:0, corners:v=>[[v.x-v.w/2,v.y-v.h/2,v.z-v.d/2],[v.x-v.w/2,v.y-v.h/2,v.z+v.d/2],[v.x-v.w/2,v.y+v.h/2,v.z+v.d/2],[v.x-v.w/2,v.y+v.h/2,v.z-v.d/2]]},
+  {n:[0,1,0],  dx:0,dy:1,dz:0, corners:v=>[[v.x-v.w/2,v.y+v.h/2,v.z-v.d/2],[v.x+v.w/2,v.y+v.h/2,v.z-v.d/2],[v.x+v.w/2,v.y+v.h/2,v.z+v.d/2],[v.x-v.w/2,v.y+v.h/2,v.z+v.d/2]]},
+  {n:[0,-1,0], dx:0,dy:-1,dz:0, corners:v=>[[v.x-v.w/2,v.y-v.h/2,v.z-v.d/2],[v.x+v.w/2,v.y-v.h/2,v.z-v.d/2],[v.x+v.w/2,v.y-v.h/2,v.z+v.d/2],[v.x-v.w/2,v.y-v.h/2,v.z+v.d/2]]},
+  {n:[0,0,1],  dx:0,dy:0,dz:1, corners:v=>[[v.x-v.w/2,v.y-v.h/2,v.z+v.d/2],[v.x+v.w/2,v.y-v.h/2,v.z+v.d/2],[v.x+v.w/2,v.y+v.h/2,v.z+v.d/2],[v.x-v.w/2,v.y+v.h/2,v.z+v.d/2]]},
+  {n:[0,0,-1], dx:0,dy:0,dz:-1, corners:v=>[[v.x-v.w/2,v.y-v.h/2,v.z-v.d/2],[v.x+v.w/2,v.y-v.h/2,v.z-v.d/2],[v.x+v.w/2,v.y+v.h/2,v.z-v.d/2],[v.x-v.w/2,v.y+v.h/2,v.z-v.d/2]]},
+];
+
+// ---- camera
+function cameraPos(){
+  const hd = state.dist*Math.cos(state.phi), h = state.dist*Math.sin(state.phi);
+  return [state.target[0] + hd*Math.cos(state.theta), state.target[1] + h, state.target[2] + hd*Math.sin(state.theta)];
+}
+function project(p, cam, dir, right, up2, fov){
+  const rel = [p[0]-cam[0], p[1]-cam[1], p[2]-cam[2]];
+  const z = dot(rel, dir);
+  const x = dot(rel, right);
+  const y = dot(rel, up2);
+  const s = fov / z;
+  return [W/2 + x*s, H/2 - y*s, z];
+}
+
+// ---- build per frame
+function buildVoxels(t){
+  const list = [];
+  const bob = Math.sin(t*0.7)*0.12;
+  const roll = Math.sin(t*0.55)*0.035;
+  const pitch = Math.sin(t*0.83)*0.025;
+  const cosR = Math.cos(roll), sinR = Math.sin(roll);
+  const cosP = Math.cos(pitch), sinP = Math.sin(pitch);
+
+  for(const w of waterLocal){
+    const wave = Math.sin(t*1.8 + w.ix*0.35 + w.iz*0.35);
+    const c = mix(C.waterDeep, C.waterLight, 0.5 + 0.5*wave);
+    list.push({x:w.ix, y:-1 + wave*0.18, z:w.iz, c, w:1, h:1, d:1, grid:waterMap, ix:w.ix, iy:-1, iz:w.iz});
+  }
+  for(const s of staticVoxels){
+    list.push({x:s.x, y:s.y, z:s.z, c:s.c, w:s.w, h:s.h, d:s.d, grid:staticMap, ix:s.ix, iy:s.iy, iz:s.iz});
+  }
+  for(const s of shipLocal){
+    const xp = s.ix*cosP - s.iy*sinP;
+    const yp0 = s.ix*sinP + s.iy*cosP;
+    const py = yp0*cosR - s.iz*sinR;
+    const pz = yp0*sinR + s.iz*cosR;
+    list.push({x:xp, y:py - 0.8 + bob, z:pz, c:s.c, w:1, h:1, d:1, grid:shipMap, ix:s.ix, iy:s.iy, iz:s.iz});
+  }
+  // sails (front of both masts)
+  for(let z=-2;z<=2;z++) for(let y=4;y<=7;y++){
+    const sway = Math.sin(t*2.2 + z*0.8)*0.10;
+    const xl = 2.9 + sway;
+    const xp = xl*cosP - y*sinP;
+    const yp0 = xl*sinP + y*cosP;
+    const py = yp0*cosR - z*sinR;
+    const pz = yp0*sinR + z*cosR;
+    const c = mix(C.sail, [255,255,255], 0.5 + 0.5*Math.sin(t*3 + z*0.6));
+    list.push({x:xp, y:py - 0.8 + bob, z:pz, c, w:0.5, h:1, d:1, grid:shipMap, ix:3, iy:y, iz:z});
+  }
+  for(let z=-2;z<=2;z++) for(let y=4;y<=8;y++){
+    const sway = Math.sin(t*2.2 + z*0.8)*0.10;
+    const xl = -1.1 + sway;
+    const xp = xl*cosP - y*sinP;
+    const yp0 = xl*sinP + y*cosP;
+    const py = yp0*cosR - z*sinR;
+    const pz = yp0*sinR + z*cosR;
+    const c = mix(C.sail, [255,255,255], 0.5 + 0.5*Math.sin(t*3 + z*0.6));
+    list.push({x:xp, y:py - 0.8 + bob, z:pz, c, w:0.5, h:1, d:1, grid:shipMap, ix:-1, iy:y, iz:z});
+  }
+  // flags
+  for(let i=0;i<4;i++){
+    const fx = -2.3 + i*0.4, fy = 11, fz = Math.sin(t*5 + i)*0.25;
+    const xp = fx*cosP - fy*sinP;
+    const yp0 = fx*sinP + fy*cosP;
+    const py = yp0*cosR - fz*sinR;
+    const pz = yp0*sinR + fz*cosR;
+    list.push({x:xp, y:py - 0.8 + bob, z:pz, c:C.flag, w:1, h:1, d:1, grid:null, ix:0, iy:0, iz:0});
+  }
+  for(let i=0;i<3;i++){
+    const fx = 2.3 + i*0.4, fy = 11, fz = Math.sin(t*6 + i)*0.2;
+    const xp = fx*cosP - fy*sinP;
+    const yp0 = fx*sinP + fy*cosP;
+    const py = yp0*cosR - fz*sinR;
+    const pz = yp0*sinR + fz*cosR;
+    list.push({x:xp, y:py - 0.8 + bob, z:pz, c:C.flag, w:1, h:1, d:1, grid:null, ix:0, iy:0, iz:0});
+  }
+  // gulls
+  if(state.gulls){
+    for(let i=0;i<3;i++){
+      const gx = Math.sin(t*0.5 + i*2.1)*6.5;
+      const gy = 6.5 + Math.sin(t*0.9 + i*1.3)*1.6;
+      const gz = Math.cos(t*0.5 + i*2.1)*6.5;
+      const flap = Math.sin(t*7 + i*2)*0.3;
+      list.push({x:gx, y:gy, z:gz, c:C.gull, w:1, h:1, d:1, grid:null, ix:0, iy:0, iz:0});
+      list.push({x:gx, y:gy + flap*0.5, z:gz - 1, c:C.gull, w:1, h:1, d:1, grid:null, ix:0, iy:0, iz:0});
+      list.push({x:gx, y:gy - flap*0.5, z:gz + 1, c:C.gull, w:1, h:1, d:1, grid:null, ix:0, iy:0, iz:0});
+    }
+  }
+  // sweeping crane arm
+  const armA = t*0.5;
+  const armDir = [Math.cos(armA), Math.sin(armA)];
+  for(let i=0;i<5;i++){
+    const d = i+1;
+    list.push({x:-11 + armDir[0]*d, y:6, z:-4 + armDir[1]*d, c:C.craneY, w:1, h:1, d:1, grid:null, ix:0, iy:0, iz:0});
+  }
+  // rowboat
+  const rbBob = Math.sin(t*0.9 + 2)*0.1;
+  for(const [x,y,z,c] of rowboatLocal){
+    list.push({x, y:y + rbBob, z, c, w:1, h:1, d:1, grid:null, ix:0, iy:0, iz:0});
+  }
+  return list;
+}
+
+// ---- render
+let view = null;
+function drawScene(t){
+  const list = buildVoxels(t);
+  const cam = cameraPos();
+  const dir = norm(sub(state.target, cam));
+  const right = norm(cross(dir, [0,1,0]));
+  const up2 = cross(right, dir);
+  const fov = H * 0.9;
+  view = {cam, dir, right, up2, fov};
+  const faces = [];
+  for(const v of list){
+    const camVec = [cam[0]-v.x, cam[1]-v.y, cam[2]-v.z];
+    for(const f of FACES){
+      if(dot(f.n, camVec) <= 0) continue;
+      if(v.grid && v.grid.has(`${v.ix+f.dx},${v.iy+f.dy},${v.iz+f.dz}`)) continue;
+      const corners = f.corners(v).map(p=>project(p, cam, dir, right, up2, fov));
+      const z = (corners[0][2]+corners[1][2]+corners[2][2]+corners[3][2])/4;
+      faces.push({corners, n:f.n, c:v.c, z});
+    }
+  }
+  faces.sort((a,b)=>b.z-a.z);
+  for(const f of faces){
+    ctx.beginPath();
+    ctx.moveTo(f.corners[0][0], f.corners[0][1]);
+    for(let i=1;i<4;i++) ctx.lineTo(f.corners[i][0], f.corners[i][1]);
+    ctx.closePath();
+    ctx.fillStyle = shade(f.c, f.n, state.night);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.22)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+}
+
+// ---- sky
+function drawSky(t){
+  const g = ctx.createLinearGradient(0,0,0,H);
+  if(state.night){
+    g.addColorStop(0,'#0a0f22'); g.addColorStop(0.6,'#141b33'); g.addColorStop(1,'#1e2a45');
+  } else {
+    g.addColorStop(0,'#3f8fd2'); g.addColorStop(0.65,'#8fd0e8'); g.addColorStop(1,'#d9f0f7');
+  }
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+  if(state.night){
+    for(const s of stars){ ctx.fillStyle = `rgba(255,255,255,${s.a})`; ctx.fillRect(s.x*W, s.y*H, s.s, s.s); }
+    const mx = W*0.78, my = H*0.15;
+    const mg = ctx.createRadialGradient(mx,my,0,mx,my,90);
+    mg.addColorStop(0,'rgba(220,228,245,0.5)'); mg.addColorStop(1,'rgba(220,228,245,0)');
+    ctx.fillStyle = mg; ctx.beginPath(); ctx.arc(mx,my,90,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#e8ecf5'; ctx.beginPath(); ctx.arc(mx,my,24,0,Math.PI*2); ctx.fill();
+  } else {
+    const sx = W*0.78, sy = H*0.15;
+    const sg = ctx.createRadialGradient(sx,sy,0,sx,sy,110);
+    sg.addColorStop(0,'rgba(255,215,120,0.55)'); sg.addColorStop(1,'rgba(255,215,120,0)');
+    ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(sx,sy,110,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#ffd76a'; ctx.beginPath(); ctx.arc(sx,sy,32,0,Math.PI*2); ctx.fill();
+  }
+  for(const c of clouds){
+    const cx = ((c.x + t*c.spd) % 1.35 - 0.18) * W;
+    const cy = c.y*H;
+    ctx.fillStyle = state.night ? 'rgba(120,130,160,0.22)' : 'rgba(255,255,255,0.55)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, 46*c.s, 16*c.s, 0, 0, Math.PI*2);
+    ctx.ellipse(cx + 34*c.s, cy - 6*c.s, 30*c.s, 12*c.s, 0, 0, Math.PI*2);
+    ctx.ellipse(cx - 34*c.s, cy - 4*c.s, 26*c.s, 11*c.s, 0, 0, Math.PI*2);
+    ctx.fill();
+  }
+}
+
+// ---- lighthouse beam
+function drawBeam(t){
+  if(!view) return;
+  const p = project([-2,9,-2], view.cam, view.dir, view.right, view.up2, view.fov);
+  const a = t*0.9;
+  const len = 150;
+  const d = [Math.cos(a), Math.sin(a)*0.35];
+  const tip = [p[0] + d[0]*len, p[1] + d[1]*len];
+  const side = [-d[1]*22, d[0]*22];
+  const g = ctx.createLinearGradient(p[0],p[1],tip[0],tip[1]);
+  g.addColorStop(0, state.night ? 'rgba(255,230,140,0.45)' : 'rgba(255,230,140,0.28)');
+  g.addColorStop(1, 'rgba(255,230,140,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(p[0],p[1]);
+  ctx.lineTo(tip[0]+side[0], tip[1]+side[1]);
+  ctx.lineTo(tip[0]-side[0], tip[1]-side[1]);
+  ctx.closePath(); ctx.fill();
+  const rg = ctx.createRadialGradient(p[0],p[1],0,p[0],p[1],55);
+  rg.addColorStop(0, state.night ? 'rgba(255,230,140,0.7)' : 'rgba(255,230,140,0.45)');
+  rg.addColorStop(1, 'rgba(255,230,140,0)');
+  ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(p[0],p[1],55,0,Math.PI*2); ctx.fill();
+}
+
+// ---- loop
+let lastT = 0;
+function frame(now){
+  const t = now/1000;
+  const dt = Math.min(0.05, t - lastT || 0.016); lastT = t;
+  if(state.autoRotate) state.theta += dt*0.22;
+  drawSky(t);
+  drawScene(t);
+  drawBeam(t);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ---- mouse / touch
+let dragging = false, lastX = 0, lastY = 0;
+canvas.addEventListener('pointerdown', e => { dragging = true; lastX = e.clientX; lastY = e.clientY; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointermove', e => {
+  if(!dragging) return;
+  const dx = e.clientX - lastX, dy = e.clientY - lastY;
+  lastX = e.clientX; lastY = e.clientY;
+  state.theta -= dx * 0.005;
+  state.phi = Math.max(0.12, Math.min(1.35, state.phi + dy * 0.005));
+});
+canvas.addEventListener('pointerup', () => { dragging = false; });
+canvas.addEventListener('pointercancel', () => { dragging = false; });
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  state.dist = Math.max(16, Math.min(90, state.dist * (1 + e.deltaY * 0.001)));
+}, { passive: false });
+
+// ---- buttons
+const rot = document.getElementById('rot');
+const day = document.getElementById('day');
+const gulls = document.getElementById('gulls');
+rot.addEventListener('click', () => { state.autoRotate = !state.autoRotate; rot.classList.toggle('on', state.autoRotate); });
+day.addEventListener('click', () => { state.night = !state.night; day.textContent = state.night ? 'Day' : 'Night'; day.classList.toggle('on', state.night); });
+gulls.addEventListener('click', () => { state.gulls = !state.gulls; gulls.classList.toggle('on', state.gulls); });
+</script>
+</body>
+</html>

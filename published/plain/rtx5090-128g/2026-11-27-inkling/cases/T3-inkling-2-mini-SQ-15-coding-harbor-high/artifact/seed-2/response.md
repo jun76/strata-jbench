@@ -1,0 +1,436 @@
+**Note:** I can't open Chrome here, so this is a careful, self-contained build — no external libraries, no build step. Save it as an `.html` file and double-click it. If anything looks off, the hint text tells you how to orbit/zoom, and the `R` key resets the camera.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no"/>
+<title>Harbor Call — Voxel Diorama</title>
+<style>
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:linear-gradient(180deg,#4f9fd8 0%,#8ec6e8 42%,#d8ecf8 72%,#fdf3dd 100%);font-family:ui-rounded,'Segoe UI',system-ui,sans-serif;}
+  #c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab;}
+  #c:active{cursor:grabbing;}
+  .sun{position:fixed;top:8%;left:12%;width:130px;height:130px;border-radius:50%;pointer-events:none;background:radial-gradient(circle,#fffbe6 0%,#ffee9e 42%,rgba(255,238,158,0) 70%);}
+  #vignette{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 42%, rgba(0,0,0,0) 58%, rgba(25,40,60,0.22) 100%);}
+  #hud{position:fixed;left:16px;top:14px;pointer-events:none;color:#12314a;text-shadow:0 1px 0 rgba(255,255,255,.65);z-index:5;}
+  #hud h1{font-size:19px;margin:0 0 3px;font-weight:800;letter-spacing:.3px;}
+  #hud p{font-size:12px;margin:0;opacity:.8;font-weight:600;}
+  #hint{position:fixed;left:16px;bottom:14px;pointer-events:none;color:#12314a;background:rgba(255,255,255,.62);padding:7px 12px;border-radius:10px;font-size:12.5px;font-weight:600;backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.5);z-index:5;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="sun"></div>
+<div id="vignette"></div>
+<div id="hud"><h1>⚓ Harbor Call</h1><p>a voxel diorama — sailing ship at the pier</p></div>
+<div id="hint">drag to orbit · scroll to zoom · double-click / “R” to reset</div>
+<script>
+(function(){
+'use strict';
+const canvas=document.getElementById('c');
+const gl=canvas.getContext('webgl',{antialias:true,alpha:true,depth:true,stencil:false,premultipliedAlpha:false});
+if(!gl){document.getElementById('hud').innerHTML='<h1>WebGL unavailable</h1><p>Open this file in a browser with WebGL.</p>';return;}
+
+// ---------------- shaders ----------------
+function compileShader(type,src){
+  const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){ console.error(gl.getShaderInfoLog(s)); return null; }
+  return s;
+}
+const VS='attribute vec3 aPos; attribute vec3 aColor; attribute float aWater; uniform mat4 uMVP; varying vec3 vColor; varying vec3 vWorld; varying float vWater; void main(){ vColor=aColor; vWorld=aPos; vWater=aWater; gl_Position=uMVP*vec4(aPos,1.0); }';
+const FS='precision mediump float; varying vec3 vColor; varying vec3 vWorld; varying float vWater; uniform float uTime; uniform vec3 uSky; uniform vec3 uCam; uniform float uFog; void main(){ float shimmer=1.0+vWater*0.07*sin(uTime*2.2+vWorld.x*0.85+vWorld.z*0.65); vec3 col=vColor*shimmer; float d=distance(vWorld,uCam); float fog=exp(-d*uFog); col=mix(uSky,col,fog); gl_FragColor=vec4(col,1.0); }';
+const prog=gl.createProgram();
+gl.attachShader(prog,compileShader(gl.VERTEX_SHADER,VS));
+gl.attachShader(prog,compileShader(gl.FRAGMENT_SHADER,FS));
+gl.linkProgram(prog);
+if(!gl.getProgramParameter(prog,gl.LINK_STATUS)){ console.error(gl.getProgramInfoLog(prog)); return; }
+gl.useProgram(prog);
+const aPos=gl.getAttribLocation(prog,'aPos'), aColor=gl.getAttribLocation(prog,'aColor'), aWater=gl.getAttribLocation(prog,'aWater');
+const uMVP=gl.getUniformLocation(prog,'uMVP'), uTime=gl.getUniformLocation(prog,'uTime'), uSky=gl.getUniformLocation(prog,'uSky'), uCam=gl.getUniformLocation(prog,'uCam'), uFog=gl.getUniformLocation(prog,'uFog');
+gl.enable(gl.DEPTH_TEST);
+gl.clearColor(0,0,0,0);
+
+// ---------------- math ----------------
+function mat4Perspective(fovDeg,aspect,near,far){
+  const f=1/Math.tan(fovDeg*Math.PI/360), nf=1/(near-far);
+  return new Float32Array([ f/aspect,0,0,0, 0,f,0,0, 0,0,(far+near)*nf,-1, 0,0,2*far*near*nf,0 ]);
+}
+function mat4View(eye,center,up){
+  let fx=center[0]-eye[0], fy=center[1]-eye[1], fz=center[2]-eye[2];
+  const fl=Math.hypot(fx,fy,fz); fx/=fl; fy/=fl; fz/=fl;
+  let rx=fy*up[2]-fz*up[1], ry=fz*up[0]-fx*up[2], rz=fx*up[1]-fy*up[0];
+  const rl=Math.hypot(rx,ry,rz); rx/=rl; ry/=rl; rz/=rl;
+  const ux=ry*fz-rz*fy, uy=rz*fx-rx*fz, uz=rx*fy-ry*fx;
+  const r=new Float32Array(16);
+  r[0]=rx; r[1]=ux; r[2]=-fx; r[3]=0;
+  r[4]=ry; r[5]=uy; r[6]=-fy; r[7]=0;
+  r[8]=rz; r[9]=uz; r[10]=-fz; r[11]=0;
+  r[12]=-(rx*eye[0]+ry*eye[1]+rz*eye[2]);
+  r[13]=-(ux*eye[0]+uy*eye[1]+uz*eye[2]);
+  r[14]=fx*eye[0]+fy*eye[1]+fz*eye[2];
+  r[15]=1;
+  return r;
+}
+function mat4Multiply(a,b){
+  const r=new Float32Array(16);
+  for(let j=0;j<4;j++) for(let i=0;i<4;i++)
+    r[j*4+i]=a[i]*b[j*4]+a[4+i]*b[j*4+1]+a[8+i]*b[j*4+2]+a[12+i]*b[j*4+3];
+  return r;
+}
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const n2=(x,z)=>{ const s=Math.sin(x*127.1+z*311.7)*43758.5453; return s-Math.floor(s); };
+const SCALE=(c,k)=>[c[0]*k,c[1]*k,c[2]*k];
+
+// ---------------- palette ----------------
+const WATER_TOP=[0.26,0.58,0.72], WATER_SIDE=[0.14,0.40,0.52];
+const GRASS_TOP=[0.45,0.70,0.36], GRASS_SIDE=[0.55,0.42,0.30];
+const SAND_TOP=[0.88,0.80,0.60], SAND_SIDE=[0.78,0.68,0.48];
+const BASE_TOP=[0.52,0.46,0.40], BASE_SIDE=[0.30,0.26,0.23];
+const DOCK_TOP=[0.66,0.46,0.24], DOCK_SIDE=[0.42,0.29,0.15], POST=[0.33,0.22,0.11];
+const HULL=[0.42,0.29,0.20], DECK=[0.79,0.63,0.42], MAST=[0.29,0.20,0.14];
+const SAIL=[0.95,0.90,0.82], SAIL2=[0.88,0.81,0.70], RIG=[0.20,0.19,0.18];
+const WHITE=[0.95,0.93,0.89], RED=[0.84,0.28,0.26], LANTERN=[1.0,0.84,0.42], LANTERN_TOP=[1.0,0.94,0.62];
+const ROCK=[0.42,0.40,0.38], LEAF=[0.30,0.56,0.25], TRUNK=[0.40,0.26,0.16];
+const CRATE=[0.85,0.68,0.45], CRATE_TOP=[0.93,0.76,0.52], BARREL=[0.55,0.36,0.20], BARREL_TOP=[0.44,0.28,0.15];
+const ROPE=[0.55,0.42,0.27], DARK=[0.20,0.19,0.18], FLAG=[0.84,0.28,0.26];
+const CABIN=[0.62,0.45,0.28], CABIN_TOP=[0.79,0.63,0.42];
+const CLOUD_SIDE=[0.85,0.90,0.95], CLOUD_TOP=[1.0,1.0,1.0];
+const SMOKE=[0.85,0.80,0.75];
+const BUOY_RED=[0.84,0.28,0.26], BUOY_TOP=[0.97,0.95,0.90];
+const G_BODY=[0.96,0.95,0.91], G_WING=[0.54,0.59,0.68];
+
+// ---------------- voxel storage ----------------
+const staticVoxels=[], dynamicVoxels=[];
+function sv(x,y,z,color,top){ staticVoxels.push({x:x,y:y,z:z,color:color,top:top||color}); }
+function dv(x,y,z,color,top,type,puff,phase,cloudIndex){ dynamicVoxels.push({x:x,y:y,z:z,color:color,top:top||color,type:type,puff:puff||0,phase:phase||0,cloudIndex:cloudIndex||0}); }
+const KEY=(x,y,z)=>((x+40)*100+(y+40))*100+(z+40);
+
+// ---------------- build static scene ----------------
+for(let x=-26;x<=25;x++) for(let z=-21;z<=18;z++) for(let y=-3;y<=-2;y++) sv(x,y,z,BASE_SIDE,BASE_TOP);
+for(let x=-24;x<=23;x++) for(let z=-20;z<=-15;z++) for(let y=-1;y<=0;y++){
+  if(z===-15) sv(x,y,z,SAND_SIDE,SAND_TOP);
+  else sv(x,y,z,GRASS_SIDE,SCALE(GRASS_TOP,0.92+0.08*n2(x*1.3,z*0.7)));
+}
+for(let x=-3;x<=3;x++) for(let z=-14;z<=-3;z++) sv(x,0,z,DOCK_SIDE,SCALE(DOCK_TOP,0.90+0.10*(Math.abs(z)%2)));
+for(const px of [-3,3]) for(const pz of [-14,-11,-8,-5]) sv(px,-1,pz,POST,POST);
+sv(2,1,-3,DARK,DARK); sv(2,2,-3,DARK,DARK); sv(2,3,-3,LANTERN,LANTERN_TOP);
+sv(-2,1,-8,CRATE,CRATE_TOP); sv(-1,1,-8,CRATE,CRATE_TOP);
+sv(2,1,-6,BARREL,BARREL_TOP);
+sv(3,1,-4,ROPE,ROPE); sv(4,1,-4,ROPE,ROPE); sv(5,1,-4,ROPE,ROPE);
+// lighthouse
+for(let y=1;y<=6;y++) for(let x=-20;x<=-19;x++) for(let z=-18;z<=-17;z++){
+  const c=(y<=2)?WHITE:((y<=4)?RED:WHITE);
+  sv(x,y,z,c,c);
+}
+for(let x=-20;x<=-19;x++) for(let z=-18;z<=-17;z++) sv(x,7,z,LANTERN,LANTERN_TOP);
+for(let x=-20;x<=-19;x++) for(let z=-18;z<=-17;z++) sv(x,8,z,RED,RED);
+sv(-19,9,-17,DARK,DARK);
+for(let x=-21;x<=-18;x++) for(let z=-19;z<=-16;z++){
+  if(x>=-20&&x<=-19&&z>=-18&&z<=-17) continue;
+  sv(x,1,z,ROCK,SCALE(ROCK,0.9+0.2*n2(x*2.1,z*1.7)));
+}
+// trees
+for(const tx of [12,18]){
+  sv(tx,1,-17,TRUNK,TRUNK);
+  sv(tx,2,-17,LEAF,SCALE(LEAF,0.9+0.2*n2(tx,1)));
+  sv(tx-1,2,-17,LEAF,SCALE(LEAF,0.9+0.2*n2(tx,2)));
+  sv(tx+1,2,-17,LEAF,SCALE(LEAF,0.9+0.2*n2(tx,3)));
+  sv(tx,3,-17,LEAF,SCALE(LEAF,0.95+0.15*n2(tx,4)));
+}
+
+// ---------------- build dynamic scene ----------------
+// water
+for(let x=-24;x<=23;x++) for(let z=-14;z<=17;z++){
+  dv(x,-1,z,WATER_SIDE,SCALE(WATER_TOP,0.92+0.08*n2(x*0.9,z*0.8)),'water');
+}
+// ship — hull
+for(let z=-10;z<=-7;z++) for(let x=5;x<=8;x++) for(let y=-1;y<=1;y++) dv(x,y,z,HULL,DECK,'ship');
+for(let z=-6;z<=-1;z++) for(let x=5;x<=8;x++) for(let y=-1;y<=0;y++) dv(x,y,z,HULL,DECK,'ship');
+for(let x=5;x<=8;x++) for(let y=-1;y<=0;y++) dv(x,y,0,HULL,DECK,'ship');
+for(let x=6;x<=7;x++) for(let y=-1;y<=0;y++) dv(x,y,1,HULL,DECK,'ship');
+for(let y=-1;y<=0;y++) dv(6,y,2,HULL,DECK,'ship');
+// masts / yards
+for(let x=6;x<=7;x++) for(let y=1;y<=7;y++) dv(x,y,0,MAST,MAST,'ship');
+for(let x=6;x<=7;x++) for(let y=1;y<=8;y++) dv(x,y,-4,MAST,MAST,'ship');
+for(let x=4;x<=9;x++) dv(x,6,0,MAST,MAST,'ship');
+for(let x=4;x<=9;x++) dv(x,7,-4,MAST,MAST,'ship');
+// sails
+for(let y=3;y<=5;y++) for(const x of [4,5,8,9]) dv(x,y,0,(y%2)?SAIL:SAIL2,SAIL,'ship');
+for(let y=3;y<=6;y++) for(const x of [4,5,8,9]) dv(x,y,-4,(y%2)?SAIL:SAIL2,SAIL,'ship');
+// pennants
+dv(6,8,0,DARK,DARK,'ship'); dv(7,8,0,FLAG,FLAG,'ship'); dv(8,8,0,FLAG,FLAG,'ship');
+dv(6,9,-4,DARK,DARK,'ship'); dv(7,9,-4,FLAG,FLAG,'ship'); dv(8,9,-4,FLAG,FLAG,'ship'); dv(9,9,-4,FLAG,FLAG,'ship');
+// rigging
+for(const r of [[6,2,1],[6,5,-1],[6,6,-2],[6,8,-3],[6,3,-9],[6,4,-8],[6,6,-7],[6,7,-6],[6,8,-5],[6,5,1],[6,5,4],[6,6,3],[6,6,2],[6,7,1]])
+  dv(r[0],r[1],r[2],RIG,RIG,'ship');
+// bowsprit
+dv(6,2,3,MAST,MAST,'ship'); dv(6,3,4,MAST,MAST,'ship'); dv(6,4,5,MAST,MAST,'ship');
+// deck cargo
+dv(5,1,-3,CRATE,CRATE_TOP,'ship'); dv(6,1,-3,CRATE,CRATE_TOP,'ship'); dv(8,1,-2,BARREL,BARREL_TOP,'ship');
+// cabin + chimney
+for(let x=6;x<=7;x++) for(let z=-10;z<=-9;z++) dv(x,2,z,CABIN,CABIN_TOP,'ship');
+dv(7,3,-10,DARK,[0.12,0.11,0.10],'ship');
+// smoke
+for(let i=0;i<3;i++) dv(7,4,-10,SMOKE,SMOKE,'smoke',i);
+// buoys
+for(const b of [[-10,8,0],[-2,12,1]]){
+  dv(b[0],0,b[1],BUOY_RED,BUOY_TOP,'buoy',0,b[2]*2.1);
+  dv(b[0],1,b[1],DARK,DARK,'buoy',0,b[2]*2.1);
+  dv(b[0],2,b[1],LANTERN,LANTERN_TOP,'buoy',0,b[2]*2.1);
+}
+// clouds
+const cloudBases=[[-16,13,-9],[-6,14,-13],[9,13,-14]];
+const cloudOffs=[[[0,0,0],[1,0,0],[2,0,0],[3,0,0],[1,0,1],[2,0,1],[1,1,0]],[[0,0,0],[1,0,0],[2,0,0],[3,0,0],[2,0,1],[1,1,0]],[[0,0,0],[1,0,0],[2,0,0],[1,0,1]]];
+for(let ci=0;ci<3;ci++){
+  for(const o of cloudOffs[ci])
+    dv(cloudBases[ci][0]+o[0],cloudBases[ci][1]+o[1],cloudBases[ci][2]+o[2],CLOUD_SIDE,CLOUD_TOP,'cloud',0,0,ci);
+}
+
+// ---------------- faces ----------------
+function facesFor(v,map){
+  const f=[];
+  if(!map.has(KEY(v.x,v.y+1,v.z))) f.push({verts:[[v.x,v.y+1,v.z],[v.x+1,v.y+1,v.z],[v.x+1,v.y+1,v.z+1],[v.x,v.y+1,v.z+1]],color:v.top,shade:1.0});
+  if(!map.has(KEY(v.x,v.y,v.z+1))) f.push({verts:[[v.x,v.y,v.z+1],[v.x+1,v.y,v.z+1],[v.x+1,v.y+1,v.z+1],[v.x,v.y+1,v.z+1]],color:v.color,shade:0.85});
+  if(!map.has(KEY(v.x,v.y,v.z-1))) f.push({verts:[[v.x+1,v.y,v.z],[v.x,v.y,v.z],[v.x,v.y+1,v.z],[v.x+1,v.y+1,v.z]],color:v.color,shade:0.70});
+  if(!map.has(KEY(v.x+1,v.y,v.z))) f.push({verts:[[v.x+1,v.y,v.z+1],[v.x+1,v.y,v.z],[v.x+1,v.y+1,v.z],[v.x+1,v.y+1,v.z+1]],color:v.color,shade:0.78});
+  if(!map.has(KEY(v.x-1,v.y,v.z))) f.push({verts:[[v.x,v.y,v.z],[v.x,v.y,v.z+1],[v.x,v.y+1,v.z+1],[v.x,v.y+1,v.z]],color:v.color,shade:0.84});
+  return f;
+}
+
+// ---------------- static buffer ----------------
+const staticQuads=[];
+{
+  const map=new Map();
+  for(const v of staticVoxels) map.set(KEY(v.x,v.y,v.z),1);
+  for(const v of staticVoxels){
+    for(const f of facesFor(v,map)){
+      staticQuads.push({verts:f.verts,color:[f.color[0]*f.shade,f.color[1]*f.shade,f.color[2]*f.shade]});
+    }
+  }
+}
+const staticVerts=staticQuads.length*6;
+const staticData=new Float32Array(staticVerts*7);
+{
+  let vi=0;
+  const w=(p,c)=>{ staticData[vi*7]=p[0]; staticData[vi*7+1]=p[1]; staticData[vi*7+2]=p[2]; staticData[vi*7+3]=c[0]; staticData[vi*7+4]=c[1]; staticData[vi*7+5]=c[2]; staticData[vi*7+6]=0; vi++; };
+  for(const q of staticQuads){
+    const v=q.verts;
+    w(v[0],q.color); w(v[1],q.color); w(v[2],q.color); w(v[0],q.color); w(v[2],q.color); w(v[3],q.color);
+  }
+}
+const staticBuf=gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER,staticBuf);
+gl.bufferData(gl.ARRAY_BUFFER,staticData,gl.STATIC_DRAW);
+
+// ---------------- dynamic prep ----------------
+const waterVoxels=[], shipFaces=[], smokeFaces=[], buoyFaces=[], cloudFaces=[];
+{
+  const map=new Map();
+  for(const v of dynamicVoxels) if(v.type!=='water') map.set(KEY(v.x,v.y,v.z),1);
+  for(const v of dynamicVoxels){
+    if(v.type==='water'){
+      waterVoxels.push({x:v.x,z:v.z,color:v.top,sideW:v.x===-24,sideE:v.x===23,sideN:v.z===-14,sideS:v.z===17});
+      continue;
+    }
+    const faces=facesFor(v,map);
+    for(const f of faces){
+      const rec={verts:f.verts,color:[f.color[0]*f.shade,f.color[1]*f.shade,f.color[2]*f.shade]};
+      if(v.type==='ship') shipFaces.push(rec);
+      else if(v.type==='smoke'){ rec.puff=v.puff; smokeFaces.push(rec); }
+      else if(v.type==='buoy'){ rec.phase=v.phase; buoyFaces.push(rec); }
+      else if(v.type==='cloud'){ rec.cloudIndex=v.cloudIndex; cloudFaces.push(rec); }
+    }
+  }
+}
+const MAX_DYN=17000;
+const dynData=new Float32Array(MAX_DYN*7);
+const dynBuf=gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER,dynBuf);
+gl.bufferData(gl.ARRAY_BUFFER,MAX_DYN*7*4,gl.DYNAMIC_DRAW);
+
+// ---------------- camera ----------------
+let theta=0.55, phi=1.02, radius=42;
+const target=[1,0.5,-3];
+const PX=6.5, PY=0.5, PZ=-4;
+let aspect=1;
+const proj=mat4Perspective(45,1,0.5,400);
+function resize(){
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  const w=Math.floor(window.innerWidth*dpr), h=Math.floor(window.innerHeight*dpr);
+  if(canvas.width!==w||canvas.height!==h){ canvas.width=w; canvas.height=h; }
+  gl.viewport(0,0,canvas.width,canvas.height);
+  aspect=canvas.width/canvas.height;
+  const p=mat4Perspective(45,aspect,0.5,400);
+  for(let i=0;i<16;i++) proj[i]=p[i];
+}
+window.addEventListener('resize',resize);
+resize();
+
+// ---------------- input ----------------
+const pointers=new Map();
+let dragging=false, lastX=0, lastY=0, pinchD=0;
+canvas.addEventListener('pointerdown',e=>{
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  try{ canvas.setPointerCapture(e.pointerId); }catch(err){}
+  if(pointers.size===1){ dragging=true; lastX=e.clientX; lastY=e.clientY; }
+  else if(pointers.size===2){ dragging=false; const p=[...pointers.values()]; pinchD=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y); }
+});
+canvas.addEventListener('pointermove',e=>{
+  if(!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pointers.size===2){
+    const p=[...pointers.values()];
+    const d=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
+    if(pinchD>0&&d>0) radius=clamp(radius*pinchD/d,20,78);
+    pinchD=d;
+  } else if(dragging){
+    const dx=e.clientX-lastX, dy=e.clientY-lastY;
+    lastX=e.clientX; lastY=e.clientY;
+    theta+=dx*0.006;
+    phi=clamp(phi-dy*0.005,0.35,1.38);
+  }
+});
+const endPointer=e=>{
+  pointers.delete(e.pointerId);
+  if(pointers.size<2) pinchD=0;
+  if(pointers.size===1){ const p=[...pointers.values()][0]; dragging=true; lastX=p.x; lastY=p.y; }
+  else dragging=false;
+};
+canvas.addEventListener('pointerup',endPointer);
+canvas.addEventListener('pointercancel',endPointer);
+canvas.addEventListener('wheel',e=>{ e.preventDefault(); radius=clamp(radius*(1+(e.deltaY>0?0.12:-0.10)),20,78); },{passive:false});
+function resetCam(){ theta=0.55; phi=1.02; radius=42; }
+canvas.addEventListener('dblclick',resetCam);
+window.addEventListener('keydown',e=>{ if(e.key==='r'||e.key==='R') resetCam(); });
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+
+// ---------------- frame ----------------
+let dynCount=0;
+function w(x,y,z,c,water){
+  if(dynCount>=MAX_DYN) return;
+  const o=dynCount*7;
+  dynData[o]=x; dynData[o+1]=y; dynData[o+2]=z;
+  dynData[o+3]=c[0]; dynData[o+4]=c[1]; dynData[o+5]=c[2]; dynData[o+6]=water;
+  dynCount++;
+}
+function quad(a,b,c,d,color,water){
+  w(a[0],a[1],a[2],color,water); w(b[0],b[1],b[2],color,water); w(c[0],c[1],c[2],color,water);
+  w(a[0],a[1],a[2],color,water); w(c[0],c[1],c[2],color,water); w(d[0],d[1],d[2],color,water);
+}
+const tv0=[0,0,0],tv1=[0,0,0],tv2=[0,0,0],tv3=[0,0,0];
+const gulls=[{r:9,cy:10.5,ph:0,sp:0.35},{r:12,cy:12.0,ph:2.2,sp:0.28},{r:15,cy:11.0,ph:4.4,sp:0.32}];
+
+function render(t){
+  const eye=[target[0]+radius*Math.sin(phi)*Math.sin(theta), target[1]+radius*Math.cos(phi), target[2]+radius*Math.sin(phi)*Math.cos(theta)];
+  const view=mat4View(eye,target,[0,1,0]);
+  const mvp=mat4Multiply(proj,view);
+  gl.uniformMatrix4fv(uMVP,false,mvp);
+  gl.uniform1f(uTime,t);
+  gl.uniform3fv(uSky,[0.84,0.92,0.97]);
+  gl.uniform3fv(uCam,eye);
+  gl.uniform1f(uFog,0.0065);
+
+  dynCount=0;
+  // water
+  for(let i=0;i<waterVoxels.length;i++){
+    const wf=waterVoxels[i];
+    const dy=0.10*Math.sin(t*1.4+wf.x*0.55+wf.z*0.45);
+    quad([[wf.x,dy,wf.z],[wf.x+1,dy,wf.z],[wf.x+1,dy,wf.z+1],[wf.x,dy,wf.z+1]],wf.color,1);
+    if(wf.sideW) quad([[wf.x,-1+dy,wf.z],[wf.x,-1+dy,wf.z+1],[wf.x,dy,wf.z+1],[wf.x,dy,wf.z]],WATER_SIDE,1);
+    if(wf.sideE) quad([[wf.x+1,-1+dy,wf.z+1],[wf.x+1,-1+dy,wf.z],[wf.x+1,dy,wf.z],[wf.x+1,dy,wf.z+1]],WATER_SIDE,1);
+    if(wf.sideN) quad([[wf.x+1,-1+dy,wf.z],[wf.x,-1+dy,wf.z],[wf.x,dy,wf.z],[wf.x+1,dy,wf.z]],WATER_SIDE,1);
+    if(wf.sideS) quad([[wf.x,-1+dy,wf.z+1],[wf.x+1,-1+dy,wf.z+1],[wf.x+1,dy,wf.z+1],[wf.x,dy,wf.z+1]],WATER_SIDE,1);
+  }
+  // ship
+  const roll=0.035*Math.sin(t*0.8), pitch=0.025*Math.sin(t*0.62+1.2), dyS=0.12*Math.sin(t*0.95+0.5);
+  const cr=Math.cos(roll), sr=Math.sin(roll), cp=Math.cos(pitch), sp=Math.sin(pitch);
+  function shipXform(p,out){
+    const dx=p[0]-PX, dy=p[1]-PY, dz=p[2]-PZ;
+    const y1=dy*cp-dz*sp, z1=dy*sp+dz*cp;
+    const x2=dx*cr-y1*sr, y2=dx*sr+y1*cr;
+    out[0]=x2+PX; out[1]=y2+PY+dyS; out[2]=z1+PZ;
+  }
+  for(let i=0;i<shipFaces.length;i++){
+    const f=shipFaces[i];
+    shipXform(f.verts[0],tv0); shipXform(f.verts[1],tv1); shipXform(f.verts[2],tv2); shipXform(f.verts[3],tv3);
+    quad(tv0,tv1,tv2,tv3,f.color,0);
+  }
+  // smoke
+  for(let i=0;i<smokeFaces.length;i++){
+    const f=smokeFaces[i], puff=f.puff;
+    const age=(t*0.9+puff*1.6)%3;
+    const ox=0.35*Math.sin(t*1.3+puff*2.1), oy=age;
+    const k=age/3;
+    const col=[0.85+0.10*k,0.80+0.14*k,0.75+0.18*k];
+    shipXform([f.verts[0][0]+ox,f.verts[0][1]+oy,f.verts[0][2]],tv0);
+    shipXform([f.verts[1][0]+ox,f.verts[1][1]+oy,f.verts[1][2]],tv1);
+    shipXform([f.verts[2][0]+ox,f.verts[2][1]+oy,f.verts[2][2]],tv2);
+    shipXform([f.verts[3][0]+ox,f.verts[3][1]+oy,f.verts[3][2]],tv3);
+    quad(tv0,tv1,tv2,tv3,col,0);
+  }
+  // buoys
+  for(let i=0;i<buoyFaces.length;i++){
+    const f=buoyFaces[i];
+    const dy=0.12*Math.sin(t*1.1+f.phase);
+    quad([[f.verts[0][0],f.verts[0][1]+dy,f.verts[0][2]],[f.verts[1][0],f.verts[1][1]+dy,f.verts[1][2]],[f.verts[2][0],f.verts[2][1]+dy,f.verts[2][2]],[f.verts[3][0],f.verts[3][1]+dy,f.verts[3][2]]],f.color,0);
+  }
+  // clouds
+  for(let i=0;i<cloudFaces.length;i++){
+    const f=cloudFaces[i];
+    const dx=((t*0.5+f.cloudIndex*25)%70)-35;
+    quad([[f.verts[0][0]+dx,f.verts[0][1],f.verts[0][2]],[f.verts[1][0]+dx,f.verts[1][1],f.verts[1][2]],[f.verts[2][0]+dx,f.verts[2][1],f.verts[2][2]],[f.verts[3][0]+dx,f.verts[3][1],f.verts[3][2]]],f.color,0);
+  }
+  // gulls
+  for(let i=0;i<gulls.length;i++){
+    const g=gulls[i];
+    const ang=t*g.sp+g.ph;
+    const cx=1.5+Math.cos(ang)*g.r, cz=-3+Math.sin(ang)*g.r*0.75;
+    const cy=g.cy+Math.sin(t*0.8+g.ph)*1.2;
+    const wY=cy+0.12+0.3*Math.sin(t*7+g.ph*2.5);
+    quad([[cx-0.5,cy+0.28,cz-0.28],[cx+0.5,cy+0.28,cz-0.28],[cx+0.5,cy+0.28,cz+0.28],[cx-0.5,cy+0.28,cz+0.28]],G_BODY,0);
+    quad([[cx-0.5,cy,cz+0.28],[cx+0.5,cy,cz+0.28],[cx+0.5,cy+0.28,cz+0.28],[cx-0.5,cy+0.28,cz+0.28]],[0.90,0.88,0.83],0);
+    quad([[cx-1.45,wY,cz-0.25],[cx-0.45,wY,cz-0.25],[cx-0.45,wY,cz+0.25],[cx-1.45,wY,cz+0.25]],G_WING,0);
+    quad([[cx+0.45,wY,cz-0.25],[cx+1.45,wY,cz-0.25],[cx+1.45,wY,cz+0.25],[cx+0.45,wY,cz+0.25]],G_WING,0);
+  }
+
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  gl.useProgram(prog);
+  function drawArrays(buf,count){
+    gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+    gl.enableVertexAttribArray(aPos); gl.vertexAttribPointer(aPos,3,gl.FLOAT,false,28,0);
+    gl.enableVertexAttribArray(aColor); gl.vertexAttribPointer(aColor,3,gl.FLOAT,false,28,12);
+    gl.enableVertexAttribArray(aWater); gl.vertexAttribPointer(aWater,1,gl.FLOAT,false,28,24);
+    gl.drawArrays(gl.TRIANGLES,0,count);
+  }
+  drawArrays(staticBuf,staticVerts);
+  gl.bindBuffer(gl.ARRAY_BUFFER,dynBuf);
+  gl.bufferSubData(gl.ARRAY_BUFFER,0,dynData.subarray(0,dynCount*7));
+  drawArrays(dynBuf,dynCount);
+}
+
+// ---------------- loop ----------------
+let last=0;
+function loop(now){
+  const t=now/1000;
+  render(t);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
+```
+
+**What's in the scene**
+- A sailing ship (brown hull, raised stern castle, cabin + chimney, two masts with yard-and-sail voxels, rigging, bowsprit, red pennants, deck crates/barrel, animated drifting smoke) — bobbing, rolling and pitching gently on the water
+- Harbor: a wooden pier with planks, posts, crates, a barrel, a glowing lantern post and a rope mooring to the ship
+- A voxel lighthouse on rocks (white/red bands, lit lamp room), a sandy shore with grass, two trees, a stone diorama base
+- Animated teal water with shimmer, two bobbing buoys, drifting voxel clouds, and three flapping seagulls
+- Mouse/touch: drag to orbit, scroll/pinch to zoom, double-click or `R` to reset
+
+**Notes / limitations**
+- Single self-contained file, no CDN, no dependencies — works offline.
+- It's a real-time WebGL voxel renderer, but it's hand-rolled, so lighting is baked per-face (flat, voxel-art look) rather than ray-traced; shadows are skipped to keep it fast.
+- I can't run Chrome here, so I couldn't visually verify it — the geometry is derived from integer voxel ranges so it should be coherent, but expect to fine-tune camera defaults (`theta`, `phi`, `radius` at the top of the script) if the framing isn't quite right on your screen.

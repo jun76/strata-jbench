@@ -63,8 +63,9 @@ TRAINED = 256 * K
 TRAINED_OF = {f: b['trained_context'] for f, b in _BASE.items()}
 # The longest context a family's engine takes (Strata's inkling_fit.CONTEXTS ends at 256K); longer cases are not made.
 MAX_CONTEXT_OF = {f: b['max_context'] for f, b in _BASE.items() if b['max_context']}
-# Families served with thinking off only (Strata's inkling_family.HAS_THINKING False): their thinking-on cases are not
-# made, and the coding task is asked with thinking off.
+# Families served with thinking off only (catalog "thinking": false): their thinking-on cases are not made, and the
+# coding task is asked with thinking off. None now: Inkling-2-Mini thinks since Strata's Control 0.1.67 (its
+# inkling_family.HAS_THINKING still says False, but the server takes every level and the request's own budget).
 NO_THINKING = {f for f, b in _BASE.items() if not b['thinking']}
 # Families that are another model than the lineup's main one (representatives: not the lineup's largest or smallest)
 OTHER_MODELS = {f for f, b in _BASE.items() if b['lineup'] == 'other'}

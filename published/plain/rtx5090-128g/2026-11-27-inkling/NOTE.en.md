@@ -1,0 +1,1 @@
+Tier 3 of Inkling-2-Mini (SQ-10 / 15 / 20) with thinking on (15 done). Strata 0.2.21 takes thinking levels for Inkling, so the high cases of math-1, code-1, reason-ja-1, reason-en-1 and coding-harbor were added under the same conditions as the other models. coding-harbor with thinking off left the plan

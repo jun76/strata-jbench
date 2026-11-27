@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Harbor — Sailing Ship (Voxel)</title>
+<style>
+  html, body { margin:0; height:100%; overflow:hidden; background:#8ec9ec;
+    font-family:"Segoe UI", system-ui, -apple-system, sans-serif; }
+  #app { position:fixed; inset:0; }
+  canvas { display:block; }
+  .vignette { position:fixed; inset:0; pointer-events:none;
+    background:radial-gradient(ellipse at center, transparent 52%, rgba(18,32,52,.38) 100%); }
+  .hud { position:fixed; top:18px; left:22px; color:#fff; pointer-events:none; z-index:5; }
+  .hud h1 { margin:0; font-size:22px; letter-spacing:.14em; text-transform:uppercase;
+    font-weight:700; text-shadow:0 2px 10px rgba(15,35,55,.55); }
+  .hud p { margin:5px 0 0; font-size:12px; letter-spacing:.08em; opacity:.92;
+    text-shadow:0 1px 6px rgba(15,35,55,.5); }
+  .hint { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); z-index:5;
+    background:rgba(14,28,44,.55); color:#eaf4fb; padding:8px 18px; border-radius:999px;
+    font-size:12px; letter-spacing:.08em; border:1px solid rgba(255,255,255,.18);
+    backdrop-filter:blur(6px); pointer-events:none; white-space:nowrap; }
+  .badge { position:fixed; top:18px; right:20px; z-index:5; color:#fff; font-size:12px;
+    letter-spacing:.06em; background:rgba(14,28,44,.5); padding:7px 14px; border-radius:999px;
+    border:1px solid rgba(255,255,255,.16); backdrop-filter:blur(6px); transition:opacity .4s; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="app"></div>
+<div class="vignette"></div>
+<div class="hud"><h1>⚓ Harbor</h1><p>A sailing ship calls at the pier</p></div>
+<div class="hint">drag to orbit &nbsp;·&nbsp; scroll to zoom &nbsp;·&nbsp; right-drag to pan</div>
+<div class="badge" id="badge">building the harbor…</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ---------- renderer / scene / camera ---------- */
+const app = document.getElementById('app');
+const renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.06;
+app.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+
+// vertical gradient sky
+const cnv = document.createElement('canvas'); cnv.width = 4; cnv.height = 512;
+const g2 = cnv.getContext('2d');
+const grad = g2.createLinearGradient(0, 0, 0, 512);
+grad.addColorStop(0.00, '#4ea3e0');
+grad.addColorStop(0.45, '#8ec9ec');
+grad.addColorStop(0.75, '#cfe8f6');
+grad.addColorStop(1.00, '#fdf3d8');
+g2.fillStyle = grad; g2.fillRect(0, 0, 4, 512);
+const skyTex = new THREE.CanvasTexture(cnv);
+skyTex.colorSpace = THREE.SRGBColorSpace;
+scene.background = skyTex;
+scene.fog = new THREE.Fog(0xdcecf6, 55, 150);
+
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 400);
+camera.position.set(20, 13.5, 27);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 1.6, -1);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 9;
+controls.maxDistance = 60;
+controls.minPolarAngle = 0.12;
+controls.maxPolarAngle = 1.42;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.45;
+controls.addEventListener('start', () => { controls.autoRotate = false; });
+
+/* ---------- lights ---------- */
+scene.add(new THREE.HemisphereLight(0xbfe3ff, 0x8a7a58, 0.75));
+const sun = new THREE.DirectionalLight(0xfff1d8, 1.7);
+sun.position.set(24, 30, 20);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -38; sun.shadow.camera.right = 38;
+sun.shadow.camera.top = 38; sun.shadow.camera.bottom = -38;
+sun.shadow.camera.near = 5; sun.shadow.camera.far = 95;
+sun.shadow.bias = -0.0006;
+scene.add(sun);
+const fill = new THREE.DirectionalLight(0xbfd9ff, 0.35);
+fill.position.set(-22, 12, -18);
+scene.add(fill);
+
+/* ---------- voxel helpers ---------- */
+const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+const matCache = new Map();
+function mat(color) {
+  if (!matCache.has(color)) matCache.set(color, new THREE.MeshStandardMaterial({ color, roughness:0.82, metalness:0.04 }));
+  return matCache.get(color);
+}
+const glowMat = new THREE.MeshStandardMaterial({ color:0xffd9a0, emissive:0xffb84d, emissiveIntensity:1.5, roughness:0.4 });
+const lanternMat = new THREE.MeshStandardMaterial({ color:0xfff3c0, emissive:0xffdf8a, emissiveIntensity:1.8, roughness:0.3 });
+const lampGlassMat = new THREE.MeshStandardMaterial({ color:0xffe3a1, emissive:0xffc25e, emissiveIntensity:1.6, roughness:0.4 });
+
+function vox(parent, x, y, z, color, s = 1, cast = true) {
+  const m = new THREE.Mesh(boxGeo, mat(color));
+  m.position.set(x, y, z); m.scale.setScalar(s);
+  m.castShadow = cast; m.receiveShadow = true;
+  parent.add(m); return m;
+}
+function block(parent, x, y, z, w, h, d, color, glow = false) {
+  const m = new THREE.Mesh(boxGeo, glow ? glowMat : mat(color));
+  m.position.set(x, y, z); m.scale.set(w, h, d);
+  m.castShadow = true; m.receiveShadow = true;
+  parent.add(m); return m;
+}
+const rand = (a, b) => a + Math.random() * (b - a);
+
+/* ---------- distant water plane ---------- */
+const plane = new THREE.Mesh(new THREE.PlaneGeometry(800, 800),
+  new THREE.MeshStandardMaterial({ color:0x2f6fa8, roughness:0.5, metalness:0.08 }));
+plane.rotation.x = -Math.PI / 2; plane.position.y = -0.6;
+scene.add(plane);
+
+/* ---------- animated voxel ocean ---------- */
+const cells = [];
+for (let x = -24; x <= 24; x++) for (let z = -10; z <= 23; z++) cells.push([x, z]);
+const ocean = new THREE.InstancedMesh(boxGeo,
+  new THREE.MeshStandardMaterial({ roughness:0.42, metalness:0.10 }), cells.length);
+ocean.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+ocean.receiveShadow = true;
+const dummy = new THREE.Object3D();
+const cA = new THREE.Color(0x2b6fb0), cB = new THREE.Color(0x47a6d8), cTmp = new THREE.Color();
+cells.forEach(([x, z], i) => {
+  dummy.position.set(x, -0.5, z); dummy.rotation.set(0,0,0); dummy.scale.set(1,1,1); dummy.updateMatrix();
+  ocean.setMatrixAt(i, dummy.matrix);
+  cTmp.lerpColors(cA, cB, Math.random());
+  ocean.setColorAt(i, cTmp);
+});
+ocean.instanceColor.needsUpdate = true;
+scene.add(ocean);
+
+/* ---------- shore (beach + grass plateau) ---------- */
+const shore = new THREE.Group(); scene.add(shore);
+for (let x = -24; x <= 24; x++) {
+  for (let z = -15; z <= -9; z++) {
+    const beach = (z === -9);
+    const color = beach ? (Math.random() < 0.5 ? 0xe6d3a3 : 0xdec78d)
+                         : (Math.random() < 0.5 ? 0x6fae4e : 0x66a34a);
+    vox(shore, x, 0.5, z, color, 1, false);
+  }
+}
+
+/* ---------- rocks ---------- */
+for (let i = 0; i < 7; i++) {
+  const x = rand(-22, 22);
+  if (x > -5 && x < 1) continue; // keep dock channel clear
+  vox(scene, x, 1.12, -9.2, 0x8d8d93, rand(0.5, 0.95), false);
+}
+vox(scene, -16.3, 0.35, -8.2, 0x7d7d84, 1.1);
+vox(scene, -18.2, 0.25, -8.6, 0x8d8d93, 0.8);
+
+/* ---------- wooden dock ---------- */
+const dock = new THREE.Group(); scene.add(dock);
+const lampLights = [];
+for (let z = -8; z <= 4; z++) for (let x = -3; x <= -1; x++)
+  vox(dock, x, 0.45, z, (z % 2 === 0) ? 0x8a5a33 : 0x7d4f2c);
+block(dock, -3.5, 0.55, -2, 0.35, 0.3, 13, 0x3f2613);
+block(dock, -0.5, 0.55, -2, 0.35, 0.3, 13, 0x3f2613);
+for (const z of [-8, -4, 0, 4]) for (const x of [-3.5, -0.5])
+  block(dock, x, -0.1, z, 0.45, 2.3, 0.45, 0x3f2613);
+for (let z = -7; z <= 3; z += 2) block(dock, -3.35, 1.55, z, 0.22, 1.2, 0.22, 0x3f2613);
+block(dock, -3.35, 2.2, -2, 0.2, 0.2, 10.5, 0x4a2c17);
+
+// crates & barrels on the pier
+vox(dock, -2.55, 1.4, 3.1, 0xa9713a, 0.9);
+vox(dock, -1.55, 1.35, 3.3, 0x96642f, 0.75);
+vox(dock, -2.45, 2.15, 3.2, 0x8f6132, 0.6);
+const barrelGeo = new THREE.CylinderGeometry(0.3, 0.34, 0.62, 10);
+function barrel(x, z) {
+  const m = new THREE.Mesh(barrelGeo, mat(0x7a4a26));
+  m.position.set(x, 1.26, z); m.castShadow = true; m.receiveShadow = true; dock.add(m);
+}
+barrel(-2.7, 2.0); barrel(-1.75, 2.3);
+
+// lamp posts
+function lampPost(x, z) {
+  const g = new THREE.Group(); g.position.set(x, 0, z); dock.add(g);
+  const pole = new THREE.Mesh(boxGeo, mat(0x2e2a26));
+  pole.scale.set(0.16, 1.9, 0.16); pole.position.y = 1.9; pole.castShadow = true; g.add(pole);
+  const head = new THREE.Mesh(boxGeo, lampGlassMat);
+  head.scale.set(0.4, 0.4, 0.4); head.position.y = 2.95; g.add(head);
+  const cap = new THREE.Mesh(boxGeo, mat(0x2e2a26));
+  cap.scale.set(0.52, 0.14, 0.52); cap.position.y = 3.22; g.add(cap);
+  const pl = new THREE.PointLight(0xffc06a, 6, 10, 2); pl.position.y = 2.95; g.add(pl);
+  lampLights.push(pl);
+}
+lampPost(-1.35, -5); lampPost(-1.35, 1.5);
+
+/* ---------- warehouse ---------- */
+const warehouse = new THREE.Group(); warehouse.position.set(-9, 0, -12.5); scene.add(warehouse);
+block(warehouse, 0, 2.25, 0, 8, 2.5, 5, 0x9c5b40);
+const wRoof = [ {w:8.9,y:3.72},{w:7.4,y:4.24},{w:5.9,y:4.76},{w:4.4,y:5.28},{w:2.9,y:5.8},{w:1.4,y:6.32} ];
+wRoof.forEach(s => block(warehouse, 0, s.y, 0, s.w, 0.56, 5.6, 0x4c5a6a));
+block(warehouse, 0, 1.9, 2.56, 1.4, 1.8, 0.12, 0x3d2a18);            // door
+block(warehouse, -2.6, 2.4, 2.55, 0.8, 0.7, 0.1, 0, true);           // windows (glow)
+block(warehouse, 2.6, 2.4, 2.55, 0.8, 0.7, 0.1, 0, true);
+block(warehouse, 2.4, 5.55, -1.2, 0.8, 1.1, 0.8, 0x7a4630);           // chimney
+
+/* ---------- cottages ---------- */
+function cottage(x, z, wallColor, roofColor) {
+  const g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
+  block(g, 0, 2.0, 0, 3.4, 2.0, 3.2, wallColor);
+  const steps = [ {w:4.1,y:3.22},{w:3.2,y:3.74},{w:2.3,y:4.26},{w:1.4,y:4.78},{w:0.6,y:5.3} ];
+  steps.forEach(s => block(g, 0, s.y, 0, s.w, 0.56, 3.7, roofColor));
+  block(g, 0, 1.75, 1.65, 0.9, 1.5, 0.12, 0x3d2a18);
+  block(g, -1.0, 2.1, 1.62, 0.6, 0.55, 0.1, 0, true);
+  block(g, 1.0, 2.1, 1.62, 0.6, 0.55, 0.1, 0, true);
+}
+cottage(6, -13, 0xe8ddc4, 0xa34a2e);
+cottage(12.5, -12, 0xd9c9a8, 0x46525e);
+
+/* ---------- lighthouse ---------- */
+const lighthouse = new THREE.Group(); lighthouse.position.set(-17, 0, -11.5); scene.add(lighthouse);
+block(lighthouse, 0, 1.3, 0, 2.6, 0.6, 2.6, 0x8d8d93);
+for (let i = 0; i < 6; i++) {
+  const w = 1.7 - i * 0.12;
+  block(lighthouse, 0, 1.6 + 0.55 + i * 1.1, 0, w, 1.1, w, i % 2 === 0 ? 0xece7da : 0xc23b2e);
+}
+vox(lighthouse, 0, 4.4, 0.6, 0x2e2a26, 0.35);
+const lantern = new THREE.Mesh(boxGeo, lanternMat);
+lantern.scale.set(1.2, 1.0, 1.2); lantern.position.y = 8.7; lighthouse.add(lantern);
+block(lighthouse, 0, 9.35, 0, 1.5, 0.3, 1.5, 0x2e2a26);
+block(lighthouse, 0, 9.62, 0, 1.0, 0.24, 1.0, 0x2e2a26);
+vox(lighthouse, 0, 9.95, 0, 0xc23b2e, 0.35);
+
+const beamGroup = new THREE.Group(); beamGroup.position.set(0, 8.7, 0); lighthouse.add(beamGroup);
+const beamGeo = new THREE.ConeGeometry(2.4, 11, 16, 1, true);
+beamGeo.rotateX(-Math.PI / 2); beamGeo.translate(0, 0, 5.5);
+const beam = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({
+  color:0xffe6a0, transparent:true, opacity:0.16, blending:THREE.AdditiveBlending,
+  side:THREE.DoubleSide, depthWrite:false, fog:false }));
+beamGroup.add(beam);
+
+/* ---------- the sailing ship ---------- */
+const ship = new THREE.Group(); ship.position.set(6, 0, 3); ship.rotation.y = -0.4; scene.add(ship);
+const hullHalf = [2,2,2,2,2,2,2,2,1,1,0]; // z = -5..5
+for (let z = -5; z <= 5; z++) {
+  const half = hullHalf[z + 5];
+  for (let x = -half; x <= half; x++) {
+    vox(ship, x, -0.5, z, 0x3d2413);
+    vox(ship, x, 0.5, z, 0x6b3a1e);
+  }
+}
+for (let z = -5; z <= 4; z++) {
+  const half = hullHalf[z + 5];
+  for (let x = -half; x <= half; x++) vox(ship, x, 1.0, z, (z % 2 === 0) ? 0xd9b078 : 0xcaa066);
+}
+// stern castle
+for (let z = -5; z <= -3; z++) for (let x = -1; x <= 1; x++) vox(ship, x, 2.0, z, 0x6b3a1e);
+block(ship, 0, 2.75, -4, 3.6, 0.35, 2.9, 0x4a2c17);
+for (const x of [-1, 0, 1]) block(ship, x, 2.0, -5.55, 0.55, 0.45, 0.1, 0, true);
+// bowsprit
+vox(ship, 0, 1.5, 5, 0x4a2c17);
+vox(ship, 0, 2.5, 6, 0x4a2c17);
+vox(ship, 0, 3.5, 7, 0x4a2c17);
+// masts
+for (let y = 2; y <= 9; y++) vox(ship, 0, y, 0, (y % 3 === 0) ? 0x5a3418 : 0x4a2c17);
+for (let y = 2; y <= 7; y++) vox(ship, 0, y, 3, (y === 4) ? 0x5a3418 : 0x4a2c17);
+// main yard + sail (billowing toward the stern)
+for (let x = -3; x <= 3; x++) vox(ship, x, 7, 0, 0x3d2413);
+[ {y:4.5,z:-0.85,c:0xe7dcc0}, {y:5.5,z:-0.55,c:0xf3ead6}, {y:6.5,z:-0.2,c:0xe7dcc0} ]
+  .forEach(r => { for (let x = -2; x <= 2; x++) vox(ship, x, r.y, r.z, r.c); });
+// fore yard + sail
+for (let x = -2; x <= 2; x++) vox(ship, x, 6, 3, 0x3d2413);
+[ {y:3.5,z:2.3,c:0xe7dcc0}, {y:4.5,z:2.55,c:0xf3ead6}, {y:5.5,z:2.85,c:0xe7dcc0} ]
+  .forEach(r => { for (let x = -2; x <= 2; x++) vox(ship, x, r.y, r.z, r.c); });
+// jib (diagonal triangle of voxels)
+[[4.0,6.45],[4.85,5.55],[5.7,4.6],[6.55,3.6]].forEach(p => vox(ship, 0, p[0], p[1], 0xf3ead6, 0.75));
+// rigging
+const rigMat = new THREE.LineBasicMaterial({ color:0x2b1a10, transparent:true, opacity:0.75 });
+function rig(a, b) {
+  const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...a), new THREE.Vector3(...b)]);
+  ship.add(new THREE.Line(geo, rigMat));
+}
+rig([0,9.4,0],[0,3.6,7]); rig([0,9.4,0],[0,2.7,-4.5]); rig([0,9.4,0],[0,7.3,3]);
+rig([0,7.3,3],[0,2.2,7.2]); rig([0,8.6,0],[-2.3,1.6,0]); rig([0,8.6,0],[2.3,1.6,0]);
+rig([0,7.3,3],[-2.0,1.6,3]); rig([0,7.3,3],[2.0,1.6,3]);
+// portholes
+for (const z of [-3, -1, 1, 3]) for (const sx of [-1, 1])
+  block(ship, sx * 2.5, 0.5, z, 0.12, 0.42, 0.42, 0x2a1708);
+// waving flag
+const flag = new THREE.Group(); flag.position.set(0, 9.35, 0); ship.add(flag);
+vox(flag, 0.55, 0, 0, 0xd33f2e, 0.7); vox(flag, 1.3, 0, 0, 0xd33f2e, 0.7);
+vox(flag, 0.55, -0.75, 0, 0xd33f2e, 0.7); vox(flag, 1.3, -0.75, 0, 0xd33f2e, 0.7);
+// foam ring + stern trail
+const foam = [];
+for (let z = -4; z <= 4; z += 2) {
+  const half = hullHalf[z + 5];
+  for (const sx of [-1, 1]) {
+    const m = new THREE.Mesh(boxGeo, mat(0xeaf7ff));
+    m.position.set(sx * (half + 0.65), 0.12, z); m.scale.set(0.85, 0.18, 0.85);
+    m.userData.base = 0.18; ship.add(m); foam.push(m);
+  }
+}
+[-6.2, -7.5, -8.8].forEach((z, i) => {
+  const m = new THREE.Mesh(boxGeo, mat(0xeaf7ff));
+  m.position.set(0, 0.12, z); m.scale.set(1.6 - i * 0.35, 0.16, 0.8);
+  m.userData.base = 0.16; ship.add(m); foam.push(m);
+});
+
+/* ---------- buoys ---------- */
+const buoys = [];
+function buoy(x, z, phase) {
+  const g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
+  const b1 = new THREE.Mesh(boxGeo, mat(0xd23b2e)); b1.scale.set(0.75, 0.55, 0.75); b1.position.y = 0.25; b1.castShadow = true; g.add(b1);
+  const b2 = new THREE.Mesh(boxGeo, mat(0xf2ede0)); b2.scale.set(0.4, 0.3, 0.4); b2.position.y = 0.68; g.add(b2);
+  const b3 = new THREE.Mesh(boxGeo, mat(0x2e2a26)); b3.scale.set(0.12, 0.5, 0.12); b3.position.y = 1.0; g.add(b3);
+  buoys.push({ g, phase });
+}
+buoy(12, 10, 0); buoy(-9, 12, 2.1); buoy(1.5, -6.5, 4.2);
+
+/* ---------- voxel sun ---------- */
+const voxelSun = new THREE.Group(); voxelSun.position.set(26, 24, -38); scene.add(voxelSun);
+const sunMat = new THREE.MeshBasicMaterial({ color:0xffdf6b, fog:false });
+const core = new THREE.Mesh(boxGeo, sunMat); core.scale.setScalar(3.4); voxelSun.add(core);
+[[2.6,0,0],[-2.6,0,0],[0,2.6,0],[0,-2.6,0],[0,0,2.6],[0,0,-2.6]].forEach(p => {
+  const m = new THREE.Mesh(boxGeo, sunMat); m.position.set(p[0], p[1], p[2]); m.scale.setScalar(1.4); voxelSun.add(m);
+});
+
+/* ---------- drifting clouds ---------- */
+const clouds = [];
+function cloud(x, y, z, s, speed) {
+  const g = new THREE.Group(); g.position.set(x, y, z); g.scale.setScalar(s); scene.add(g);
+  const white = mat(0xffffff);
+  [[0,0,0,2.6,1.3,1.6],[2.1,0.25,0.3,1.7,1.1,1.3],[-2.0,0.2,-0.2,1.6,1.0,1.2],[0.4,1.15,-0.2,1.5,1.0,1.1],[-0.8,1.0,0.35,1.2,0.9,1.0]]
+    .forEach(p => { const m = new THREE.Mesh(boxGeo, white); m.position.set(p[0],p[1],p[2]); m.scale.set(p[3],p[4],p[5]); g.add(m); });
+  clouds.push({ g, speed });
+}
+cloud(-18, 16, -18, 1.6, 0.50); cloud(2, 19, -24, 2.0, 0.35); cloud(16, 15, -12, 1.3, 0.65);
+cloud(-4, 21, 10, 1.5, 0.45); cloud(24, 17, 8, 1.2, 0.55);
+
+/* ---------- seagulls ---------- */
+const birds = [];
+function bird(r, h, phase, speed, cx, cz) {
+  const g = new THREE.Group(); scene.add(g);
+  const body = new THREE.Mesh(boxGeo, mat(0xf7f7f2)); body.scale.set(0.32, 0.22, 0.62); g.add(body);
+  const beak = new THREE.Mesh(boxGeo, mat(0xf2a03c)); beak.scale.set(0.14, 0.14, 0.2); beak.position.set(0, -0.02, 0.4); g.add(beak);
+  const wl = new THREE.Group(); wl.position.set(0.12, 0.06, 0); g.add(wl);
+  const wlMesh = new THREE.Mesh(boxGeo, mat(0xffffff)); wlMesh.scale.set(0.75, 0.07, 0.34); wlMesh.position.x = 0.42; wl.add(wlMesh);
+  const wr = new THREE.Group(); wr.position.set(-0.12, 0.06, 0); g.add(wr);
+  const wrMesh = new THREE.Mesh(boxGeo, mat(0xffffff)); wrMesh.scale.set(0.75, 0.07, 0.34); wrMesh.position.x = -0.42; wr.add(wrMesh);
+  birds.push({ g, wl, wr, r, h, phase, speed, cx, cz });
+}
+bird(9, 15.5, 0, 0.35, 2, 2); bird(12, 17.5, 2.2, 0.28, 0, 0); bird(7, 13.5, 4.1, 0.42, 8, 6);
+
+/* ---------- animation ---------- */
+const clock = new THREE.Clock();
+let firstFrame = true;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const t = clock.elapsedTime;
+
+  // ocean waves
+  for (let i = 0; i < cells.length; i++) {
+    const x = cells[i][0], z = cells[i][1];
+    const y = -0.5 + Math.sin(t * 1.5 + x * 0.35 + z * 0.45) * 0.14;
+    dummy.position.set(x, y, z); dummy.rotation.set(0,0,0); dummy.scale.set(1,1,1); dummy.updateMatrix();
+    ocean.setMatrixAt(i, dummy.matrix);
+  }
+  ocean.instanceMatrix.needsUpdate = true;
+
+  // ship bobbing
+  ship.position.y = Math.sin(t * 0.8) * 0.14;
+  ship.rotation.z = Math.sin(t * 0.9 + 0.5) * 0.028;
+  ship.rotation.x = Math.sin(t * 0.62 + 1.2) * 0.02;
+
+  // flag wave
+  flag.rotation.y = Math.sin(t * 3.1) * 0.3;
+  flag.scale.x = 1 + Math.sin(t * 5.2) * 0.07;
+
+  // foam pulse
+  foam.forEach((m, i) => { m.scale.y = m.userData.base * (1 + 0.22 * Math.sin(t * 2.1 + i * 1.4)); });
+
+  // buoys
+  buoys.forEach(b => {
+    b.g.position.y = Math.sin(t * 1.4 + b.phase) * 0.18;
+    b.g.rotation.x = Math.sin(t * 1.1 + b.phase) * 0.10;
+    b.g.rotation.z = Math.cos(t * 0.9 + b.phase) * 0.10;
+  });
+
+  // lighthouse beam + lantern pulse
+  beamGroup.rotation.y = t * 0.6;
+  lanternMat.emissiveIntensity = 1.7 + Math.sin(t * 2.2) * 0.5;
+
+  // lamp flicker
+  lampLights.forEach((pl, i) => { pl.intensity = 6 + Math.sin(t * 7 + i * 2.4) * 0.8; });
+
+  // clouds drift
+  clouds.forEach(c => {
+    c.g.position.x += c.speed * dt;
+    if (c.g.position.x > 42) c.g.position.x = -42;
+  });
+
+  // birds flap & fly
+  birds.forEach(b => {
+    const a = t * b.speed + b.phase;
+    b.g.position.set(b.cx + Math.cos(a) * b.r, b.h + Math.sin(t * 0.9 + b.phase) * 0.5, b.cz + Math.sin(a) * b.r);
+    b.g.rotation.y = -a;
+    const flap = 0.25 + Math.sin(t * 9 + b.phase) * 0.55;
+    b.wl.rotation.z = flap; b.wr.rotation.z = -flap;
+  });
+
+  controls.update();
+  renderer.render(scene, camera);
+
+  if (firstFrame) {
+    firstFrame = false;
+    const badge = document.getElementById('badge');
+    if (badge) badge.style.display = 'none';
+  }
+}
+animate();
+
+/* ---------- resize ---------- */
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
