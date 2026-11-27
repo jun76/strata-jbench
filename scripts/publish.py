@@ -128,9 +128,9 @@ def update_readme():
 
         def row(r):
             note = r['notes'].get(lang) or r['notes'].get('ja') or '–'
-            # the charts open on the run's engine (the page shows one engine at a time; Strata's needs no parameter)
+            # the charts open with the run's engine ticked, beside Strata (Strata alone needs no parameter)
             snap = f'snapshots/{r["div"]}/{r["env"]}/{r["run"]}/?env={r["env"]}' + (
-                '' if r['engine'] == engines.DEFAULT else f'&engine={r["engine"]}')
+                '' if r['engine'] == engines.DEFAULT else f'&engine={engines.DEFAULT},{r["engine"]}')
             lists = f'cases/{r["div"]}/{r["env"]}/README{SUFFIX[lang]}.md'
             tag = envs.tag(r['env'], r['run'], r['div'])
             return (f'| {r["date"]} | {r["div_label"][lang]} | {r["engine_label"]} | {r["label"]} | `{r["run"]}` | '

@@ -42,10 +42,10 @@ nothing about the launch is checked and the results say "attach only". An engine
 Strata where it says nothing), so the plan's rows carry the engine they are for. bench.json's `track` says how the
 engine is set: `exact` (every approximation that changes the output off: Sync-Strata's tail skip at R10), `default`
 (the engine as it comes) or `custom`. Only runs on the `exact` track of an engine jbench started itself share the
-pages under the same case ids (`envs.comparable`); the others are results of their own. A page shows one engine at a
-time (the switch at its top, `?engine=`): Strata's view lists Strata's builds only; a derived engine's view lists its
-builds with Strata's builds of the same base model beside them as the reference. The README's table of runs names
-each run's engine, and the case lists have a table per engine.
+pages under the same case ids (`envs.comparable`); the others are results of their own. A page shows the results
+of the engines ticked at its top (a checkbox each; `?engine=a,b` in a link): Strata alone by default, so a derived
+engine's builds appear among Strata's only when it is ticked. The README's table of runs names each run's engine (a
+derived engine's link opens with it ticked beside Strata), and the case lists have a table per engine.
 What a run uses on this PC and where it came from (the engine, the harness, the models: fetched by jbench into
 `tools/`, or a place the user named) is `tools/provision.json` (`scripts/provision.py`), copied into the run.
 

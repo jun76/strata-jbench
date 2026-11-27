@@ -28,10 +28,10 @@ To compare an engine's own default against exact, measure both tracks as two run
 
 ## How the pages show engines
 
-One engine at a time: the switch at the top of a results page (`?engine=<id>` in a link; the README's 📈 link of a run
-opens on that run's engine). Strata's view lists only Strata's builds, so a derived engine never appears among Strata's
-results. A derived engine's view lists its own builds and, as the reference, Strata's builds of the same base model
-(the catalog's `base`). Each model carries its engines in the page data; nothing in the template names an engine.
+A checkbox per engine at the top of a results page: the page shows the results of the engines ticked (`?engine=a,b`
+in a link). Strata alone is ticked by default, so a derived engine never appears among Strata's results unless the
+reader ticks it; the README's 📈 link of a derived engine's run opens with that engine ticked beside Strata. Each model
+carries its engines in the page data; nothing in the template names an engine.
 The README's table of runs has an engine column, and each Tier's case list has one table per engine.
 
 ## Trying a derived engine today (attach only)
