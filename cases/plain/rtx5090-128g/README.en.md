@@ -22,7 +22,7 @@ One table of cases per Tier (a row per case). Every parameter and result: the CS
 
 The Strata desktop app is not used. The CLI (<code>strata launch --no-tui</code>) starts the engine on a dedicated port (18600), and <code>scripts/bench_runner.py</code> calls its OpenAI-compatible HTTP API (<code>POST /v1/chat/completions</code>, streaming) directly. Only Tier 2 runs Strata's bundled benchmark, <code>strata bench run --suite standard-v1</code>, against the same engine.
 
-environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-25-main (machine.json)
+environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-27-fix (machine.json)
 
 ## Overview
 
@@ -31,8 +31,8 @@ environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-25-main 
 - engine launches: 193
 - estimate: 37 h
 - reference model: qwen IQ3_S (env.json "ref", else the model Strata recommends for this RAM + VRAM)
-- done: 2,120
-- failed: 22
+- done: 2,134
+- failed: 8
 
 
 ## By Tier
@@ -43,11 +43,11 @@ environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-25-main 
 | [1](tier-1.en.md) | base speed of every model (5 decode kinds × 3 temperatures, prefill 4K / 32K / 128K); decode also with DFlash2 on the models that have it | 35 | 915 | 2,745 | 4.0 | 861 |
 | [2](tier-2.en.md) | the official standard-v1 (thinking xhigh, temperature 1.0), the whole suite 3 times | 32 | 480 | 1,440 | 4.9 | 480 |
 | [3](tier-3.en.md) | reasoning effort none / high × 4 tasks, the coding task (sailing ship) at high only (every model) | 35 | 298 | 894 | 10.1 | 271 |
-| [4a](tier-4a.en.md) | the cost of reserving context (the same 4K input at 128K / 256K / 1M) | 35 | 99 | 297 | 2.2 | 91 |
+| [4a](tier-4a.en.md) | the cost of reserving context (the same 4K input at 128K / 256K / 1M) | 35 | 99 | 297 | 2.2 | 93 |
 | [4b](tier-4b.en.md) | long inputs within the trained length (32K / 128K / 256K; the reference model, the largest of each family, the smallest) | 8 | 96 | 288 | 2.5 | 88 |
 | [4c](tier-4c.en.md) | long inputs in the extended range (512K / 1M; the reference model, the smallest and the largest) | 3 | 24 | 72 | 7.7 | 24 |
 | [4d](tier-4d.en.md) | the effect of YaRN (the reference model, same input, only the setting changes) | 1 | 16 | 48 | 1.1 | 16 |
-| [5](tier-5.en.md) | changing one launch option at a time (the reference model, the largest and the smallest; auto tune included) | 3 | 276 | 828 | 4.0 | 264 |
+| [5](tier-5.en.md) | changing one launch option at a time (the reference model, the largest and the smallest; auto tune included) | 3 | 276 | 828 | 4.0 | 276 |
 
 
 ## Models
@@ -61,7 +61,7 @@ environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-25-main 
 | coder | IQ1_M | 58.4 | pruned to half the experts | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF @ `bba8885`](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF/tree/bba88856f8c3c0c9e40e45f82d05e228b814ac43) **differs** ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
 | gyro | Gyro-S | 58.5 | quantized from the original weights (trellis) | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
 | gyro | Gyro-M | 92.0 | quantized from the original weights (trellis) | [agentionai/Qwen3.8-Flash-Next-Gyro-GGUF @ `1ada084`](https://huggingface.co/agentionai/Qwen3.8-Flash-Next-Gyro-GGUF/tree/1ada08422e404aca51ab9df665f089f34c419c6b) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
-| gyro | Gyro-S (v2) | 58.5 | quantized from the original weights (trellis, the 2026-11-24 version) | not recorded ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
+| gyro | Gyro-S (v2) | 58.5 | quantized from the original weights (trellis, the 2026-11-24 version) | not recorded ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json), [2026-11-27-fix](../../../published/plain/rtx5090-128g/2026-11-27-fix/models.json)) |
 | unsloth | UD-IQ4_XS (pre-v3.1) | 93.7 | quantized from the original weights (Unsloth, the version before v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | unsloth | UD-Q4_K_XL (pre-v3.1) | 111.3 | quantized from the original weights (Unsloth, unchanged in v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
 | unsloth | UD-Q5_K_XL | 158.3 | quantized from the original weights (Unsloth, unchanged in v3.1) | [unsloth/Qwen3.8-Flash-Next-GGUF @ `38bb39e`](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/tree/38bb39ee97821de2c9009abb7e93950eec396e66) ([2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/models.json)) |
@@ -77,7 +77,7 @@ environment <code>rtx5090-128g</code> · as recorded for RUN_ID 2026-11-25-main 
 | swift | IQ2_XS | 69.1 | fine-tune (shorter thinking) | [ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `99bb8f7`](https://huggingface.co/ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/99bb8f7f95c7aa7b24a36a7786a4f657b30f5d3d) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
 | swift | IQ3_XXS | 76.0 | fine-tune (shorter thinking) | [ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `99bb8f7`](https://huggingface.co/ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/99bb8f7f95c7aa7b24a36a7786a4f657b30f5d3d) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
 | swift | IQ3_S | 83.7 | fine-tune (shorter thinking) | [ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF @ `99bb8f7`](https://huggingface.co/ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/99bb8f7f95c7aa7b24a36a7786a4f657b30f5d3d) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
-| nvfp4 | NVFP4 | 128.0 | quantized from the original weights (GPTQ) | [Maximilian228/Qwen3.8-Flash-Next-NVFP4-GPTQ-Strata @ `640a1db`](https://huggingface.co/Maximilian228/Qwen3.8-Flash-Next-NVFP4-GPTQ-Strata/tree/640a1db97446ddd5e89d2b70ecd0297987192c93) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
+| nvfp4 | NVFP4 | 128.0 | quantized from the original weights (GPTQ) | [Maximilian228/Qwen3.8-Flash-Next-NVFP4-GPTQ-Strata @ `640a1db`](https://huggingface.co/Maximilian228/Qwen3.8-Flash-Next-NVFP4-GPTQ-Strata/tree/640a1db97446ddd5e89d2b70ecd0297987192c93) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json), [2026-11-27-fix](../../../published/plain/rtx5090-128g/2026-11-27-fix/models.json)) |
 | nvfp4 | NVFP4-NVIDIA | 128.0 | quantized from the original weights (RTN) | [Maximilian228/Qwen3.8-Flash-Next-NVIDIA-NVFP4-Strata @ `cca8f7f`](https://huggingface.co/Maximilian228/Qwen3.8-Flash-Next-NVIDIA-NVFP4-Strata/tree/cca8f7fee5ce0af932097340a75e06df25c4e57d) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
 | nvfp4 | NVFP4-QAD | 102.3 | retrained for FP4 | [nvidia/Qwen3.8-Flash-Next-FP4-Local @ `b9ce18a`](https://huggingface.co/nvidia/Qwen3.8-Flash-Next-FP4-Local/tree/b9ce18a6887e18c089fdea8509a33e63429a3300) ([2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/models.json)) |
 | sync | Sync-XS | 24.1 | Sync-Strata's quantization (for 24 GB of RAM or less) | – |
