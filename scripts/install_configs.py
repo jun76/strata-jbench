@@ -39,10 +39,11 @@ def config_path(fam, model):
 
 
 def plan_download_gb(fam, model, card):
-    out = subprocess.run(['strata', 'launch', '--plan', '--family', fam, '--model', model, '--context', '128k',
+    sfam, smodel = own_build.target(fam, model)
+    out = subprocess.run(['strata', 'launch', '--plan', '--family', sfam, '--model', smodel, '--context', '128k',
                           '--vision', 'off', '--parallel', '1', '--tune', 'skip', '--port', '18600', '--drafting', 'mtp',
-                          '--gpu', str(card), '--output', 'json'], capture_output=True, text=True, timeout=180,
-                         cwd='/tmp').stdout
+                          '--gpu', str(card), '--output', 'json', *own_build.launch_extra(fam, model)],
+                         capture_output=True, text=True, timeout=180, cwd='/tmp').stdout
     try:
         return json.loads(out[out.index('{'):])['plan']['download']['gb']
     except (ValueError, KeyError):
@@ -59,6 +60,9 @@ def needs_install(fam, model, card):
         return f'run config for card {cfg.get("gpus") or cfg.get("gpu")}, not {card}'
     if fam in HELPER_FAMILIES and cfg.get('mtp') is False:
         return 'run config has the MTP draft layer off'
+    mine = own_build.pinned_file(fam, model)
+    if mine and str(mine) not in cfg.get('args', []):   # Strata keeps an older file of the build where it has one
+        return f'run config does not name {mine.name}'
     gb = plan_download_gb(fam, model, card)
     if gb:
         return f'launch --plan would download {gb} GB'
@@ -96,8 +100,11 @@ def run_install(args):
 
 
 def install_args(fam, model, card):
-    args = ['strata', 'install', '--family', fam, '--model', model, '--yes', '--no-start', '--context', '131072',
+    sfam, smodel = own_build.target(fam, model)
+    args = ['strata', 'install', '--family', sfam, '--model', smodel, '--yes', '--no-start', '--context', '131072',
             '--vision', 'no', '--gpu', str(card)]
+    if own_build.custom(fam, model):   # as strata launch passes one of its custom builds to setup
+        args += ['--gguf-dir', str(own_build.pinned_file(fam, model)), '--custom-label', model]
     if fam in HELPER_FAMILIES:
         args += ['--mtp', 'on']
     if fam in ('qwen', 'coder'):
@@ -119,7 +126,12 @@ def main():
         if own_build.own(fam, model):   # its run config is jbench's own (scripts/own_build.py prepare), not setup's
             print(f'{fam} {model}: {own_build.state(fam, model) or "run config ok (jbench\'s own)"}', flush=True)
             continue
-        if not overnight.model_complete(fam, model):
+        if own_build.pinned(fam, model):   # one file the catalog pins: not in the downloads' manifest
+            missing = own_build.pinned_state(fam, model)
+            if missing:
+                print(f'{fam} {model}: {missing}; skipped', flush=True)
+                continue
+        elif not overnight.model_complete(fam, model):
             print(f'{fam} {model}: files not all on disk yet; skipped', flush=True)
             continue
         why = needs_install(fam, model, card)
@@ -127,7 +139,7 @@ def main():
             print(f'{fam} {model}: run config ok', flush=True)
             continue
         args = install_args(fam, model, card)
-        away = outside_strata_folder(fam, model)
+        away = [] if own_build.pinned(fam, model) else outside_strata_folder(fam, model)
         if away:
             failed.append(f'{fam} {model}')
             print(f'{fam} {model}: {why}, but not installed: Strata reads {fam} only from '

@@ -91,6 +91,11 @@ def model_items(models):
             items.append({'item': 'models', 'what': f'{fam} {model}', 'state': 'missing' if why else 'ok', 'detail': why,
                           'fix': why, 'bytes': None, '_files': []})
             continue
+        if own_build.pinned(fam, model):   # one file the catalog pins itself (catalog "pinned"): not in the manifest either
+            why = own_build.pinned_state(fam, model)
+            items.append({'item': 'models', 'what': f'{fam} {model}', 'state': 'missing' if why else 'ok', 'detail': why,
+                          'fix': why, 'bytes': None, '_files': []})
+            continue
         files = [f for f in m['files'] if (f.get('family'), f['model']) == (fam, model)]
         if not files:
             items.append({'item': 'models', 'what': f'{fam} {model}', 'state': 'not in downloads/manifest.json',

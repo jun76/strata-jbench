@@ -72,4 +72,19 @@
   that starts downloading a model file (`envs.STRATA_FOLDER_ONLY`; SQ-64 and Engram were fetched twice on 2026-11-22).
   Run `strata install` by hand only through `install_configs.py`.
 - Since 0.2.18 Strata's source keeps `setup.py`, `tools/` and the requirements in `terminal/`; the scripts read either layout.
+- Inkling-2-Mini (`inkling-2-mini`, since 0.2.19) has its own engine program too (`strata-inkling`). Since 0.2.23 its
+  only drafter is DFlash 2, read from `dflash2.safetensors` beside the model file (Strata's pre-quantized copy,
+  551,600,700 bytes, pinned in `strata_control/inkling_family.py`; without the file the engine starts with
+  `--draft off`). Strata's default for it is `auto`, a probe at the first start that turns it on only where it gains
+  1.10x, so the runner adds `--drafting dflash2` (catalog `"drafter"`, `"launch"`) and fails a case whose engine line
+  lacks `--draft dflash2`. The same release replaced SQ-20's file under the same name; Strata keeps the old file
+  running where an install has it, and only an install run again (`scripts/install_configs.py`) writes the new one into
+  the run config. Builds whose file the catalog pins itself (`"pinned"`: SQ-20-v2, the GSQ-RCO files, three of them as
+  Strata's custom builds) are checked by `scripts/own_build.py`, not by the downloads' manifest.
+- A launch with `--data-dir` saves that folder as Strata's data folder (`data_dir` in
+  `~/.config/strata/settings.json`): after the Gyro-S v2 launches of 2026-11-27 it pointed at the build's own data
+  folder, where Strata's own downloads would have gone and where `envs.strata_models_dir()` looks for Hy4-Flash and
+  Inkling-2-Mini. It happens only at a launch that runs Strata's setup (another context than the run config's). The
+  runner puts the setting back after every launch it gave `--data-dir` and says so in the session's `launch.txt`
+  (`own_build.restore_data_dir`; only `data_dir` is written, and only when the launch changed it).
 - Q2_0's first launch builds a pack for AVX-512 (about 40 GB). The first launch's time is not part of the measurements.

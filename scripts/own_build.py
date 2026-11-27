@@ -15,9 +15,25 @@ saved run configs and the files of the model it knows are never touched, and bot
 prepare needs the run config Strata wrote for the model it knows ("as": installed on this PC) and writes nothing
 outside the folder of the file and tools/strata-install/. After each launch the runner checks that the engine's
 command line names jbench's file: a launch that ran Strata's setup would write the known model's paths back.
+
+A build with "pinned" is one file the catalog itself pins (repo, revision, file, bytes, sha256), for a model whose
+engine reads one file and needs no pack (Inkling-2-Mini). Three kinds, by what else the record says:
+
+    "pinned": {...}                      a build Strata lists under the same name (GSQ-RCO-IQ3_S): the file is in
+                                         Strata's own folder for the family, with its finish mark
+    "pinned": {"as": "SQ-20", ...}       a build Strata lists under another name (SQ-20-v2: Strata 0.2.23 calls the new
+                                         file SQ-20 as it called the old one); launched and installed under Strata's name
+    "pinned": {"custom": {"base": "GSQ-RCO-IQ3_S", "group": "<provision models group>"}, ...}
+                                         a file Strata does not list, run as one of Strata's custom builds (0.2.23 on):
+                                         every launch names it (--model-path FILE --custom-label <model>) with the
+                                         settings of "base"; Strata writes a run config of its own for it
+                                         (strata-<family>-custom-<slug>.json) and never copies the file
+
+For all three the runner checks that the engine was started on the pinned file.
 """
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -45,15 +61,74 @@ def builds():
     return [(f, m) for f, m, *_ in catalog.builds() if own(f, m)]
 
 
+def pinned(fam, model):
+    """The build's "pinned" record (one file the catalog pins), or None."""
+    for base in catalog.load():
+        for e in base['builds']:
+            if (e['family'], e['model']) == (fam, model):
+                return e.get('pinned')
+    return None
+
+
+def custom(fam, model):
+    """The "custom" part of a pinned build Strata does not list ({"base", "group"}), or None."""
+    return (pinned(fam, model) or {}).get('custom')
+
+
+def slug(text):
+    """Strata's slug of a custom build's name (strata_control/custom_models.py)."""
+    return re.sub(r'-{2,}', '-', re.sub(r'[^a-z0-9]+', '-', str(text).lower())).strip('-')[:40] or 'build'
+
+
 def target(fam, model):
     """(family, model) as Strata knows it."""
     o = own(fam, model)
-    return tuple(o['as']) if o else (fam, model)
+    if o:
+        return tuple(o['as'])
+    p = pinned(fam, model) or {}
+    return fam, p.get('as') or (p.get('custom') or {}).get('base') or model
 
 
 def tag(fam, model):
+    if custom(fam, model):
+        return f'{fam}-custom-{slug(model)}'
     fam, model = target(fam, model)
     return model.lower() if fam == 'qwen' else f'{fam}-{model.lower()}'
+
+
+def pinned_file(fam, model):
+    """Where a pinned build's file is: Strata's own folder for the family, or for a custom build the folder recorded
+    for its group (tools/provision.json). None when no folder is recorded."""
+    p = pinned(fam, model)
+    if not p:
+        return None
+    if p.get('custom'):
+        where = provision.models(p['custom']['group']).get('path')
+        return Path(where) / p['file'] if where else None
+    import envs
+    return envs.strata_models_dir() / fam / p['file']
+
+
+def pinned_state(fam, model):
+    """None when a pinned build's file is on disk as pinned, else what is missing. The SHA-256 is checked when the
+    file is fetched (its finish mark, <file>.done, holds it); here the size and the mark."""
+    p, f = pinned(fam, model), pinned_file(fam, model)
+    fetch = f'hf download {p["repo"]} {p["file"]} --revision {p["revision"]} --local-dir DIR'
+    if not f:
+        return f'no folder recorded for it: {fetch}, then python3 -I scripts/provision.py set-models {p["custom"]["group"]} --path DIR'
+    if not f.is_file():
+        return f'{f} is missing ({fetch}; check its SHA-256 {p["sha256"]} and write "sha256 <hash>" into {f.name}.done)'
+    if f.stat().st_size != p['bytes']:
+        return f'{f} has {f.stat().st_size} bytes, the pin {p["bytes"]}'
+    mark = f.with_name(f.name + '.done')
+    if not mark.is_file() or mark.read_text().split()[-1:] != [p['sha256']]:
+        return f'{mark} does not say sha256 {p["sha256"]} (sha256sum {f})'
+    return None
+
+
+def expected_file(fam, model):
+    """The file the engine has to be started on, for a build with files of jbench's own or a pinned one; else None."""
+    return model_file(fam, model) if own(fam, model) else pinned_file(fam, model)
 
 
 def install_dir(fam, model):
@@ -76,8 +151,45 @@ def launch_extra(fam, model):
     run config was written for) otherwise takes the known model's file: on 2026-11-26 it fetched Gyro-S (58.5 GB) into
     the build's data folder and started that. With --model-path alone the pack is built again in a folder Strata
     derives from the file's path, where no drafter is."""
+    if custom(fam, model):   # one of Strata's custom builds: the file where it is, under the build's name
+        f = pinned_file(fam, model)
+        return ['--model-path', str(f), '--custom-label', model] if f else []
     f = model_file(fam, model) if own(fam, model) else None
     return ['--model-path', str(f), '--data-dir', str(data_dir(fam, model))] if f else []
+
+
+STRATA_SETTINGS = Path.home() / '.config/strata/settings.json'
+
+
+def saved_data_dir():
+    """Strata's saved data folder ("data_dir" in ~/.config/strata/settings.json), or None when it has none."""
+    try:
+        return json.loads(STRATA_SETTINGS.read_text()).get('data_dir')
+    except (OSError, ValueError):
+        return None
+
+
+def restore_data_dir(before):
+    """Put Strata's saved data folder back to what it was before a launch with --data-dir: strata launch saves the
+    folder it is given as the default for the next start and for the app (it passes setup --set-default-data-dir
+    whenever --data-dir is there), so after a Gyro-S v2 launch Strata's own downloads went to the build's data folder
+    and Hy4-Flash and Inkling-2-Mini were looked for there (2026-11-27). Only "data_dir" is written, and only when
+    the launch changed it. Returns the folder the launch had saved, or None when nothing was changed."""
+    try:
+        doc = json.loads(STRATA_SETTINGS.read_text())
+    except (OSError, ValueError):
+        return None
+    now = doc.get('data_dir')
+    if now == before:
+        return None
+    if before is None:
+        doc.pop('data_dir', None)
+    else:
+        doc['data_dir'] = before
+    tmp = STRATA_SETTINGS.with_name(STRATA_SETTINGS.name + '.jbench-tmp')
+    tmp.write_text(json.dumps(doc, indent=1))
+    tmp.replace(STRATA_SETTINGS)
+    return now
 
 
 def before_launch(fam, model):
@@ -194,6 +306,10 @@ def main():
     for fam, model in builds():
         o = own(fam, model)
         print(f'{fam} {model}: started as {" ".join(o["as"])} from tools/strata-install/{o["install"]}/: {state(fam, model) or "ok"}')
+    for fam, model, *_ in catalog.builds():
+        if pinned(fam, model):
+            how = 'a custom build' if custom(fam, model) else 'Strata\'s ' + target(fam, model)[1]
+            print(f'{fam} {model}: pinned file, started as {how}: {pinned_state(fam, model) or "ok"} ({pinned_file(fam, model)})')
 
 
 if __name__ == '__main__':

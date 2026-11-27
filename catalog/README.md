@@ -18,7 +18,7 @@ One file per base model. What is said at the top holds for every build of it.
 | `max_context` | The longest context its engine takes (`null`: no limit of its own). Longer cases are not made |
 | `thinking` | `false`: served with thinking off only. Its thinking-on cases are not made and the coding task is asked with thinking off |
 | `lineup` | `main` or `other`. The representatives of the long-context and launch-option cases (the largest, the smallest) are picked among the `main` builds; an `other` base model still gets its own largest build there |
-| `drafter` | `{"pin": "mtp", "also": {"dflash2": [families]}}`: the runner pins this drafter at launch, and the families listed are measured once more with the other one. `{"builtin": "dfly2", "label": "DFly2", "reports_counts": false}`: the builds carry their own drafter, the runner pins nothing and checks that the engine started with it; `reports_counts: false` when the engine's responses carry no draft counts (no acceptance rate) |
+| `drafter` | `{"pin": "mtp", "also": {"dflash2": [families]}}`: the runner pins this drafter at launch, and the families listed are measured once more with the other one. `{"builtin": "dfly2", "label": "DFly2", "reports_counts": false}`: the model has a drafter of its own, the runner pins no MTP layer and checks that the engine started with it (`--draft <builtin>`); `"launch": [...]` is what the launch adds where Strata would not turn it on by itself (Inkling-2-Mini: `--drafting dflash2`); `reports_counts: false` when the engine's responses carry no draft counts (no acceptance rate) |
 | `builds` | The builds, in page order |
 
 A build:
@@ -42,6 +42,12 @@ Notes on particular builds (kept here, JSON has no comments):
   is not counted.
 - **Inkling-2-Mini** (Strata 0.2.19 on): its own engine program (strata-inkling), Strata's `.strata` v1.1 builds. The
   size is the build's file (Strata's inkling_fit footprint is the same).
+  Since Strata 0.2.23 its only drafter is DFlash 2 (`dflash2.safetensors` beside the model: Strata's pre-quantized copy,
+  551,600,700 bytes; DSpark is gone), and Strata's default is a probe that turns it on only where it gains, so the
+  launch asks for it (`"launch"`). The same release replaced SQ-20's file (`Inkling-2-Mini-SQv2-20.strata`, the 16 KiB
+  layout) under the same name: here it is `SQ-20-v2`, and the SQ-20 of 0.2.22 and before is no longer a build of the
+  catalog (its results are in the snapshots of the runs that measured it). The GSQ-RCO builds are ISTA-DASLab's GGUF
+  files: Strata offers IQ3_S; IQ3_XXS, Q2_K_XL and IQ2_S are run as Strata's custom builds with IQ3_S's settings.
 
 Where a property belongs to the pair of an engine and a model rather than to the model (the drafter, today), it will
 move to the engine's entry when engines get a catalog of their own.
@@ -69,6 +75,17 @@ tensor types as Gyro-S, other expert weights). jbench keeps the file, a pack bui
 folder of its own, and starts the model Strata knows (`"as"`) with `STRATA_INSTALL_DIR` pointing there, so Strata's
 saved run configs and the known model's files stay as they are (`scripts/own_build.py`: `prepare`, and the state on
 this PC). `"repo"`, `"revision"`, `"file"` and `"sha256"` say where the file comes from.
+
+A build with `"pinned"` is one file the catalog itself pins (`"repo"`, `"revision"`, `"file"`, `"bytes"`, `"sha256"`),
+for a model whose engine reads one file and needs no pack (Inkling-2-Mini); Strata's source checkout is not asked
+about it, so it is not in `downloads/manifest.json`. With nothing else it is a build Strata lists under the same name,
+its file in Strata's own folder for the family with its finish mark (`<file>.done`: `sha256 <hash>`). With `"as"` it is
+a build Strata lists under another name (`SQ-20-v2`: Strata's `SQ-20`). With `"custom": {"base", "group"}` it is a file
+Strata does not list, run as one of Strata's custom builds (0.2.23 on): every launch names the file where it is
+(`--model-path`, in the folder `tools/provision.json` records for `group`) and the build (`--custom-label`), with the
+settings of `base`; Strata writes a run config of its own for it (`strata-<family>-custom-<slug>.json`) and never
+copies the file. For all of them the runner fails a launch whose engine was not started on the pinned file
+(`scripts/own_build.py` lists them and their state on this PC).
 
 ## tasks.json
 

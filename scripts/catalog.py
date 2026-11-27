@@ -25,7 +25,8 @@ LANGS = ('ja', 'en', 'zh')
 
 BASE_KEYS = {'base', 'order', 'label', 'tokenizer', 'trained_context', 'max_context', 'thinking', 'lineup', 'drafter',
              'builds'}
-BUILD_KEYS = {'family', 'model', 'size_gb', 'role', 'derivative', 'display', 'engines', 'own'}
+BUILD_KEYS = {'family', 'model', 'size_gb', 'role', 'derivative', 'display', 'engines', 'own', 'pinned'}
+PINNED_KEYS = {'repo', 'revision', 'file', 'bytes', 'sha256'}
 
 
 def bases():
@@ -59,6 +60,16 @@ def problems(found=None):
                     out.append(f'{name}: a build without "{k}": {e}')
             for k in sorted(set(e) - BUILD_KEYS):
                 out.append(f'{name} {key}: unknown key "{k}"')
+            if 'pinned' in e:
+                pin = e['pinned']
+                for k in sorted(PINNED_KEYS - set(pin)):
+                    out.append(f'{name} {key}: "pinned" without "{k}"')
+                for k in sorted(set(pin) - PINNED_KEYS - {'as', 'custom'}):
+                    out.append(f'{name} {key}: "pinned" has an unknown key "{k}"')
+                if 'own' in e or ('as' in pin and 'custom' in pin):
+                    out.append(f'{name} {key}: one of "own", "pinned" with "as", "pinned" with "custom"')
+                if 'custom' in pin and set(pin['custom']) != {'base', 'group'}:
+                    out.append(f'{name} {key}: "custom" is {{"base": the build whose settings it takes, "group": its folder in tools/provision.json}}')
             if key in seen:
                 out.append(f'{name}: {key[0]} {key[1]} is listed twice')
             seen.add(key)

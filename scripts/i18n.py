@@ -49,7 +49,9 @@ TR = {
         'Strata 的量化（另一模型 Hy4-Flash，面向 128 GB 内存，最接近原始权重）'),
     'Strata の量子化 (別モデル Inkling-2-Mini、小さく速い)': ('Strata\'s quantization (another model, Inkling-2-Mini, small and fast)', 'Strata 的量化（另一模型 Inkling-2-Mini，小而快）'),
     'Strata の量子化 (別モデル Inkling-2-Mini、作者の推奨)': ('Strata\'s quantization (another model, Inkling-2-Mini, the author\'s pick)', 'Strata 的量化（另一模型 Inkling-2-Mini，作者推荐）'),
-    'Strata の量子化 (別モデル Inkling-2-Mini、元重みと同じ)': ('Strata\'s quantization (another model, Inkling-2-Mini, lossless)', 'Strata 的量化（另一模型 Inkling-2-Mini，与原权重相同）'),
+    'Strata の量子化 (別モデル Inkling-2-Mini、元重みと同じ、0.2.23 からのファイル)': ('Strata\'s quantization (another model, Inkling-2-Mini, lossless, the file since 0.2.23)', 'Strata 的量化（另一模型 Inkling-2-Mini，与原权重相同，0.2.23 起的文件）'),
+    'ISTA-DASLab の量子化 (別モデル Inkling-2-Mini、GSQ-RCO、Strata が配るビルド)': ('ISTA-DASLab\'s quantization (another model, Inkling-2-Mini, GSQ-RCO, the build Strata offers)', 'ISTA-DASLab 的量化（另一模型 Inkling-2-Mini，GSQ-RCO，Strata 提供的版本）'),
+    'ISTA-DASLab の量子化 (別モデル Inkling-2-Mini、GSQ-RCO、Strata の一覧に無いファイル)': ('ISTA-DASLab\'s quantization (another model, Inkling-2-Mini, GSQ-RCO, a file Strata does not list)', 'ISTA-DASLab 的量化（另一模型 Inkling-2-Mini，GSQ-RCO，Strata 列表中没有的文件）'),
     # input contents
     '日本語の説明文': ('Japanese explanatory prose', '日语说明文'),
     '英語の説明文': ('English explanatory prose', '英语说明文'),

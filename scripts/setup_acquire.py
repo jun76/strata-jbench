@@ -117,7 +117,8 @@ def env_choices():
     import case_plan
     import envs
     case_plan.use_env(envs.load(envs.current()))
-    return [(f, m) for f, m, *_ in case_plan.env_models() if not own_build.own(f, m)]   # Strata's setup lists these
+    # Strata's setup (the checkout's) lists these; a build with files of jbench's own or a file the catalog pins is not in the manifest
+    return [(f, m) for f, m, *_ in case_plan.env_models() if not own_build.own(f, m) and not own_build.pinned(f, m)]
 
 
 def main():

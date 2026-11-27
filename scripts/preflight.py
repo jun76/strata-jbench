@@ -104,8 +104,9 @@ def bench_checks(steps, env_id):
     if engine_id == engines.DEFAULT:
         bad = []
         for fam, model in models:
-            why = own_build.state(fam, model) if own_build.own(fam, model) else None
-            if why:        # a build with files of jbench's own (catalog "own")
+            why = own_build.state(fam, model) if own_build.own(fam, model) else \
+                own_build.pinned_state(fam, model) if own_build.pinned(fam, model) else None
+            if why:        # a build with files of jbench's own (catalog "own"), or one file the catalog pins ("pinned")
                 bad.append(f'{fam}:{model} {why}')
                 continue
             sfam, smodel = own_build.target(fam, model)
@@ -130,7 +131,7 @@ def bench_checks(steps, env_id):
         install = Path.home() / '.local/share/strata/install'
         off = []
         for fam, model in models:
-            if fam in case_plan.OWN_DRAFTER:   # its own drafter (DFly2, DSpark: catalog "drafter"), no MTP layer
+            if fam in case_plan.OWN_DRAFTER:   # its own drafter (DFly2, DFlash 2: catalog "drafter"), no MTP layer
                 continue
             conf = own_build.config_path(fam, model)
             try:

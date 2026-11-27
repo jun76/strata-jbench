@@ -21,6 +21,9 @@ from engines import Engine  # noqa: E402
 # Families whose builds carry their own drafter (catalog "drafter": {"builtin": ...}; also skipped by preflight's MTP
 # check), with the --draft value serve gives their engine (serve/hy4_kind.py, serve/inkling_kind.py)
 OWN_DRAFTER = {f: b['drafter']['builtin'] for f, b in catalog.by_family().items() if 'builtin' in b['drafter']}
+# What the launch adds to have that drafter on (catalog "drafter": {"launch": [...]}): Inkling-2-Mini's default since
+# 0.2.23 is "auto", a probe at the first start that turns DFlash 2 on only where it gains 1.10x, so it is asked for.
+DRAFTER_LAUNCH = {f: b['drafter'].get('launch') or [] for f, b in catalog.by_family().items() if 'builtin' in b['drafter']}
 
 
 def kill_session(sid):
@@ -77,10 +80,11 @@ class Adapter(Engine):
         # its args; every later launch of that model then ran without the draft layer (qwen IQ3_S in 2026-11-03-main).
         # --mtp on makes such a setup write it back on; a launch that runs no setup cannot, so preflight checks the installed
         # configs and verify checks that the layer loaded.
-        # A family with a drafter of its own (Hy4-Flash: DFly2, Inkling-2-Mini: DSpark, built into its builds) has no MTP
-        # layer: it starts with its own, Strata's default for it, and only Tier 5's --drafting off changes that.
-        if '--drafting' not in opts and row['family'] not in OWN_DRAFTER:
-            args += ['--drafting', 'mtp', '--mtp', 'on']
+        # A family with a drafter of its own (Hy4-Flash: DFly2, built into its builds; Inkling-2-Mini: DFlash 2, a file
+        # beside the model) has no MTP layer: it starts with its own (asked for where the catalog says how), and only
+        # Tier 5's --drafting off changes that.
+        if '--drafting' not in opts:
+            args += DRAFTER_LAUNCH[row['family']] if row['family'] in OWN_DRAFTER else ['--drafting', 'mtp', '--mtp', 'on']
         return args + shlex.split(opts)
 
     @staticmethod
@@ -129,6 +133,10 @@ class Adapter(Engine):
         args = self.launch_args(row)
         timeout = self.ctx.get('launch_timeout', 3 * 3600)
         t0 = time.time()
+        # a launch with --data-dir (a build with files of jbench's own) saves that folder as Strata's data folder:
+        # it is put back once the launch has returned (own_build.restore_data_dir)
+        data_before = own_build.saved_data_dir() if '--data-dir' in args else None
+        restore = (lambda: own_build.restore_data_dir(data_before)) if '--data-dir' in args else (lambda: None)
         # its own session, so that a launch given up on can be killed with everything it started: the tuner
         # (strata.py tune) outlives the CLI and goes on starting engines, which the next session would launch beside
         p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True,
@@ -138,11 +146,14 @@ class Adapter(Engine):
         except subprocess.TimeoutExpired:
             kill_session(p.pid)
             stdout, stderr = p.communicate()
+            restore()
             (session_dir / 'launch.txt').write_text(shlex.join(args) + '\n\n' + stdout + stderr
                                                     + f'\n[launch timed out after {timeout} s]\n')
             return {'argv': args, 'rc': None, 'launch_s': round(time.time() - t0, 1),
                     'error': f'launch timed out after {timeout} s'}
-        (session_dir / 'launch.txt').write_text(shlex.join(args) + '\n\n' + stdout + stderr)
+        changed = restore()
+        (session_dir / 'launch.txt').write_text(shlex.join(args) + '\n\n' + stdout + stderr + (
+            f"\n[jbench: the launch saved {changed} as Strata's data folder; put back to {data_before}]\n" if changed else ''))
         info = {'argv': args, 'rc': p.returncode, 'launch_s': round(time.time() - t0, 1)}
         if p.returncode != 0 or 'Ready:' not in stdout:
             info['error'] = (stdout + stderr)[-800:]
@@ -161,9 +172,10 @@ class Adapter(Engine):
         text = Path(info['engine_log']).read_text(errors='replace')
         part = text[info['engine_log_offset']:]
         # a build with files of jbench's own: a launch that ran Strata's setup writes the known model's paths back
-        mine = own_build.model_file(row['family'], row['model']) if own_build.own(row['family'], row['model']) else None
+        # (and a build the catalog pins the file of: Strata keeps an older file of the same build running where it has one)
+        mine = own_build.expected_file(row['family'], row['model'])
         if mine and f'--native {mine} ' not in part.split('\n', 1)[0] + ' ':
-            info['error'] = f'the engine was not started on {mine} (python3 -I scripts/own_build.py prepare {row["family"]} {row["model"]})'
+            info['error'] = f'the engine was not started on {mine} (python3 -I scripts/own_build.py)'
             info['setting_missing'] = ['own file']
             return False
         # MTP asked for but not loaded: the engine serves (with suffix drafts only), so only its log tells
