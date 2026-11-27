@@ -21,6 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from i18n import one, tr, untranslated  # noqa: E402
+import engines  # noqa: E402
 import envs  # noqa: E402
 import catalog  # noqa: E402
 import machine_info  # noqa: E402
@@ -294,6 +295,10 @@ def evidence_md(r, up):
     return f'[{r["run_id"]}]({up}{folder.rsplit("/", 1)[0]}/)' if folder else r['run_id']
 
 
+def engine_label(engine_id):
+    return engines.entry(engine_id)['label']
+
+
 def write_md(rows, out, cfg, published_only=False):
     """cases/<division>/<env>/ (or preview/cases/...): README*.md, tier-<step>*.md and tier-<step>.csv. Links to the result
     files are relative, so they also work at the tag a publish leaves (scripts/publish.py)."""
@@ -351,10 +356,10 @@ def write_md(rows, out, cfg, published_only=False):
                              f'{sum(r["status"] == "done" for r in lst)} |\n')
         text[-1] += ''.join(tier_rows)
         text.append(f'\n## {L("モデル", "Models", "模型")}\n\n'
-                    f'| family | model | GB | {L("種別", "kind", "类别")} | '
+                    f'| {L("エンジン", "engine", "引擎")} | family | model | GB | {L("種別", "kind", "类别")} | '
                     f'{L("測った版（リポジトリ @ コミット、RUN_ID の models.json）", "version measured (repository @ commit, the RUN_ID's models.json)", "测量的版本（仓库 @ 提交，RUN_ID 的 models.json）")} |\n'
-                    '| --- | --- | ---: | --- | --- |\n')
-        text[-1] += ''.join(f'| {f} | {display_model(f, m)} | {gb} | {md(tr(role, lang))} | {versions.get((f, m), "–")} |\n'
+                    '| --- | --- | --- | ---: | --- | --- |\n')
+        text[-1] += ''.join(f'| {engine_label(case_plan.ENGINES_OF[(f, m)][0])} | {f} | {display_model(f, m)} | {gb} | {md(tr(role, lang))} | {versions.get((f, m), "–")} |\n'
                             for f, m, gb, role in page_models(rows))
         harness = division.get('harness')
         text.append(f'\n## {L("全ケース共通の条件", "Conditions shared by every case", "所有用例的共同条件")}\n\n{(HARNESS_COMMON if harness else COMMON)[lang]}')
@@ -369,8 +374,10 @@ def write_md(rows, out, cfg, published_only=False):
             labels = dict(COLUMNS)
             head = ([L('状態', 'status', '状态')] + [heading(labels.get(k, k), lang) for k in TIER_COLS]
                     + [L('結果', 'result', '结果'), L('エビデンス', 'evidence', '证据')])
-            body = []
-            for r in lst:
+            body, by_engine = [], list(dict.fromkeys(r.get('engine') or engines.DEFAULT for r in lst))
+            for r in sorted(lst, key=lambda r: by_engine.index(r.get('engine') or engines.DEFAULT)):   # one table per engine
+                if len(by_engine) > 1 and (r.get('engine') or engines.DEFAULT) != (body and body[-1][0]):
+                    body.append((r.get('engine') or engines.DEFAULT, None))
                 cells = []
                 for k in TIER_COLS:
                     if k == 'id':
@@ -381,14 +388,21 @@ def write_md(rows, out, cfg, published_only=False):
                         cells.append(r['context_label'] + (f' (YaRN {r["yarn"]})' if r.get('yarn') else ''))
                     else:
                         cells.append(md(tr(cell(r[k], k), lang)))
-                body.append('| ' + ' | '.join([r['status']] + cells + [md(result_md(r, lang)), evidence_md(r, up)]) + ' |')
+                body.append((r.get('engine') or engines.DEFAULT,
+                             '| ' + ' | '.join([r['status']] + cells + [md(result_md(r, lang)), evidence_md(r, up)]) + ' |'))
             info = L(*TIER_INFO[step]) if step in TIER_INFO else ''
             page = [langs_line(f'tier-{step}'), f'[{L("← ケース一覧", "← cases", "← 用例一览")}](README{suffix}.md)\n',
                     f'# Tier {step}: {info}\n', f'{envs.label(cfg)} · ' + L(
                         f'{len(lst):,} ケース / {sum(r["reps"] for r in lst):,} リクエスト。ほかのパラメータ（入力の内容、見るもの、備考、seed、timeout、起動セッション）は [tier-{step}.csv](tier-{step}.csv)。',
                         f'{len(lst):,} cases / {sum(r["reps"] for r in lst):,} requests. The other parameters (input, measures, notes, seeds, timeout, launch session) are in [tier-{step}.csv](tier-{step}.csv).',
                         f'{len(lst):,} 个用例 / {sum(r["reps"] for r in lst):,} 个请求。其他参数（输入内容、测量内容、备注、seed、timeout、启动会话）见 [tier-{step}.csv](tier-{step}.csv)。') + '\n',
-                    '| ' + ' | '.join(head) + ' |', '| ' + ' | '.join(['---'] * len(head)) + ' |', *body, '']
+                    ]
+            table = ['| ' + ' | '.join(head) + ' |', '| ' + ' | '.join(['---'] * len(head)) + ' |']
+            if len(by_engine) < 2:
+                page += table
+            for eng, line in body:
+                page += [f'\n## {engine_label(eng)}\n', *table] if line is None else [line]
+            page.append('')
             (out / tier_file(step, lang)).write_text('\n'.join(page))
 
     for old in out.glob('*.csv'):

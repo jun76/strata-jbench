@@ -6,6 +6,9 @@
 
 GeForce RTX 5090 · 128 GB RAM · 298 个用例 / 894 个请求。其他参数（输入内容、测量内容、备注、seed、timeout、启动会话）见 [tier-3.csv](tier-3.csv)。
 
+
+## Strata
+
 | 状态 | case id | model | context | 配置 | 启动选项（相对默认） | fixture | effort | temp | 并发 | 输入 token | 输出 cap | 次数 | 结果 | 证据 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | done | `T3-qwen-Q2_0-math-1-none` | qwen Q2_0 | 128K | baseline |  | math-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 | prefill 382.4 / decode 285.1 / TTFT ms 233.3 / 接受率 0.779 / 正确 3/3 | [2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/cases/T3-qwen-Q2_0-math-1-none/) |
@@ -239,33 +242,6 @@ GeForce RTX 5090 · 128 GB RAM · 298 个用例 / 894 个请求。其他参数�
 | done | `T3-inkling-2-mini-SQ-20-reason-ja-1-none` | inkling-2-mini SQ-20 | 128K | baseline |  | reason-ja-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 | prefill 4197.8 / decode 188.2 / TTFT ms 66.7 / 接受率 0.476 / 正确 0/3 | [2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/cases/T3-inkling-2-mini-SQ-20-reason-ja-1-none/) |
 | done | `T3-inkling-2-mini-SQ-20-reason-en-1-none` | inkling-2-mini SQ-20 | 128K | baseline |  | reason-en-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 | prefill 3118.5 / decode 167.2 / TTFT ms 57.2 / 接受率 0.207 / 正确 2/3 | [2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/cases/T3-inkling-2-mini-SQ-20-reason-en-1-none/) |
 | done | `T3-inkling-2-mini-SQ-20-coding-harbor-none` | inkling-2-mini SQ-20 | 128K | baseline |  | coding-harbor | none | 1.0 | 1 | 短文 | 130,048 | 3 | prefill 2280.3 / decode 200.3 / TTFT ms 70.0 / 接受率 0.513 | [2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/cases/T3-inkling-2-mini-SQ-20-coding-harbor-none/) |
-| planned | `T3-sync-Sync-XS-math-1-none` | sync Sync-XS | 128K | baseline |  | math-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-XS-math-1-high` | sync Sync-XS | 128K | baseline |  | math-1 | high | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-XS-code-1-none` | sync Sync-XS | 128K | baseline |  | code-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-XS-code-1-high` | sync Sync-XS | 128K | baseline |  | code-1 | high | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-XS-reason-ja-1-none` | sync Sync-XS | 128K | baseline |  | reason-ja-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-XS-reason-ja-1-high` | sync Sync-XS | 128K | baseline |  | reason-ja-1 | high | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-XS-reason-en-1-none` | sync Sync-XS | 128K | baseline |  | reason-en-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-XS-reason-en-1-high` | sync Sync-XS | 128K | baseline |  | reason-en-1 | high | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-XS-coding-harbor-high` | sync Sync-XS | 128K | baseline |  | coding-harbor | high | 1.0 | 1 | 短文 | 130,048 | 3 |  |  |
-| planned | `T3-sync-Sync-S-math-1-none` | sync Sync-S | 128K | baseline |  | math-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-S-math-1-high` | sync Sync-S | 128K | baseline |  | math-1 | high | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-S-code-1-none` | sync Sync-S | 128K | baseline |  | code-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-S-code-1-high` | sync Sync-S | 128K | baseline |  | code-1 | high | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-S-reason-ja-1-none` | sync Sync-S | 128K | baseline |  | reason-ja-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-S-reason-ja-1-high` | sync Sync-S | 128K | baseline |  | reason-ja-1 | high | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-S-reason-en-1-none` | sync Sync-S | 128K | baseline |  | reason-en-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-S-reason-en-1-high` | sync Sync-S | 128K | baseline |  | reason-en-1 | high | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-S-coding-harbor-high` | sync Sync-S | 128K | baseline |  | coding-harbor | high | 1.0 | 1 | 短文 | 130,048 | 3 |  |  |
-| planned | `T3-sync-Sync-M-math-1-none` | sync Sync-M | 128K | baseline |  | math-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-M-math-1-high` | sync Sync-M | 128K | baseline |  | math-1 | high | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-M-code-1-none` | sync Sync-M | 128K | baseline |  | code-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-M-code-1-high` | sync Sync-M | 128K | baseline |  | code-1 | high | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-M-reason-ja-1-none` | sync Sync-M | 128K | baseline |  | reason-ja-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-M-reason-ja-1-high` | sync Sync-M | 128K | baseline |  | reason-ja-1 | high | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-M-reason-en-1-none` | sync Sync-M | 128K | baseline |  | reason-en-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-M-reason-en-1-high` | sync Sync-M | 128K | baseline |  | reason-en-1 | high | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-M-coding-harbor-high` | sync Sync-M | 128K | baseline |  | coding-harbor | high | 1.0 | 1 | 短文 | 130,048 | 3 |  |  |
 | done | `T3-unsloth-UD-IQ4_XS-math-1-none` | unsloth UD-IQ4_XS (pre-v3.1) | 128K | baseline |  | math-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 | prefill 313.4 / decode 218.2 / TTFT ms 300.8 / 接受率 0.789 / 正确 3/3 | [2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/cases/T3-unsloth-UD-IQ4_XS-math-1-none/) |
 | done | `T3-unsloth-UD-IQ4_XS-math-1-high` | unsloth UD-IQ4_XS (pre-v3.1) | 128K | baseline |  | math-1 | high | 1.0 | 1 | 短文 | 16,384 | 3 | prefill 284.0 / decode 167.6 / TTFT ms 472.6 / 接受率 0.841 / 正确 3/3 | [2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/cases/T3-unsloth-UD-IQ4_XS-math-1-high/) |
 | done | `T3-unsloth-UD-IQ4_XS-code-1-none` | unsloth UD-IQ4_XS (pre-v3.1) | 128K | baseline |  | code-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 | prefill 318.1 / decode 162.1 / TTFT ms 362.0 / 接受率 0.787 / 正确 3/3 | [2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/cases/T3-unsloth-UD-IQ4_XS-code-1-none/) |
@@ -306,3 +282,35 @@ GeForce RTX 5090 · 128 GB RAM · 298 个用例 / 894 个请求。其他参数�
 | done | `T3-unsloth-Q8_0-reason-ja-1-high` | unsloth Q8_0 | 128K | baseline |  | reason-ja-1 | high | 1.0 | 1 | 短文 | 16,384 | 3 | prefill 208.4 / decode 54.7 / TTFT ms 1100.3 / 接受率 0.648 / 正确 3/3 | [2026-11-04-q8-t3](../../../published/plain/rtx5090-128g/2026-11-04-q8-t3/cases/T3-unsloth-Q8_0-reason-ja-1-high/) |
 | done | `T3-unsloth-Q8_0-reason-en-1-none` | unsloth Q8_0 | 128K | baseline |  | reason-en-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 | prefill 165.7 / decode 73.7 / TTFT ms 871.1 / 接受率 0.834 / 正确 3/3 | [2026-11-04-q8-t3](../../../published/plain/rtx5090-128g/2026-11-04-q8-t3/cases/T3-unsloth-Q8_0-reason-en-1-none/) |
 | done | `T3-unsloth-Q8_0-reason-en-1-high` | unsloth Q8_0 | 128K | baseline |  | reason-en-1 | high | 1.0 | 1 | 短文 | 16,384 | 3 | prefill 193.9 / decode 57.7 / TTFT ms 947.5 / 接受率 0.746 / 正确 3/3 | [2026-11-04-q8-t3](../../../published/plain/rtx5090-128g/2026-11-04-q8-t3/cases/T3-unsloth-Q8_0-reason-en-1-high/) |
+
+## Sync-Strata
+
+| 状态 | case id | model | context | 配置 | 启动选项（相对默认） | fixture | effort | temp | 并发 | 输入 token | 输出 cap | 次数 | 结果 | 证据 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| planned | `T3-sync-Sync-XS-math-1-none` | sync Sync-XS | 128K | baseline |  | math-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-XS-math-1-high` | sync Sync-XS | 128K | baseline |  | math-1 | high | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-XS-code-1-none` | sync Sync-XS | 128K | baseline |  | code-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-XS-code-1-high` | sync Sync-XS | 128K | baseline |  | code-1 | high | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-XS-reason-ja-1-none` | sync Sync-XS | 128K | baseline |  | reason-ja-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-XS-reason-ja-1-high` | sync Sync-XS | 128K | baseline |  | reason-ja-1 | high | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-XS-reason-en-1-none` | sync Sync-XS | 128K | baseline |  | reason-en-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-XS-reason-en-1-high` | sync Sync-XS | 128K | baseline |  | reason-en-1 | high | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-XS-coding-harbor-high` | sync Sync-XS | 128K | baseline |  | coding-harbor | high | 1.0 | 1 | 短文 | 130,048 | 3 |  |  |
+| planned | `T3-sync-Sync-S-math-1-none` | sync Sync-S | 128K | baseline |  | math-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-S-math-1-high` | sync Sync-S | 128K | baseline |  | math-1 | high | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-S-code-1-none` | sync Sync-S | 128K | baseline |  | code-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-S-code-1-high` | sync Sync-S | 128K | baseline |  | code-1 | high | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-S-reason-ja-1-none` | sync Sync-S | 128K | baseline |  | reason-ja-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-S-reason-ja-1-high` | sync Sync-S | 128K | baseline |  | reason-ja-1 | high | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-S-reason-en-1-none` | sync Sync-S | 128K | baseline |  | reason-en-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-S-reason-en-1-high` | sync Sync-S | 128K | baseline |  | reason-en-1 | high | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-S-coding-harbor-high` | sync Sync-S | 128K | baseline |  | coding-harbor | high | 1.0 | 1 | 短文 | 130,048 | 3 |  |  |
+| planned | `T3-sync-Sync-M-math-1-none` | sync Sync-M | 128K | baseline |  | math-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-M-math-1-high` | sync Sync-M | 128K | baseline |  | math-1 | high | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-M-code-1-none` | sync Sync-M | 128K | baseline |  | code-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-M-code-1-high` | sync Sync-M | 128K | baseline |  | code-1 | high | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-M-reason-ja-1-none` | sync Sync-M | 128K | baseline |  | reason-ja-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-M-reason-ja-1-high` | sync Sync-M | 128K | baseline |  | reason-ja-1 | high | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-M-reason-en-1-none` | sync Sync-M | 128K | baseline |  | reason-en-1 | none | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-M-reason-en-1-high` | sync Sync-M | 128K | baseline |  | reason-en-1 | high | 1.0 | 1 | 短文 | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-M-coding-harbor-high` | sync Sync-M | 128K | baseline |  | coding-harbor | high | 1.0 | 1 | 短文 | 130,048 | 3 |  |  |

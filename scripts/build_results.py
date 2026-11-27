@@ -360,12 +360,14 @@ def collect_env(cfg, run_id, published_only, rel=''):
     # Every model in every environment and chart: which ones an environment measures is the measurer's choice (a disk
     # too small for some), not a property of the environment, so a model it has no value for reads "not measured".
     models = [{'key': f'{f} {dm(f, m)}', 'family': f, 'model': dm(f, m), 'gb': gb, 'role': role,
-               'derivative': (f, m) in case_plan.DERIVATIVE, 'ref': (f, m) == case_plan.REF}
+               'derivative': (f, m) in case_plan.DERIVATIVE, 'ref': (f, m) == case_plan.REF,
+               'engines': case_plan.ENGINES_OF[(f, m)], 'base': case_plan._BASE[f]['base']}
               for f, m, gb, role in case_plan.MODELS]
     planned = {}
     for r in plan:
         planned.setdefault(r['step'], set()).add(f'{r["family"]} {dm(r["family"], r["model"])}')
-    env = {'id': env_id, 'label': envs.label(cfg), 'runs': [machine(d) for d in runs], 'models': models,
+    env = {'id': env_id, 'label': envs.label(cfg), 'models': models,
+           'runs': [{**machine(d), 'engine': engines.of_run(d)[0]} for d in runs],
            'planned_cases': {k: sum(1 for r in plan if r['step'] == k) for k in planned},
            'planned_per_model': {k: {m: sum(1 for r in plan if r['step'] == k and f'{r["family"]} {dm(r["family"], r["model"])}' == m) for m in v}
                                  for k, v in planned.items()},
@@ -383,7 +385,10 @@ def collect(run_id, published_only=False, rel=''):
            'tr': i18n.TR}
     out['division'] = envs.division()
     out['headline_defs'] = [h for h in catalog.headlines()]
+    # the page shows one engine at a time: its builds, and for a derived engine the default engine's builds of the same
+    # base model beside them as the reference (never the other way round)
     out['engines'] = {e['id']: {'label': e['label'], 'managed': e['managed']} for e in engines.entries()}
+    out['engine_default'] = engines.DEFAULT
     out['tasks'] = [{k: t[k] for k in ('id', 'label', 'question', 'sends', 'headline')} for t in catalog.tasks()]
     out['harness'] = envs.load_division(out['division']).get('harness')
     for env_id in envs.page_ids(published_only):

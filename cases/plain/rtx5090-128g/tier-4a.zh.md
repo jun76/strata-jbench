@@ -6,6 +6,9 @@
 
 GeForce RTX 5090 · 128 GB RAM · 99 个用例 / 297 个请求。其他参数（输入内容、测量内容、备注、seed、timeout、启动会话）见 [tier-4a.csv](tier-4a.csv)。
 
+
+## Strata
+
 | 状态 | case id | model | context | 配置 | 启动选项（相对默认） | fixture | effort | temp | 并发 | 输入 token | 输出 cap | 次数 | 结果 | 证据 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | done | `T4a-qwen-Q2_0-ctxcost-128K` | qwen Q2_0 | 128K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 | prefill 5902.6 / decode 262.7 / TTFT ms 706.9 / 接受率 0.66 | [2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/cases/T4a-qwen-Q2_0-ctxcost-128K/) |
@@ -86,12 +89,6 @@ GeForce RTX 5090 · 128 GB RAM · 99 个用例 / 297 个请求。其他参数（
 | done | `T4a-inkling-2-mini-SQ-15-ctxcost-256K` | inkling-2-mini SQ-15 | 256K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 | prefill 8758.2 / decode 97.2 / TTFT ms 433.7 / 接受率 0.183 | [2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/cases/T4a-inkling-2-mini-SQ-15-ctxcost-256K/) |
 | done | `T4a-inkling-2-mini-SQ-20-ctxcost-128K` | inkling-2-mini SQ-20 | 128K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 | prefill 9344.2 / decode 111.6 / TTFT ms 411.6 / 接受率 0.148 | [2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/cases/T4a-inkling-2-mini-SQ-20-ctxcost-128K/) |
 | done | `T4a-inkling-2-mini-SQ-20-ctxcost-256K` | inkling-2-mini SQ-20 | 256K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 | prefill 8558.5 / decode 116.2 / TTFT ms 439.6 / 接受率 0.186 | [2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/cases/T4a-inkling-2-mini-SQ-20-ctxcost-256K/) |
-| planned | `T4a-sync-Sync-XS-ctxcost-128K` | sync Sync-XS | 128K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 |  |  |
-| planned | `T4a-sync-Sync-XS-ctxcost-256K` | sync Sync-XS | 256K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 |  |  |
-| planned | `T4a-sync-Sync-S-ctxcost-128K` | sync Sync-S | 128K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 |  |  |
-| planned | `T4a-sync-Sync-S-ctxcost-256K` | sync Sync-S | 256K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 |  |  |
-| planned | `T4a-sync-Sync-M-ctxcost-128K` | sync Sync-M | 128K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 |  |  |
-| planned | `T4a-sync-Sync-M-ctxcost-256K` | sync Sync-M | 256K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 |  |  |
 | done | `T4a-unsloth-UD-IQ4_XS-ctxcost-128K` | unsloth UD-IQ4_XS (pre-v3.1) | 128K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 | prefill 2227.9 / decode 168.1 / TTFT ms 1864.0 / 接受率 0.641 | [2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/cases/T4a-unsloth-UD-IQ4_XS-ctxcost-128K/) |
 | done | `T4a-unsloth-UD-IQ4_XS-ctxcost-256K` | unsloth UD-IQ4_XS (pre-v3.1) | 256K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 | prefill 2197.8 / decode 176.4 / TTFT ms 1887.7 / 接受率 0.644 | [2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/cases/T4a-unsloth-UD-IQ4_XS-ctxcost-256K/) |
 | done | `T4a-unsloth-UD-IQ4_XS-ctxcost-1M` | unsloth UD-IQ4_XS (pre-v3.1) | 1M (YaRN 4) | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 | prefill 2068.2 / decode 172.5 / TTFT ms 2013.5 / 接受率 0.679 | [2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/cases/T4a-unsloth-UD-IQ4_XS-ctxcost-1M/) |
@@ -107,3 +104,14 @@ GeForce RTX 5090 · 128 GB RAM · 99 个用例 / 297 个请求。其他参数（
 | done | `T4a-unsloth-Q8_0-ctxcost-128K` | unsloth Q8_0 | 128K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 | prefill 794.0 / decode 52.6 / TTFT ms 5205.5 / 接受率 0.654 | [2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/cases/T4a-unsloth-Q8_0-ctxcost-128K/) |
 | done | `T4a-unsloth-Q8_0-ctxcost-256K` | unsloth Q8_0 | 256K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 | prefill 755.4 / decode 50.3 / TTFT ms 5465.8 / 接受率 0.642 | [2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/cases/T4a-unsloth-Q8_0-ctxcost-256K/) |
 | done | `T4a-unsloth-Q8_0-ctxcost-1M` | unsloth Q8_0 | 1M (YaRN 4) | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 | prefill 378.6 / decode 23.8 / TTFT ms 10893.9 / 接受率 0.651 | [2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/cases/T4a-unsloth-Q8_0-ctxcost-1M/) |
+
+## Sync-Strata
+
+| 状态 | case id | model | context | 配置 | 启动选项（相对默认） | fixture | effort | temp | 并发 | 输入 token | 输出 cap | 次数 | 结果 | 证据 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| planned | `T4a-sync-Sync-XS-ctxcost-128K` | sync Sync-XS | 128K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 |  |  |
+| planned | `T4a-sync-Sync-XS-ctxcost-256K` | sync Sync-XS | 256K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 |  |  |
+| planned | `T4a-sync-Sync-S-ctxcost-128K` | sync Sync-S | 128K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 |  |  |
+| planned | `T4a-sync-Sync-S-ctxcost-256K` | sync Sync-S | 256K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 |  |  |
+| planned | `T4a-sync-Sync-M-ctxcost-128K` | sync Sync-M | 128K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 |  |  |
+| planned | `T4a-sync-Sync-M-ctxcost-256K` | sync Sync-M | 256K | baseline |  | ctxcost-4k | none | 0.7 | 1 | 4,096 | 512 | 3 |  |  |

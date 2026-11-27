@@ -6,6 +6,9 @@
 
 GeForce RTX 5070 · Core Ultra 5 235 · 64 GB RAM · SATA SSD · 402 个用例 / 1,206 个请求。其他参数（输入内容、测量内容、备注、seed、timeout、启动会话）见 [tier-1.csv](tier-1.csv)。
 
+
+## Strata
+
 | 状态 | case id | model | context | 配置 | 启动选项（相对默认） | fixture | effort | temp | 并发 | 输入 token | 输出 cap | 次数 | 结果 | 证据 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | done | `T1-qwen-Q2_0-decode-prose-ja-t0` | qwen Q2_0 | 128K | baseline |  | decode-prose-ja | none | 0.0 | 1 | 短文 | 512 | 3 | prefill 210.5 / decode 106.0 / TTFT ms 438.9 / 接受率 0.576 | [2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/cases/T1-qwen-Q2_0-decode-prose-ja-t0/) |
@@ -356,6 +359,11 @@ GeForce RTX 5070 · Core Ultra 5 235 · 64 GB RAM · SATA SSD · 402 个用例 /
 | done | `T1-unsloth-UD-Q2_K_XL-dflash2-decode-copy-t0` | unsloth UD-Q2_K_XL (v3.1) | 128K | drafter=DFlash2 | --drafting dflash2 | decode-copy | none | 0.0 | 1 | 短文 | 512 | 3 | prefill 547.2 / decode 145.6 / TTFT ms 774.9 / 接受率 0.998 | [2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/cases/T1-unsloth-UD-Q2_K_XL-dflash2-decode-copy-t0/) |
 | done | `T1-unsloth-UD-Q2_K_XL-dflash2-decode-copy-t0.7` | unsloth UD-Q2_K_XL (v3.1) | 128K | drafter=DFlash2 | --drafting dflash2 | decode-copy | none | 0.7 | 1 | 短文 | 512 | 3 | prefill 544.5 / decode 142.1 / TTFT ms 782.4 / 接受率 0.998 | [2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/cases/T1-unsloth-UD-Q2_K_XL-dflash2-decode-copy-t0.7/) |
 | done | `T1-unsloth-UD-Q2_K_XL-dflash2-decode-copy-t1` | unsloth UD-Q2_K_XL (v3.1) | 128K | drafter=DFlash2 | --drafting dflash2 | decode-copy | none | 1.0 | 1 | 短文 | 512 | 3 | prefill 542.3 / decode 141.9 / TTFT ms 780.4 / 接受率 0.996 | [2026-11-06-main](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-06-main/cases/T1-unsloth-UD-Q2_K_XL-dflash2-decode-copy-t1/) |
+
+## Sync-Strata
+
+| 状态 | case id | model | context | 配置 | 启动选项（相对默认） | fixture | effort | temp | 并发 | 输入 token | 输出 cap | 次数 | 结果 | 证据 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | done | `T1-sync-Sync-XS-decode-prose-ja-t0` | sync Sync-XS | 128K | baseline |  | decode-prose-ja | none | 0.0 | 1 | 短文 | 512 | 3 | prefill 49.2 / decode 93.3 / TTFT ms 1806.1 / 接受率 0.572 | [2026-11-19-sync-r10](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-19-sync-r10/cases/T1-sync-Sync-XS-decode-prose-ja-t0/) |
 | done | `T1-sync-Sync-XS-decode-prose-ja-t0.7` | sync Sync-XS | 128K | baseline |  | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 | prefill 50.4 / decode 88.6 / TTFT ms 1809.1 / 接受率 0.539 | [2026-11-19-sync-r10](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-19-sync-r10/cases/T1-sync-Sync-XS-decode-prose-ja-t0.7/) |
 | done | `T1-sync-Sync-XS-decode-prose-ja-t1` | sync Sync-XS | 128K | baseline |  | decode-prose-ja | none | 1.0 | 1 | 短文 | 512 | 3 | prefill 50.2 / decode 83.2 / TTFT ms 1769.6 / 接受率 0.489 | [2026-11-19-sync-r10](../../../published/plain/rtx5070-cu5_235-64g-sata/2026-11-19-sync-r10/cases/T1-sync-Sync-XS-decode-prose-ja-t1/) |

@@ -6,6 +6,9 @@
 
 GeForce RTX 5090 · 128 GB RAM · 915 ケース / 2,745 リクエスト。ほかのパラメータ（入力の内容、見るもの、備考、seed、timeout、起動セッション）は [tier-1.csv](tier-1.csv)。
 
+
+## Strata
+
 | 状態 | case id | model | context | 設定 | 起動オプションの差分 | fixture | effort | temp | 並列 | 入力 token | 出力 cap | 回数 | 結果 | エビデンス |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | done | `T1-qwen-Q2_0-decode-prose-ja-t0` | qwen Q2_0 | 128K | baseline |  | decode-prose-ja | none | 0.0 | 1 | 短文 | 512 | 3 | prefill 420.8 / decode 222.8 / TTFT ms 221.2 / 採用率 0.607 | [2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/cases/T1-qwen-Q2_0-decode-prose-ja-t0/) |
@@ -704,60 +707,6 @@ GeForce RTX 5090 · 128 GB RAM · 915 ケース / 2,745 リクエスト。ほか
 | done | `T1-inkling-2-mini-SQ-20-prefill-4k` | inkling-2-mini SQ-20 | 128K | baseline |  | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 | prefill 9261.2 / decode 160.3 / TTFT ms 407.2 / 採用率 0.387 | [2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/cases/T1-inkling-2-mini-SQ-20-prefill-4k/) |
 | done | `T1-inkling-2-mini-SQ-20-prefill-32k` | inkling-2-mini SQ-20 | 128K | baseline |  | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 | prefill 7055.9 / decode 117.9 / TTFT ms 3962.6 / 採用率 0.365 | [2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/cases/T1-inkling-2-mini-SQ-20-prefill-32k/) |
 | done | `T1-inkling-2-mini-SQ-20-prefill-128k` | inkling-2-mini SQ-20 | 128K | baseline |  | prefill-128k | none | 0.7 | 1 | 128,000 | 128 | 3 | prefill 3890.4 / decode 70.6 / TTFT ms 27801.2 / 採用率 0.366 | [2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/cases/T1-inkling-2-mini-SQ-20-prefill-128k/) |
-| planned | `T1-sync-Sync-XS-decode-prose-ja-t0` | sync Sync-XS | 128K | baseline |  | decode-prose-ja | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-XS-decode-prose-ja-t0.7` | sync Sync-XS | 128K | baseline |  | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-XS-decode-prose-ja-t1` | sync Sync-XS | 128K | baseline |  | decode-prose-ja | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-XS-decode-prose-en-t0` | sync Sync-XS | 128K | baseline |  | decode-prose-en | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-XS-decode-prose-en-t0.7` | sync Sync-XS | 128K | baseline |  | decode-prose-en | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-XS-decode-prose-en-t1` | sync Sync-XS | 128K | baseline |  | decode-prose-en | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-XS-decode-json-t0` | sync Sync-XS | 128K | baseline |  | decode-json | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-XS-decode-json-t0.7` | sync Sync-XS | 128K | baseline |  | decode-json | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-XS-decode-json-t1` | sync Sync-XS | 128K | baseline |  | decode-json | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-XS-decode-code-t0` | sync Sync-XS | 128K | baseline |  | decode-code | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-XS-decode-code-t0.7` | sync Sync-XS | 128K | baseline |  | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-XS-decode-code-t1` | sync Sync-XS | 128K | baseline |  | decode-code | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-XS-decode-copy-t0` | sync Sync-XS | 128K | baseline |  | decode-copy | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-XS-decode-copy-t0.7` | sync Sync-XS | 128K | baseline |  | decode-copy | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-XS-decode-copy-t1` | sync Sync-XS | 128K | baseline |  | decode-copy | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-XS-prefill-4k` | sync Sync-XS | 128K | baseline |  | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
-| planned | `T1-sync-Sync-XS-prefill-32k` | sync Sync-XS | 128K | baseline |  | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
-| planned | `T1-sync-Sync-XS-prefill-128k` | sync Sync-XS | 128K | baseline |  | prefill-128k | none | 0.7 | 1 | 128,000 | 128 | 3 |  |  |
-| planned | `T1-sync-Sync-S-decode-prose-ja-t0` | sync Sync-S | 128K | baseline |  | decode-prose-ja | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-S-decode-prose-ja-t0.7` | sync Sync-S | 128K | baseline |  | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-S-decode-prose-ja-t1` | sync Sync-S | 128K | baseline |  | decode-prose-ja | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-S-decode-prose-en-t0` | sync Sync-S | 128K | baseline |  | decode-prose-en | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-S-decode-prose-en-t0.7` | sync Sync-S | 128K | baseline |  | decode-prose-en | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-S-decode-prose-en-t1` | sync Sync-S | 128K | baseline |  | decode-prose-en | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-S-decode-json-t0` | sync Sync-S | 128K | baseline |  | decode-json | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-S-decode-json-t0.7` | sync Sync-S | 128K | baseline |  | decode-json | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-S-decode-json-t1` | sync Sync-S | 128K | baseline |  | decode-json | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-S-decode-code-t0` | sync Sync-S | 128K | baseline |  | decode-code | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-S-decode-code-t0.7` | sync Sync-S | 128K | baseline |  | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-S-decode-code-t1` | sync Sync-S | 128K | baseline |  | decode-code | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-S-decode-copy-t0` | sync Sync-S | 128K | baseline |  | decode-copy | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-S-decode-copy-t0.7` | sync Sync-S | 128K | baseline |  | decode-copy | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-S-decode-copy-t1` | sync Sync-S | 128K | baseline |  | decode-copy | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-S-prefill-4k` | sync Sync-S | 128K | baseline |  | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
-| planned | `T1-sync-Sync-S-prefill-32k` | sync Sync-S | 128K | baseline |  | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
-| planned | `T1-sync-Sync-S-prefill-128k` | sync Sync-S | 128K | baseline |  | prefill-128k | none | 0.7 | 1 | 128,000 | 128 | 3 |  |  |
-| planned | `T1-sync-Sync-M-decode-prose-ja-t0` | sync Sync-M | 128K | baseline |  | decode-prose-ja | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-M-decode-prose-ja-t0.7` | sync Sync-M | 128K | baseline |  | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-M-decode-prose-ja-t1` | sync Sync-M | 128K | baseline |  | decode-prose-ja | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-M-decode-prose-en-t0` | sync Sync-M | 128K | baseline |  | decode-prose-en | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-M-decode-prose-en-t0.7` | sync Sync-M | 128K | baseline |  | decode-prose-en | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-M-decode-prose-en-t1` | sync Sync-M | 128K | baseline |  | decode-prose-en | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-M-decode-json-t0` | sync Sync-M | 128K | baseline |  | decode-json | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-M-decode-json-t0.7` | sync Sync-M | 128K | baseline |  | decode-json | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-M-decode-json-t1` | sync Sync-M | 128K | baseline |  | decode-json | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-M-decode-code-t0` | sync Sync-M | 128K | baseline |  | decode-code | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-M-decode-code-t0.7` | sync Sync-M | 128K | baseline |  | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-M-decode-code-t1` | sync Sync-M | 128K | baseline |  | decode-code | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-M-decode-copy-t0` | sync Sync-M | 128K | baseline |  | decode-copy | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-M-decode-copy-t0.7` | sync Sync-M | 128K | baseline |  | decode-copy | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-M-decode-copy-t1` | sync Sync-M | 128K | baseline |  | decode-copy | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
-| planned | `T1-sync-Sync-M-prefill-4k` | sync Sync-M | 128K | baseline |  | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
-| planned | `T1-sync-Sync-M-prefill-32k` | sync Sync-M | 128K | baseline |  | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
-| planned | `T1-sync-Sync-M-prefill-128k` | sync Sync-M | 128K | baseline |  | prefill-128k | none | 0.7 | 1 | 128,000 | 128 | 3 |  |  |
 | done | `T1-unsloth-UD-IQ4_XS-decode-prose-ja-t0` | unsloth UD-IQ4_XS (pre-v3.1) | 128K | baseline |  | decode-prose-ja | none | 0.0 | 1 | 短文 | 512 | 3 | prefill 225.3 / decode 160.8 / TTFT ms 425.4 / 採用率 0.59 | [2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/cases/T1-unsloth-UD-IQ4_XS-decode-prose-ja-t0/) |
 | done | `T1-unsloth-UD-IQ4_XS-decode-prose-ja-t0.7` | unsloth UD-IQ4_XS (pre-v3.1) | 128K | baseline |  | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 | prefill 255.6 / decode 149.0 / TTFT ms 391.4 / 採用率 0.549 | [2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/cases/T1-unsloth-UD-IQ4_XS-decode-prose-ja-t0.7/) |
 | done | `T1-unsloth-UD-IQ4_XS-decode-prose-ja-t1` | unsloth UD-IQ4_XS (pre-v3.1) | 128K | baseline |  | decode-prose-ja | none | 1.0 | 1 | 短文 | 512 | 3 | prefill 290.7 / decode 147.2 / TTFT ms 332.6 / 採用率 0.507 | [2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/cases/T1-unsloth-UD-IQ4_XS-decode-prose-ja-t1/) |
@@ -923,3 +872,62 @@ GeForce RTX 5090 · 128 GB RAM · 915 ケース / 2,745 リクエスト。ほか
 | done | `T1-unsloth-Q8_0-dflash2-decode-copy-t0` | unsloth Q8_0 | 128K | drafter=DFlash2 | --drafting dflash2 | decode-copy | none | 0.0 | 1 | 短文 | 512 | 3 | prefill 312.0 / decode 107.3 / TTFT ms 1390.8 / 採用率 0.975 | [2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/cases/T1-unsloth-Q8_0-dflash2-decode-copy-t0/) |
 | done | `T1-unsloth-Q8_0-dflash2-decode-copy-t0.7` | unsloth Q8_0 | 128K | drafter=DFlash2 | --drafting dflash2 | decode-copy | none | 0.7 | 1 | 短文 | 512 | 3 | prefill 280.0 / decode 123.0 / TTFT ms 1488.9 / 採用率 0.975 | [2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/cases/T1-unsloth-Q8_0-dflash2-decode-copy-t0.7/) |
 | done | `T1-unsloth-Q8_0-dflash2-decode-copy-t1` | unsloth Q8_0 | 128K | drafter=DFlash2 | --drafting dflash2 | decode-copy | none | 1.0 | 1 | 短文 | 512 | 3 | prefill 287.7 / decode 98.9 / TTFT ms 1445.6 / 採用率 0.974 | [2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/cases/T1-unsloth-Q8_0-dflash2-decode-copy-t1/) |
+
+## Sync-Strata
+
+| 状態 | case id | model | context | 設定 | 起動オプションの差分 | fixture | effort | temp | 並列 | 入力 token | 出力 cap | 回数 | 結果 | エビデンス |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| planned | `T1-sync-Sync-XS-decode-prose-ja-t0` | sync Sync-XS | 128K | baseline |  | decode-prose-ja | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-XS-decode-prose-ja-t0.7` | sync Sync-XS | 128K | baseline |  | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-XS-decode-prose-ja-t1` | sync Sync-XS | 128K | baseline |  | decode-prose-ja | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-XS-decode-prose-en-t0` | sync Sync-XS | 128K | baseline |  | decode-prose-en | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-XS-decode-prose-en-t0.7` | sync Sync-XS | 128K | baseline |  | decode-prose-en | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-XS-decode-prose-en-t1` | sync Sync-XS | 128K | baseline |  | decode-prose-en | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-XS-decode-json-t0` | sync Sync-XS | 128K | baseline |  | decode-json | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-XS-decode-json-t0.7` | sync Sync-XS | 128K | baseline |  | decode-json | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-XS-decode-json-t1` | sync Sync-XS | 128K | baseline |  | decode-json | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-XS-decode-code-t0` | sync Sync-XS | 128K | baseline |  | decode-code | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-XS-decode-code-t0.7` | sync Sync-XS | 128K | baseline |  | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-XS-decode-code-t1` | sync Sync-XS | 128K | baseline |  | decode-code | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-XS-decode-copy-t0` | sync Sync-XS | 128K | baseline |  | decode-copy | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-XS-decode-copy-t0.7` | sync Sync-XS | 128K | baseline |  | decode-copy | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-XS-decode-copy-t1` | sync Sync-XS | 128K | baseline |  | decode-copy | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-XS-prefill-4k` | sync Sync-XS | 128K | baseline |  | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T1-sync-Sync-XS-prefill-32k` | sync Sync-XS | 128K | baseline |  | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T1-sync-Sync-XS-prefill-128k` | sync Sync-XS | 128K | baseline |  | prefill-128k | none | 0.7 | 1 | 128,000 | 128 | 3 |  |  |
+| planned | `T1-sync-Sync-S-decode-prose-ja-t0` | sync Sync-S | 128K | baseline |  | decode-prose-ja | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-S-decode-prose-ja-t0.7` | sync Sync-S | 128K | baseline |  | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-S-decode-prose-ja-t1` | sync Sync-S | 128K | baseline |  | decode-prose-ja | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-S-decode-prose-en-t0` | sync Sync-S | 128K | baseline |  | decode-prose-en | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-S-decode-prose-en-t0.7` | sync Sync-S | 128K | baseline |  | decode-prose-en | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-S-decode-prose-en-t1` | sync Sync-S | 128K | baseline |  | decode-prose-en | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-S-decode-json-t0` | sync Sync-S | 128K | baseline |  | decode-json | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-S-decode-json-t0.7` | sync Sync-S | 128K | baseline |  | decode-json | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-S-decode-json-t1` | sync Sync-S | 128K | baseline |  | decode-json | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-S-decode-code-t0` | sync Sync-S | 128K | baseline |  | decode-code | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-S-decode-code-t0.7` | sync Sync-S | 128K | baseline |  | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-S-decode-code-t1` | sync Sync-S | 128K | baseline |  | decode-code | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-S-decode-copy-t0` | sync Sync-S | 128K | baseline |  | decode-copy | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-S-decode-copy-t0.7` | sync Sync-S | 128K | baseline |  | decode-copy | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-S-decode-copy-t1` | sync Sync-S | 128K | baseline |  | decode-copy | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-S-prefill-4k` | sync Sync-S | 128K | baseline |  | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T1-sync-Sync-S-prefill-32k` | sync Sync-S | 128K | baseline |  | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T1-sync-Sync-S-prefill-128k` | sync Sync-S | 128K | baseline |  | prefill-128k | none | 0.7 | 1 | 128,000 | 128 | 3 |  |  |
+| planned | `T1-sync-Sync-M-decode-prose-ja-t0` | sync Sync-M | 128K | baseline |  | decode-prose-ja | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-M-decode-prose-ja-t0.7` | sync Sync-M | 128K | baseline |  | decode-prose-ja | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-M-decode-prose-ja-t1` | sync Sync-M | 128K | baseline |  | decode-prose-ja | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-M-decode-prose-en-t0` | sync Sync-M | 128K | baseline |  | decode-prose-en | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-M-decode-prose-en-t0.7` | sync Sync-M | 128K | baseline |  | decode-prose-en | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-M-decode-prose-en-t1` | sync Sync-M | 128K | baseline |  | decode-prose-en | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-M-decode-json-t0` | sync Sync-M | 128K | baseline |  | decode-json | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-M-decode-json-t0.7` | sync Sync-M | 128K | baseline |  | decode-json | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-M-decode-json-t1` | sync Sync-M | 128K | baseline |  | decode-json | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-M-decode-code-t0` | sync Sync-M | 128K | baseline |  | decode-code | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-M-decode-code-t0.7` | sync Sync-M | 128K | baseline |  | decode-code | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-M-decode-code-t1` | sync Sync-M | 128K | baseline |  | decode-code | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-M-decode-copy-t0` | sync Sync-M | 128K | baseline |  | decode-copy | none | 0.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-M-decode-copy-t0.7` | sync Sync-M | 128K | baseline |  | decode-copy | none | 0.7 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-M-decode-copy-t1` | sync Sync-M | 128K | baseline |  | decode-copy | none | 1.0 | 1 | 短文 | 512 | 3 |  |  |
+| planned | `T1-sync-Sync-M-prefill-4k` | sync Sync-M | 128K | baseline |  | prefill-4k | none | 0.7 | 1 | 4,096 | 128 | 3 |  |  |
+| planned | `T1-sync-Sync-M-prefill-32k` | sync Sync-M | 128K | baseline |  | prefill-32k | none | 0.7 | 1 | 32,768 | 128 | 3 |  |  |
+| planned | `T1-sync-Sync-M-prefill-128k` | sync Sync-M | 128K | baseline |  | prefill-128k | none | 0.7 | 1 | 128,000 | 128 | 3 |  |  |

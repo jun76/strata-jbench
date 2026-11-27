@@ -36,6 +36,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import engines  # noqa: E402
 import envs  # noqa: E402
 
 ROOT = envs.ROOT
@@ -78,9 +79,9 @@ def size(paths):
 # README.md (Japanese), README.en.md and README.zh.md each carry the list; a run's line in each is NOTE.md, NOTE.en.md,
 # NOTE.zh.md (the Japanese one where a translation is missing)
 READMES = {'ja': ROOT / 'README.md', 'en': ROOT / 'README.en.md', 'zh': ROOT / 'README.zh.md'}
-HEAD = {'ja': ['計測完了', '部門', '環境', 'RUN_ID', 'Tier', 'ケース（done / 全体）', '内容', '見る'],
-        'en': ['Finished', 'Division', 'Environment', 'RUN_ID', 'Tier', 'Cases (done / all)', 'Content', 'See'],
-        'zh': ['测量完成', '部门', '环境', 'RUN_ID', 'Tier', '用例（done / 全部）', '内容', '查看']}
+HEAD = {'ja': ['計測完了', '部門', 'エンジン', '環境', 'RUN_ID', 'Tier', 'ケース（done / 全体）', '内容', '見る'],
+        'en': ['Finished', 'Division', 'Engine', 'Environment', 'RUN_ID', 'Tier', 'Cases (done / all)', 'Content', 'See'],
+        'zh': ['测量完成', '部门', '引擎', '环境', 'RUN_ID', 'Tier', '用例（done / 全部）', '内容', '查看']}
 LINKS = {'ja': ('グラフ', 'ケース一覧', 'エビデンス'), 'en': ('Charts', 'Cases', 'Evidence'), 'zh': ('图表', '用例一览', '证据')}
 # One emoji per link keeps the narrow column readable; the name is the link's title (shown on hover)
 ICONS = ('📈', '📋', '📁')
@@ -106,7 +107,8 @@ def run_rows():
         end = envs.finished(run)   # the last finish, to the second
         notes = {lang: (run / name).read_text().strip() for lang, name in (('ja', 'NOTE.md'), ('en', 'NOTE.en.md'), ('zh', 'NOTE.zh.md'))
                  if (run / name).exists()}
-        rows.append({'div': div, 'div_label': envs.load_division(div)['label'], 'env': env_id, 'label': label, 'run': run.name, 'finished': end, 'date': end[:16].replace('T', ' ') if end else '?', 'notes': notes,
+        engine = engines.of_run(run)[0]
+        rows.append({'engine': engine, 'engine_label': engines.entry(engine)['label'], 'div': div, 'div_label': envs.load_division(div)['label'], 'env': env_id, 'label': label, 'run': run.name, 'finished': end, 'date': end[:16].replace('T', ' ') if end else '?', 'notes': notes,
                      'tiers': ', '.join(t for t in TIER_ORDER if t in steps), 'cases': f'{done} / {total}'})
     return sorted(rows, key=lambda r: (datetime.fromisoformat(r['finished']).timestamp() if r['finished'] else 0, r['run']), reverse=True)
 
@@ -126,17 +128,19 @@ def update_readme():
 
         def row(r):
             note = r['notes'].get(lang) or r['notes'].get('ja') or '–'
-            snap = f'snapshots/{r["div"]}/{r["env"]}/{r["run"]}/?env={r["env"]}'
+            # the charts open on the run's engine (the page shows one engine at a time; Strata's needs no parameter)
+            snap = f'snapshots/{r["div"]}/{r["env"]}/{r["run"]}/?env={r["env"]}' + (
+                '' if r['engine'] == engines.DEFAULT else f'&engine={r["engine"]}')
             lists = f'cases/{r["div"]}/{r["env"]}/README{SUFFIX[lang]}.md'
             tag = envs.tag(r['env'], r['run'], r['div'])
-            return (f'| {r["date"]} | {r["div_label"][lang]} | {r["label"]} | `{r["run"]}` | '
+            return (f'| {r["date"]} | {r["div_label"][lang]} | {r["engine_label"]} | {r["label"]} | `{r["run"]}` | '
                     f'{r["tiers"]} | {r["cases"]} | {note} | '
                     f'[{ICONS[0]}]({f"{pages}/{snap}" if pages else snap} "{charts}") '
                     f'[{ICONS[1]}]({f"{repo}/blob/{tag}/{lists}" if repo else lists} "{cases}") '
                     f'[{ICONS[2]}](published/{r["div"]}/{r["env"]}/{r["run"]}/ "{files}") |')
         lines = table + [row(r) for r in rows[:SHOWN]]
         if not rows:
-            lines.append('| ' + ' | '.join(['–'] * 6 + [NONE[lang], '–']) + ' |')
+            lines.append('| ' + ' | '.join(['–'] * 7 + [NONE[lang], '–']) + ' |')
         if rows[SHOWN:]:
             # blank lines around the table: GitHub renders Markdown inside <details> only when it is set apart
             lines += ['', '<details>', f'<summary>{OLDER[lang].format(n=len(rows) - SHOWN)}</summary>', '',

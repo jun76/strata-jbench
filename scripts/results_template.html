@@ -113,6 +113,7 @@ nav.tabs button:focus-visible, .filters select:focus-visible, .envsw button:focu
 .envsw button[aria-pressed="true"] { background: var(--accent); color: var(--bg); font-weight: 600; }
 .envsw button .n { color: var(--muted); font-weight: 400; margin-left: 4px; }
 .envsw button[aria-pressed="true"] .n { color: inherit; opacity: .8; }
+.engnote { font-size: 13px; font-weight: 400; color: var(--muted); flex: 1 1 280px; }
 .banner { background: var(--warn-bg); color: var(--warn-ink); padding: 7px 12px; border-radius: 8px; font-size: 13px; margin: 0 0 10px; }
 /* the runs behind the environment's results: a footnote to its panel above */
 .runs { margin: 6px 2px 0; font-size: 12.5px; color: var(--text-2); }
@@ -209,6 +210,7 @@ dialog#viewer::backdrop { background: rgba(0, 0, 0, .55); }
 <p class="sub"><span class="L ja">ローカル LLM 推論エンジン Strata とその派生エンジンで、モデルを同じ条件で測った結果。何を選ぶとどの数字が取れるかは<a href="{{configurator}}">コンフィギュレータ</a>で。ハードウェア構成（GPU と RAM の組み合わせ）ごとに「環境」として分け、下のボタンで切り替える。2つ以上の環境に結果があると「環境の比較」が出る。ケースごとの条件と生データは<a href="{{cases}}">ケース一覧</a>、全ケースの数値は <a href="{{csv}}">summary.csv</a>。</span><span class="L en">Models measured with the local LLM inference engine Strata and engines derived from it under the same conditions (what to choose for which number: <a href="{{configurator}}">the configurator</a>), kept apart per hardware set-up (a GPU and an amount of RAM: an “environment”); switch with the buttons below. With results in two or more environments, “Across environments” compares them. Each case's conditions and raw data: <a href="{{cases}}">the case lists</a>; every case's numbers: <a href="{{csv}}">summary.csv</a>. </span><span class="L zh">用本地 LLM 推理引擎 Strata 及其衍生引擎以相同条件测量各模型的结果（选什么能得到哪些数字见<a href="{{configurator}}">配置器</a>），按硬件配置（GPU 与 RAM 的组合，即“环境”）分开，用下方按钮切换。两个以上环境有结果时会显示“环境比较”。各用例的条件与原始数据见<a href="{{cases}}">用例一览</a>，全部用例的数值见 <a href="{{csv}}">summary.csv</a>。</span></p>
 <p class="sub how">{{how}}</p>
 <p class="gen"><span class="L ja">生成: {{generated}}（<code>scripts/build_results.py</code>）</span><span class="L en">Generated {{generated}} (<code>scripts/build_results.py</code>)</span><span class="L zh">生成于 {{generated}}（<code>scripts/build_results.py</code>）</span></p>
+<div class="envsw-row" id="engsw-row" hidden><span class="L ja">エンジン</span><span class="L en">Engine</span><span class="L zh">引擎</span><div id="engsw" class="envsw" role="group" aria-label="engine"></div><span id="engsw-note" class="engnote"></span></div>
 <div class="envsw-row"><span class="L ja">環境</span><span class="L en">Environment</span><span class="L zh">环境</span><div id="envsw" class="envsw" role="group" aria-label="environment"></div></div>
 {{env}}
 <div id="runs" class="runs"></div>
@@ -242,7 +244,7 @@ dialog#viewer::backdrop { background: rgba(0, 0, 0, .55); }
 <div class="tiles" id="tiles"></div>
 
 <h2 id="s-headline"><span class="L ja">見出しの数字</span><span class="L en">Headline numbers</span><span class="L zh">头条数字</span></h2>
-<p class="lead"><span class="L ja">どれも 1 つの固定の条件から読んだ値で、複数のケースをまとめた値ではない。結果のある環境・モデル・エンジンをすべて並べている（上の環境の切り替えには従わない）。列の見出しで並べ替え。条件が同じケースだけが同じ列に入る。</span><span class="L en">Each is read from one fixed condition, never a summary over several kinds of cases. Every environment, model and engine with a result is listed (the environment switch above does not apply). Sort by clicking a heading. Only cases with the same conditions share a column.</span><span class="L zh">每个数字都取自一个固定条件，而非多种用例的汇总。列出所有有结果的环境、模型与引擎（不受上方环境切换影响）。点击列标题排序。只有条件相同的用例才会列在同一列。</span></p>
+<p class="lead"><span class="L ja">どれも 1 つの固定の条件から読んだ値で、複数のケースをまとめた値ではない。上で選んだエンジンについて、結果のある環境とモデルをすべて並べている（環境の切り替えには従わない）。列の見出しで並べ替え。条件が同じケースだけが同じ列に入る。</span><span class="L en">Each is read from one fixed condition, never a summary over several kinds of cases. For the engine chosen above, every environment and model with a result is listed (the environment switch does not apply). Sort by clicking a heading. Only cases with the same conditions share a column.</span><span class="L zh">每个数字都取自一个固定条件，而非多种用例的汇总。针对上方所选引擎，列出所有有结果的环境与模型（不受环境切换影响）。点击列标题排序。只有条件相同的用例才会列在同一列。</span></p>
 <dl class="about" id="headline-defs"></dl>
 <div id="c-headline"></div>
 
@@ -404,15 +406,36 @@ const $ = id => document.getElementById(id);
 const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 // One environment is shown at a time (useEnv); the comparison section reads them all (BY_ENV).
 const ENVS = D.envs, ENV_IDS = ENVS.map(e => e.id);
-const BY_ENV = {};
-for (const c of D.cases) ((BY_ENV[c.env] ||= {})[c.family + ' ' + c.model] ||= []).push(c);
+// One engine is shown at a time (ENGINE): its builds, and for a derived engine the default engine's builds of the same
+// base model beside them as the reference. The default engine's view never lists another engine's builds.
+const ENGINE_DEF = D.engine_default || 'strata';
+const enginesOf = m => m.engines && m.engines.length ? m.engines : [ENGINE_DEF];
+const MODEL_OF = {};
+for (const e of ENVS) for (const m of e.models) MODEL_OF[m.key] = m;
+const ENGINE_IDS = Object.keys(D.engines || {}).filter(id => id === ENGINE_DEF ||
+  D.cases.some(c => enginesOf(MODEL_OF[c.family + ' ' + c.model] || {}).includes(id)));
+let ENGINE = [new URLSearchParams(location.search).get('engine'), ENGINE_DEF, ENGINE_IDS[0]].find(id => ENGINE_IDS.includes(id));
+let VIEW_BASES, ALL_CASES, BY_ENV;
+const inView = m => { if (!m) return false; const own = enginesOf(m);
+  return own.includes(ENGINE) || (ENGINE !== ENGINE_DEF && own.includes(ENGINE_DEF) && VIEW_BASES.has(m.base)); };
+const engineInView = (engine, family) => engine === ENGINE || (ENGINE !== ENGINE_DEF && engine === ENGINE_DEF &&
+  Object.values(MODEL_OF).some(m => m.family === family && VIEW_BASES.has(m.base)));
+const viewModels = e => e.models.filter(inView);
+function useEngine(id) {
+  ENGINE = id;
+  VIEW_BASES = new Set(Object.values(MODEL_OF).filter(m => enginesOf(m).includes(ENGINE)).map(m => m.base));
+  ALL_CASES = D.cases.filter(c => inView(MODEL_OF[c.family + ' ' + c.model]));
+  BY_ENV = {};
+  for (const c of ALL_CASES) ((BY_ENV[c.env] ||= {})[c.family + ' ' + c.model] ||= []).push(c);
+}
+useEngine(ENGINE);
 let E, MODELS, CASES, byModel, FAMILIES, REF;
 function useEnv(id) {
   E = ENVS.find(e => e.id === id) || ENVS[0];
   // every chart and the table list the models by series (in the plan's order), then size ascending
-  const series = [...new Set(E.models.map(m => m.family))];
-  MODELS = [...E.models].sort((a, b) => series.indexOf(a.family) - series.indexOf(b.family) || a.gb - b.gb || a.key.localeCompare(b.key));
-  CASES = D.cases.filter(c => c.env === E.id); byModel = BY_ENV[E.id] || {};
+  const VM = viewModels(E), series = [...new Set(VM.map(m => m.family))];
+  MODELS = [...VM].sort((a, b) => series.indexOf(a.family) - series.indexOf(b.family) || a.gb - b.gb || a.key.localeCompare(b.key));
+  CASES = ALL_CASES.filter(c => c.env === E.id); byModel = BY_ENV[E.id] || {};
   FAMILIES = [...new Set(MODELS.map(m => m.family))];
   REF = (MODELS.find(m => m.ref) || MODELS[0] || {}).key;
 }
@@ -442,7 +465,7 @@ try { Object.assign(state, JSON.parse(localStorage.getItem('strata-results') || 
 const save = () => { try { localStorage.setItem('strata-results', JSON.stringify(state)); } catch (e) {} };
 { // the environment: ?env=, then the last one shown, then this PC's, then the first with results
   const want = new URLSearchParams(location.search).get('env');
-  const withData = ENV_IDS.find(id => D.cases.some(c => c.env === id));
+  const withData = ENV_IDS.find(id => ALL_CASES.some(c => c.env === id));
   state.env = [want, state.env, D.here, withData, ENV_IDS[0]].find(id => ENV_IDS.includes(id));
   useEnv(state.env);
   if (!state.hl || (state.hl !== 'none' && !MODELS.some(m => m.key === state.hl))) state.hl = REF;
@@ -829,8 +852,8 @@ function tiles() {
     [L('最速の prefill（32K 入力）', 'fastest prefill (32K input)', '最快 prefill（32K 输入）'), pf && fmtTps(pf[1]), 'tok/s', pf && pf[0].key, ''],
     [L('最短の TTFT（4K 入力）', 'shortest TTFT (4K input)', '最短 TTFT（4K 输入）'), tt && fmtMs(tt[1]), '', tt && tt[0].key, L('最初の文字が出るまで', 'until the first character', '到出现第一个字')],
     [L('Tier 1 を測ったモデル', 'models with Tier 1 measured', '已测 Tier 1 的模型'), String(measured), '/ ' + shown.length, '', ''],
-    [L('結果のあるケース', 'cases with results', '有结果的用例'), D.cases.filter(c => c.env === E.id).length.toLocaleString(),
-     '/ ' + Object.values(E.planned_cases).reduce((a, b) => a + b, 0).toLocaleString(), '',
+    [L('結果のあるケース', 'cases with results', '有结果的用例'), CASES.length.toLocaleString(),
+     '/ ' + Object.values(E.planned_per_model).reduce((a, per) => a + MODELS.reduce((n, m) => n + (per[m.key] || 0), 0), 0).toLocaleString(), '',
      L('この環境の全 Tier（絞り込みによらない）', 'every Tier of this environment (not filtered)', '该环境的全部 Tier（不受筛选影响）')],
   ];
   for (const [k, v, unit, who, note] of items) {
@@ -896,15 +919,16 @@ function runs() {
   if (!D.published) h('span', {}, pv, L('プレビュー: 計測中・公開前（results/）の結果も含む。公開するページは scripts/publish.py で published/ に移した結果だけから作る。',
     'Preview: includes results still in results/ (measuring, not published). The published pages are built only from runs moved to published/ by scripts/publish.py.',
     '预览：包含 results/ 中尚在测量、未发布的结果。发布的页面只由 scripts/publish.py 移到 published/ 的结果生成。'));
-  if (!E.runs.length) { box.textContent = L('まだ結果がありません。計測が済んだら scripts/build_results.py を実行し直すと、ここに結果が入ります。',
+  const RUNS = E.runs.filter(r => (r.engine || ENGINE_DEF) === ENGINE || (ENGINE !== ENGINE_DEF && (r.engine || ENGINE_DEF) === ENGINE_DEF));
+  if (!RUNS.length) { box.textContent = L('まだ結果がありません。計測が済んだら scripts/build_results.py を実行し直すと、ここに結果が入ります。',
     'No results yet. Once measured, re-running scripts/build_results.py puts them here.', '还没有结果。测量完成后重新运行 scripts/build_results.py，结果会显示在这里。'); return; }
-  for (const r of E.runs) {
+  for (const r of RUNS) {
     const n = CASES.filter(c => c.run_id === r.run_id).length;
     const line = h('div', {}, box, `RUN_ID ${r.run_id}: ${n} ${L('ケース', 'cases', '个用例')} · ${L('GPU 電力上限', 'GPU power limit', 'GPU 功耗上限')} ${r.power_limit_w ?? '?'} W · ${r.strata || ''}`);
     if (r.models_json) { line.append(' · '); h('a', { href: r.models_json }, line, L('モデルの版（models.json）', 'model versions (models.json)', '模型版本（models.json）')); }
   }
-  const limits = new Set(E.runs.map(r => r.power_limit_w));
-  if (E.runs.length > 1) h('div', { class: 'note' }, box, L(`複数の RUN_ID の結果が混ざっています${limits.size > 1 ? '（GPU の電力上限が違う）' : ''}。比べるときは条件の違いに注意。`,
+  const limits = new Set(RUNS.map(r => r.power_limit_w));
+  if (RUNS.length > 1) h('div', { class: 'note' }, box, L(`複数の RUN_ID の結果が混ざっています${limits.size > 1 ? '（GPU の電力上限が違う）' : ''}。比べるときは条件の違いに注意。`,
     `Results from several RUN_IDs are mixed${limits.size > 1 ? ' (with different GPU power limits)' : ''}. Mind the different conditions when comparing.`,
     `混有多个 RUN_ID 的结果${limits.size > 1 ? '（GPU 功耗上限不同）' : ''}。比较时请注意条件差异。`));
 }
@@ -1360,12 +1384,12 @@ function sTable() {
 }
 
 function sCompare() {
-  const have = ENV_IDS.filter(id => D.cases.some(c => c.env === id && c.step === '1' && done(c)));
+  const have = ENV_IDS.filter(id => ALL_CASES.some(c => c.env === id && c.step === '1' && done(c)));
   $('s-cmp-wrap').hidden = have.length < 2;
   if (have.length < 2) return;
   const keys = have.map(id => ({ k: id, label: ENVS.find(e => e.id === id).label, color: '--e' + (ENV_IDS.indexOf(id) % 8 + 1) }));
-  const fams = [...new Set(ENVS.flatMap(e => e.models.map(m => m.family)))];
-  const order = [...new Map(ENVS.flatMap(e => e.models.map(m => [m.key, m]))).values()]
+  const fams = [...new Set(ENVS.flatMap(e => viewModels(e).map(m => m.family)))];
+  const order = [...new Map(ENVS.flatMap(e => viewModels(e).map(m => [m.key, m]))).values()]
     .sort((a, b) => fams.indexOf(a.family) - fams.indexOf(b.family) || a.gb - b.gb || a.key.localeCompare(b.key)).map(m => m.key)
     .filter(key => state.family === 'all' || key.split(' ')[0] === state.family);
   const rows = get => order.map(key => { const vals = {};
@@ -1390,10 +1414,33 @@ function sCompare() {
 }
 
 let refillFilters = () => {};
+function engineSwitch() {
+  $('engsw-row').hidden = ENGINE_IDS.length < 2;
+  const box = $('engsw'); box.replaceChildren();
+  for (const id of ENGINE_IDS) {
+    const b = h('button', { type: 'button', 'aria-pressed': String(id === ENGINE), title: id }, box, D.engines[id].label);
+    b.addEventListener('click', () => {
+      if (id === ENGINE) return;
+      useEngine(id); useEnv(E.id);
+      if (state.hl !== 'none' && !MODELS.some(m => m.key === state.hl)) state.hl = REF;
+      if (state.family !== 'all' && !FAMILIES.includes(state.family)) state.family = 'all';
+      const u = new URL(location.href); if (id === ENGINE_DEF) u.searchParams.delete('engine'); else u.searchParams.set('engine', id);
+      history.replaceState(null, '', u);
+      refillFilters(); engineSwitch(); envSwitch(); runs(); draw();
+    });
+  }
+  document.querySelectorAll('.eng-only').forEach(x => { x.hidden = x.dataset.engine !== ENGINE; });
+  const name = D.engines[ENGINE].label, def = D.engines[ENGINE_DEF].label;
+  $('engsw-note').textContent = ENGINE === ENGINE_DEF
+    ? L(`${name} で測った build だけを並べる。`, `Only the builds measured with ${name}.`, `只列出用 ${name} 测量的 build。`)
+    : L(`${name} の build と、比較の基準として同じ元モデルの ${def} の build を並べる。`,
+        `${name}'s builds, with ${def}'s builds of the same base model beside them as the reference.`,
+        `列出 ${name} 的 build，并以同一基础模型的 ${def} build 作为比较基准。`);
+}
 function envSwitch() {
   const box = $('envsw'); box.replaceChildren();
   for (const e of ENVS) {
-    const n = D.cases.filter(c => c.env === e.id).length;
+    const n = ALL_CASES.filter(c => c.env === e.id).length;
     const b = h('button', { type: 'button', 'aria-pressed': String(e.id === E.id), title: e.id }, box, e.label);
     if (!n) h('span', { class: 'n' }, b, L('未計測', 'no results', '未测量'));
     b.addEventListener('click', () => {
@@ -1426,7 +1473,7 @@ function filters() {
   hl.addEventListener('change', () => { state.hl = hl.value; save(); draw(); });
   temp.addEventListener('change', () => { state.temp = temp.value; save(); draw(); });
   content.addEventListener('change', () => { state.content = content.value; save(); draw(); });
-  addEventListener('langchange', () => { fill(); envSwitch(); runs(); draw(); });
+  addEventListener('langchange', () => { fill(); engineSwitch(); envSwitch(); runs(); draw(); });
 }
 // A table with a bar in each number cell, sorted by a click on a heading (a first click puts the better end first).
 // cols: [heading, value(item), format, better ('↑' / '↓' / ''), bar]
@@ -1461,10 +1508,10 @@ const modelOrder = (a, b) => MODELS.findIndex(m => m.key === a.family + ' ' + a.
 function sHeadline() {
   const box = $('c-headline'); box.replaceChildren();
   const defs = $('headline-defs'); defs.replaceChildren();
-  const have = new Set(D.envs.flatMap(e => (e.headlines || []).flatMap(r => Object.keys(r.v))));
+  const have = new Set(D.envs.flatMap(e => (e.headlines || []).filter(r => engineInView(r.engine || ENGINE_DEF, r.family)).flatMap(r => Object.keys(r.v))));
   const hs = (D.headline_defs || []).filter(x => have.has(x.id));
   for (const x of hs) { h('dt', {}, defs, x.id + '  ' + (x.label[LANG()] || x.label.en)); h('dd', {}, defs, x.definition[LANG()] || x.definition.en); }
-  const items = D.envs.flatMap(e => (e.headlines || []).map(r => ({ ...r, env: e.label, envId: e.id })));
+  const items = D.envs.flatMap(e => (e.headlines || []).filter(r => engineInView(r.engine || ENGINE_DEF, r.family)).map(r => ({ ...r, env: e.label, envId: e.id })));
   if (!items.length) { h('p', { class: 'lead' }, box, L('まだ結果がない。', 'No results yet.', '尚无结果。')); return; }
   const engineName = r => (D.engines?.[r.engine]?.label || r.engine) + (D.engines?.[r.engine]?.managed === false ? L('（接続のみ）', ' (attach only)', '（仅连接）') : '');
   const cols = [[L('モデル', 'Model', '模型'), r => r.family + ' ' + r.model, v => v],
@@ -1615,7 +1662,7 @@ function draw() {
   hideTip();
   TAB_DRAW[tab]();
 }
-sections(); envSwitch(); runs(); filters(); showTab(tabOf(location.hash));
+sections(); engineSwitch(); envSwitch(); runs(); filters(); showTab(tabOf(location.hash));
 // the sticky filters' height, for the headings' scroll margin
 const stick = () => { const f = $('filters');
   document.documentElement.style.setProperty('--stick', (getComputedStyle(f).position === 'sticky' ? f.offsetHeight : 0) + 'px'); };

@@ -159,8 +159,8 @@ def latest_env(root, env_id, published_only=False):
     if not found:
         return None, None
     env, run_id = found
-    if others:
-        env = {**env, 'strata': ' · '.join([env.get('strata') or '?'] + [v for v in others.values() if v])}
+    if others:   # kept apart from Strata's own line: the page shows them only in that engine's view
+        env = {**env, 'other_engines': {k: v for k, v in others.items() if v}}
     return env, run_id
 
 
@@ -191,6 +191,7 @@ def env_md(root, cfg, lang, published_only=False):
     L = one(lang)
     env, run_id = env_for(root, cfg, published_only)
     rows, src = env_rows(env, run_id, cfg, L)
+    rows = [(k, re.sub(r'<span class="eng-only"[^>]*>(.*?)</span>', r'\1', v) if v else v) for k, v in rows]   # no views in Markdown
     return ('| | |\n| --- | --- |\n' + ''.join(f'| {k} | {v} |\n' for k, v in rows if v)
             + f'\n{how_html(L)}\n\n{src}\n')
 
@@ -281,7 +282,8 @@ def env_rows(env, run_id, cfg, L):
         (L('マザーボード', 'Motherboard', '主板'), e(board)),
         (L('モデルの置き場所', 'Model storage', '模型存放'), drive_text(env, e, L)),
         ('OS', f'{e(env.get("os"))} (Linux {e(env.get("kernel"))})'),
-        (L('推論エンジン', 'Inference engine', '推理引擎'), e(env.get('strata'))),
+        (L('推論エンジン', 'Inference engine', '推理引擎'), e(env.get('strata')) + ''.join(
+            f'<span class="eng-only" data-engine="{e(k)}" hidden> · {e(v)}</span>' for k, v in (env.get('other_engines') or {}).items())),
     ]
     src = (L(f'RUN_ID {run_id} の記録（machine.json）', f'as recorded for RUN_ID {run_id} (machine.json)', f'RUN_ID {run_id} 的记录（machine.json）')
            if run_id else L('まだ計測の記録が無いので、env.json とこの PC の現在の構成から', 'no run recorded yet: from env.json and this PC now',

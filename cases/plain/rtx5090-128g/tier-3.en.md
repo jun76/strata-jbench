@@ -6,6 +6,9 @@
 
 GeForce RTX 5090 · 128 GB RAM · 298 cases / 894 requests. The other parameters (input, measures, notes, seeds, timeout, launch session) are in [tier-3.csv](tier-3.csv).
 
+
+## Strata
+
 | status | case id | model | context | config | launch options (vs. default) | fixture | effort | temp | concurrency | input tokens | output cap | runs | result | evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | done | `T3-qwen-Q2_0-math-1-none` | qwen Q2_0 | 128K | baseline |  | math-1 | none | 1.0 | 1 | short | 16,384 | 3 | prefill 382.4 / decode 285.1 / TTFT ms 233.3 / acceptance 0.779 / correct 3/3 | [2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/cases/T3-qwen-Q2_0-math-1-none/) |
@@ -239,33 +242,6 @@ GeForce RTX 5090 · 128 GB RAM · 298 cases / 894 requests. The other parameters
 | done | `T3-inkling-2-mini-SQ-20-reason-ja-1-none` | inkling-2-mini SQ-20 | 128K | baseline |  | reason-ja-1 | none | 1.0 | 1 | short | 16,384 | 3 | prefill 4197.8 / decode 188.2 / TTFT ms 66.7 / acceptance 0.476 / correct 0/3 | [2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/cases/T3-inkling-2-mini-SQ-20-reason-ja-1-none/) |
 | done | `T3-inkling-2-mini-SQ-20-reason-en-1-none` | inkling-2-mini SQ-20 | 128K | baseline |  | reason-en-1 | none | 1.0 | 1 | short | 16,384 | 3 | prefill 3118.5 / decode 167.2 / TTFT ms 57.2 / acceptance 0.207 / correct 2/3 | [2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/cases/T3-inkling-2-mini-SQ-20-reason-en-1-none/) |
 | done | `T3-inkling-2-mini-SQ-20-coding-harbor-none` | inkling-2-mini SQ-20 | 128K | baseline |  | coding-harbor | none | 1.0 | 1 | short | 130,048 | 3 | prefill 2280.3 / decode 200.3 / TTFT ms 70.0 / acceptance 0.513 | [2026-11-25-main](../../../published/plain/rtx5090-128g/2026-11-25-main/cases/T3-inkling-2-mini-SQ-20-coding-harbor-none/) |
-| planned | `T3-sync-Sync-XS-math-1-none` | sync Sync-XS | 128K | baseline |  | math-1 | none | 1.0 | 1 | short | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-XS-math-1-high` | sync Sync-XS | 128K | baseline |  | math-1 | high | 1.0 | 1 | short | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-XS-code-1-none` | sync Sync-XS | 128K | baseline |  | code-1 | none | 1.0 | 1 | short | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-XS-code-1-high` | sync Sync-XS | 128K | baseline |  | code-1 | high | 1.0 | 1 | short | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-XS-reason-ja-1-none` | sync Sync-XS | 128K | baseline |  | reason-ja-1 | none | 1.0 | 1 | short | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-XS-reason-ja-1-high` | sync Sync-XS | 128K | baseline |  | reason-ja-1 | high | 1.0 | 1 | short | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-XS-reason-en-1-none` | sync Sync-XS | 128K | baseline |  | reason-en-1 | none | 1.0 | 1 | short | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-XS-reason-en-1-high` | sync Sync-XS | 128K | baseline |  | reason-en-1 | high | 1.0 | 1 | short | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-XS-coding-harbor-high` | sync Sync-XS | 128K | baseline |  | coding-harbor | high | 1.0 | 1 | short | 130,048 | 3 |  |  |
-| planned | `T3-sync-Sync-S-math-1-none` | sync Sync-S | 128K | baseline |  | math-1 | none | 1.0 | 1 | short | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-S-math-1-high` | sync Sync-S | 128K | baseline |  | math-1 | high | 1.0 | 1 | short | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-S-code-1-none` | sync Sync-S | 128K | baseline |  | code-1 | none | 1.0 | 1 | short | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-S-code-1-high` | sync Sync-S | 128K | baseline |  | code-1 | high | 1.0 | 1 | short | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-S-reason-ja-1-none` | sync Sync-S | 128K | baseline |  | reason-ja-1 | none | 1.0 | 1 | short | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-S-reason-ja-1-high` | sync Sync-S | 128K | baseline |  | reason-ja-1 | high | 1.0 | 1 | short | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-S-reason-en-1-none` | sync Sync-S | 128K | baseline |  | reason-en-1 | none | 1.0 | 1 | short | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-S-reason-en-1-high` | sync Sync-S | 128K | baseline |  | reason-en-1 | high | 1.0 | 1 | short | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-S-coding-harbor-high` | sync Sync-S | 128K | baseline |  | coding-harbor | high | 1.0 | 1 | short | 130,048 | 3 |  |  |
-| planned | `T3-sync-Sync-M-math-1-none` | sync Sync-M | 128K | baseline |  | math-1 | none | 1.0 | 1 | short | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-M-math-1-high` | sync Sync-M | 128K | baseline |  | math-1 | high | 1.0 | 1 | short | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-M-code-1-none` | sync Sync-M | 128K | baseline |  | code-1 | none | 1.0 | 1 | short | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-M-code-1-high` | sync Sync-M | 128K | baseline |  | code-1 | high | 1.0 | 1 | short | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-M-reason-ja-1-none` | sync Sync-M | 128K | baseline |  | reason-ja-1 | none | 1.0 | 1 | short | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-M-reason-ja-1-high` | sync Sync-M | 128K | baseline |  | reason-ja-1 | high | 1.0 | 1 | short | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-M-reason-en-1-none` | sync Sync-M | 128K | baseline |  | reason-en-1 | none | 1.0 | 1 | short | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-M-reason-en-1-high` | sync Sync-M | 128K | baseline |  | reason-en-1 | high | 1.0 | 1 | short | 16,384 | 3 |  |  |
-| planned | `T3-sync-Sync-M-coding-harbor-high` | sync Sync-M | 128K | baseline |  | coding-harbor | high | 1.0 | 1 | short | 130,048 | 3 |  |  |
 | done | `T3-unsloth-UD-IQ4_XS-math-1-none` | unsloth UD-IQ4_XS (pre-v3.1) | 128K | baseline |  | math-1 | none | 1.0 | 1 | short | 16,384 | 3 | prefill 313.4 / decode 218.2 / TTFT ms 300.8 / acceptance 0.789 / correct 3/3 | [2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/cases/T3-unsloth-UD-IQ4_XS-math-1-none/) |
 | done | `T3-unsloth-UD-IQ4_XS-math-1-high` | unsloth UD-IQ4_XS (pre-v3.1) | 128K | baseline |  | math-1 | high | 1.0 | 1 | short | 16,384 | 3 | prefill 284.0 / decode 167.6 / TTFT ms 472.6 / acceptance 0.841 / correct 3/3 | [2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/cases/T3-unsloth-UD-IQ4_XS-math-1-high/) |
 | done | `T3-unsloth-UD-IQ4_XS-code-1-none` | unsloth UD-IQ4_XS (pre-v3.1) | 128K | baseline |  | code-1 | none | 1.0 | 1 | short | 16,384 | 3 | prefill 318.1 / decode 162.1 / TTFT ms 362.0 / acceptance 0.787 / correct 3/3 | [2026-11-03-main](../../../published/plain/rtx5090-128g/2026-11-03-main/cases/T3-unsloth-UD-IQ4_XS-code-1-none/) |
@@ -306,3 +282,35 @@ GeForce RTX 5090 · 128 GB RAM · 298 cases / 894 requests. The other parameters
 | done | `T3-unsloth-Q8_0-reason-ja-1-high` | unsloth Q8_0 | 128K | baseline |  | reason-ja-1 | high | 1.0 | 1 | short | 16,384 | 3 | prefill 208.4 / decode 54.7 / TTFT ms 1100.3 / acceptance 0.648 / correct 3/3 | [2026-11-04-q8-t3](../../../published/plain/rtx5090-128g/2026-11-04-q8-t3/cases/T3-unsloth-Q8_0-reason-ja-1-high/) |
 | done | `T3-unsloth-Q8_0-reason-en-1-none` | unsloth Q8_0 | 128K | baseline |  | reason-en-1 | none | 1.0 | 1 | short | 16,384 | 3 | prefill 165.7 / decode 73.7 / TTFT ms 871.1 / acceptance 0.834 / correct 3/3 | [2026-11-04-q8-t3](../../../published/plain/rtx5090-128g/2026-11-04-q8-t3/cases/T3-unsloth-Q8_0-reason-en-1-none/) |
 | done | `T3-unsloth-Q8_0-reason-en-1-high` | unsloth Q8_0 | 128K | baseline |  | reason-en-1 | high | 1.0 | 1 | short | 16,384 | 3 | prefill 193.9 / decode 57.7 / TTFT ms 947.5 / acceptance 0.746 / correct 3/3 | [2026-11-04-q8-t3](../../../published/plain/rtx5090-128g/2026-11-04-q8-t3/cases/T3-unsloth-Q8_0-reason-en-1-high/) |
+
+## Sync-Strata
+
+| status | case id | model | context | config | launch options (vs. default) | fixture | effort | temp | concurrency | input tokens | output cap | runs | result | evidence |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| planned | `T3-sync-Sync-XS-math-1-none` | sync Sync-XS | 128K | baseline |  | math-1 | none | 1.0 | 1 | short | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-XS-math-1-high` | sync Sync-XS | 128K | baseline |  | math-1 | high | 1.0 | 1 | short | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-XS-code-1-none` | sync Sync-XS | 128K | baseline |  | code-1 | none | 1.0 | 1 | short | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-XS-code-1-high` | sync Sync-XS | 128K | baseline |  | code-1 | high | 1.0 | 1 | short | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-XS-reason-ja-1-none` | sync Sync-XS | 128K | baseline |  | reason-ja-1 | none | 1.0 | 1 | short | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-XS-reason-ja-1-high` | sync Sync-XS | 128K | baseline |  | reason-ja-1 | high | 1.0 | 1 | short | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-XS-reason-en-1-none` | sync Sync-XS | 128K | baseline |  | reason-en-1 | none | 1.0 | 1 | short | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-XS-reason-en-1-high` | sync Sync-XS | 128K | baseline |  | reason-en-1 | high | 1.0 | 1 | short | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-XS-coding-harbor-high` | sync Sync-XS | 128K | baseline |  | coding-harbor | high | 1.0 | 1 | short | 130,048 | 3 |  |  |
+| planned | `T3-sync-Sync-S-math-1-none` | sync Sync-S | 128K | baseline |  | math-1 | none | 1.0 | 1 | short | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-S-math-1-high` | sync Sync-S | 128K | baseline |  | math-1 | high | 1.0 | 1 | short | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-S-code-1-none` | sync Sync-S | 128K | baseline |  | code-1 | none | 1.0 | 1 | short | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-S-code-1-high` | sync Sync-S | 128K | baseline |  | code-1 | high | 1.0 | 1 | short | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-S-reason-ja-1-none` | sync Sync-S | 128K | baseline |  | reason-ja-1 | none | 1.0 | 1 | short | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-S-reason-ja-1-high` | sync Sync-S | 128K | baseline |  | reason-ja-1 | high | 1.0 | 1 | short | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-S-reason-en-1-none` | sync Sync-S | 128K | baseline |  | reason-en-1 | none | 1.0 | 1 | short | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-S-reason-en-1-high` | sync Sync-S | 128K | baseline |  | reason-en-1 | high | 1.0 | 1 | short | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-S-coding-harbor-high` | sync Sync-S | 128K | baseline |  | coding-harbor | high | 1.0 | 1 | short | 130,048 | 3 |  |  |
+| planned | `T3-sync-Sync-M-math-1-none` | sync Sync-M | 128K | baseline |  | math-1 | none | 1.0 | 1 | short | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-M-math-1-high` | sync Sync-M | 128K | baseline |  | math-1 | high | 1.0 | 1 | short | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-M-code-1-none` | sync Sync-M | 128K | baseline |  | code-1 | none | 1.0 | 1 | short | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-M-code-1-high` | sync Sync-M | 128K | baseline |  | code-1 | high | 1.0 | 1 | short | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-M-reason-ja-1-none` | sync Sync-M | 128K | baseline |  | reason-ja-1 | none | 1.0 | 1 | short | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-M-reason-ja-1-high` | sync Sync-M | 128K | baseline |  | reason-ja-1 | high | 1.0 | 1 | short | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-M-reason-en-1-none` | sync Sync-M | 128K | baseline |  | reason-en-1 | none | 1.0 | 1 | short | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-M-reason-en-1-high` | sync Sync-M | 128K | baseline |  | reason-en-1 | high | 1.0 | 1 | short | 16,384 | 3 |  |  |
+| planned | `T3-sync-Sync-M-coding-harbor-high` | sync Sync-M | 128K | baseline |  | coding-harbor | high | 1.0 | 1 | short | 130,048 | 3 |  |  |
