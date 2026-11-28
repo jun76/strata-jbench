@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>A Sailing Ship Calling at a Harbor — Voxel Art</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #8ecfe8; font-family: Georgia, 'Times New Roman', serif; }
+  #app { position: fixed; inset: 0; }
+  #app canvas { display: block; }
+  .card {
+    position: fixed; left: 16px; bottom: 16px; z-index: 10;
+    max-width: 300px;
+    background: rgba(14, 28, 40, 0.72);
+    color: #f4efe4;
+    border: 1px solid rgba(255, 215, 94, 0.35);
+    border-radius: 12px;
+    padding: 12px 16px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+  .card h1 { margin: 0 0 6px; font-size: 16px; letter-spacing: 0.4px; color: #ffd75e; font-weight: 600; }
+  .card p { margin: 0; font-size: 12px; line-height: 1.55; opacity: 0.9; }
+  .card b { color: #ffd75e; font-weight: 600; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="app"></div>
+<div class="card">
+  <h1>A Sailing Ship Calling at a Harbor</h1>
+  <p><b>Drag</b> to orbit &nbsp;·&nbsp; <b>scroll</b> to zoom &nbsp;·&nbsp; <b>right-drag</b> to pan</p>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ---------- scene / camera / renderer ----------
+const app = document.getElementById('app');
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x8ecfe8);
+scene.fog = new THREE.Fog(0x8ecfe8, 55, 125);
+
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 400);
+camera.position.set(24, 15, 34);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+app.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 2.5, 6);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 9;
+controls.maxDistance = 75;
+controls.maxPolarAngle = Math.PI * 0.49;
+controls.update();
+
+// ---------- lights ----------
+scene.add(new THREE.HemisphereLight(0xd8ecff, 0x3d5a68, 0.85));
+scene.add(new THREE.AmbientLight(0xffffff, 0.15));
+
+const sunLight = new THREE.DirectionalLight(0xfff0d0, 1.9);
+sunLight.position.set(22, 32, 14);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.set(2048, 2048);
+sunLight.shadow.camera.left = -36;
+sunLight.shadow.camera.right = 36;
+sunLight.shadow.camera.top = 36;
+sunLight.shadow.camera.bottom = -36;
+sunLight.shadow.camera.near = 5;
+sunLight.shadow.camera.far = 95;
+sunLight.shadow.bias = -0.0006;
+sunLight.shadow.camera.updateProjectionMatrix();
+scene.add(sunLight);
+
+// ---------- voxel helpers ----------
+const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+const matCache = new Map();
+
+function getMat(hex) {
+  if (!matCache.has(hex)) {
+    matCache.set(hex, new THREE.MeshStandardMaterial({ color: hex, roughness: 0.85, metalness: 0.04 }));
+  }
+  return matCache.get(hex);
+}
+
+function jitterColor(hex, amt = 0.06) {
+  const c = new THREE.Color(hex);
+  const hsl = {};
+  c.getHSL(hsl);
+  hsl.l = Math.min(1, Math.max(0.05, Math.round((hsl.l + (Math.random() - 0.5) * amt) / 0.04) * 0.04));
+  c.setHSL(hsl.h, hsl.s, hsl.l);
+  return c.getHex();
+}
+
+function voxel(parent, x, y, z, sx, sy, sz, hex, opts = {}) {
+  const mat = opts.basic
+    ? new THREE.MeshBasicMaterial({ color: hex, fog: opts.fog !== false })
+    : getMat(hex);
+  const mesh = new THREE.Mesh(boxGeo, mat);
+  mesh.position.set(x, y, z);
+  mesh.scale.set(sx, sy, sz);
+  mesh.castShadow = opts.cast !== false;
+  mesh.receiveShadow = opts.receive !== false;
+  parent.add(mesh);
+  return mesh;
+}
+
+// ---------- water (instanced voxels, animated) ----------
+const waterTiles = [];
+for (let x = -32; x <= 32; x += 2) {
+  for (let z = -6; z <= 32; z += 2) waterTiles.push({ x, z });
+}
+const identityQ = new THREE.Quaternion();
+const oneVec = new THREE.Vector3(1, 1, 1);
+const tmpVec = new THREE.Vector3();
+const tmpMat = new THREE.Matrix4();
+
+const water = new THREE.InstancedMesh(
+  new THREE.BoxGeometry(2, 1.2, 2),
+  new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.1 }),
+  waterTiles.length
+);
+water.receiveShadow = true;
+water.frustumCulled = false;
+waterTiles.forEach((t, i) => {
+  water.setColorAt(i, new THREE.Color(jitterColor(0x2f7ba3, 0.09)));
+  tmpVec.set(t.x, -0.4, t.z);
+  tmpMat.compose(tmpVec, identityQ, oneVec);
+  water.setMatrixAt(i, tmpMat);
+});
+water.instanceColor.needsUpdate = true;
+water.instanceMatrix.needsUpdate = true;
+scene.add(water);
+
+// ---------- shore (instanced voxels) ----------
+const shoreTiles = [];
+for (let x = -32; x <= 32; x += 2) {
+  for (let z = -14; z <= -8; z += 2) shoreTiles.push({ x, z });
+}
+const shore = new THREE.InstancedMesh(
+  new THREE.BoxGeometry(2, 1.6, 2),
+  new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0.02 }),
+  shoreTiles.length
+);
+shore.receiveShadow = true;
+shore.castShadow = true;
+shore.frustumCulled = false;
+shoreTiles.forEach((t, i) => {
+  shore.setColorAt(i, new THREE.Color(jitterColor(0xe6d194, 0.08)));
+  tmpVec.set(t.x, 0.2, t.z);
+  tmpMat.compose(tmpVec, identityQ, oneVec);
+  shore.setMatrixAt(i, tmpMat);
+});
+shore.instanceColor.needsUpdate = true;
+shore.instanceMatrix.needsUpdate = true;
+scene.add(shore);
+
+// ---------- dock ----------
+const dockGroup = new THREE.Group();
+for (let x = -12; x <= 12; x++) {
+  for (let z = -6; z <= -2; z++) {
+    voxel(dockGroup, x, 1.1, z, 1.02, 0.4, 1.02, jitterColor(0xb9895a, 0.09));
+  }
+}
+for (let x = -12; x <= 12; x += 3) {
+  voxel(dockGroup, x, 0.3, -1.9, 0.7, 1.6, 0.7, 0x5a3a22);
+}
+scene.add(dockGroup);
+
+// ---------- lighthouse ----------
+const lx = -11, lz = -9;
+const lh = new THREE.Group();
+for (let bx = -1; bx <= 1; bx++) {
+  for (let bz = -1; bz <= 1; bz++) {
+    voxel(lh, lx + bx, 1, lz + bz, 1, 1, 1, jitterColor(0x8a8f98, 0.05));
+  }
+}
+const rows = [
+  { y: 2, hex: 0xf5f0e6 }, { y: 3, hex: 0xf5f0e6 },
+  { y: 4, hex: 0xd14a33 }, { y: 5, hex: 0xd14a33 },
+  { y: 6, hex: 0xf5f0e6 }, { y: 7, hex: 0xf5f0e6 },
+  { y: 8, hex: 0xd14a33 }, { y: 9, hex: 0xd14a33 }
+];
+for (const row of rows) {
+  for (let i = 0; i < 2; i++) {
+    for (let j = 0; j < 2; j++) {
+      voxel(lh, lx - 0.5 + i, row.y, lz - 0.5 + j, 1, 1, 1, jitterColor(row.hex, 0.05));
+    }
+  }
+}
+for (let i = 0; i < 2; i++) {
+  for (let j = 0; j < 2; j++) {
+    voxel(lh, lx - 0.5 + i, 10, lz - 0.5 + j, 1, 1, 1, 0x4a5568);
+    voxel(lh, lx - 0.5 + i, 11, lz - 0.5 + j, 0.9, 0.9, 0.9, 0xffd75e, { basic: true, cast: false, receive: false });
+  }
+}
+voxel(lh, lx, 12, lz, 1.2, 0.7, 1.2, 0x2f3640);
+scene.add(lh);
+const lanternLight = new THREE.PointLight(0xffd75e, 30, 20, 2);
+lanternLight.position.set(lx, 11.6, lz);
+scene.add(lanternLight);
+
+// ---------- houses ----------
+function house(hx, hz, wallHex, roofHex) {
+  const g = new THREE.Group();
+  voxel(g, hx, 2.0, hz, 2, 2, 2, jitterColor(wallHex, 0.05));
+  voxel(g, hx, 3.4, hz, 2.4, 0.8, 2.4, jitterColor(roofHex, 0.05));
+  voxel(g, hx, 4.15, hz, 1.2, 0.7, 1.2, jitterColor(roofHex, 0.05));
+  voxel(g, hx, 1.6, hz + 1.06, 0.7, 1.2, 0.22, 0x6b4228);
+  voxel(g, hx - 0.55, 2.3, hz + 1.03, 0.45, 0.45, 0.18, 0x3a4a5a);
+  voxel(g, hx + 0.55, 2.3, hz + 1.03, 0.45, 0.45, 0.18, 0x3a4a5a);
+  scene.add(g);
+}
+house(3, -9, 0xf2e3c2, 0xb5533c);
+house(-6, -9.5, 0xe6d3ac, 0xa84b36);
+
+// ---------- trees ----------
+function tree(tx, tz) {
+  const g = new THREE.Group();
+  voxel(g, tx, 1.75, tz, 0.6, 1.5, 0.6, jitterColor(0x6b4228, 0.05));
+  voxel(g, tx, 3.1, tz, 1.7, 1.4, 1.7, jitterColor(0x4a8a3f, 0.08));
+  voxel(g, tx, 3.95, tz, 1.0, 0.8, 1.0, jitterColor(0x55a04a, 0.08));
+  scene.add(g);
+}
+tree(8, -8.5);
+tree(-13.5, -10.5);
+
+// ---------- dock crane ----------
+const crane = new THREE.Group();
+voxel(crane, 6, 2.35, -4.5, 1, 2.7, 1, 0x3f4a5a);
+voxel(crane, 6, 4.0, -2.75, 0.8, 0.8, 3.5, 0x3f4a5a);
+voxel(crane, 6, 3.75, -1.3, 0.12, 0.9, 0.12, 0x3a2a1a, { cast: false });
+voxel(crane, 6, 3.3, -1.3, 0.35, 0.5, 0.35, 0xffd75e, { basic: true, cast: false });
+scene.add(crane);
+
+// ---------- crates & barrels on dock ----------
+voxel(scene, -3, 1.8, -4.5, 1, 1, 1, jitterColor(0xa9773f, 0.08));
+voxel(scene, -3, 2.7, -4.5, 0.9, 0.9, 0.9, jitterColor(0x8a5a2e, 0.08));
+voxel(scene, -1.6, 1.75, -4.8, 0.9, 0.9, 0.9, jitterColor(0xb9895a, 0.08));
+voxel(scene, -8, 1.8, -4.5, 0.95, 1.0, 0.95, jitterColor(0x7c4a21, 0.08));
+voxel(scene, -8, 2.75, -4.5, 0.85, 0.9, 0.85, jitterColor(0x6b4228, 0.08));
+
+// ---------- lamp post ----------
+voxel(scene, 10, 2.3, -4.2, 0.35, 2.2, 0.35, 0x2f3640);
+voxel(scene, 10, 3.55, -4.2, 0.6, 0.6, 0.6, 0xffd75e, { basic: true, cast: false, receive: false });
+const lampLight = new THREE.PointLight(0xffd75e, 18, 14, 2);
+lampLight.position.set(10, 3.6, -4.2);
+scene.add(lampLight);
+
+// ---------- sun (voxel) ----------
+voxel(scene, -30, 25, -8, 3, 3, 3, 0xffdf6b, { basic: true, cast: false, receive: false, fog: false });
+
+// ---------- clouds ----------
+const clouds = [];
+function makeCloud(cx, cy, cz, scale) {
+  const g = new THREE.Group();
+  const layout = [
+    [-2, 0, 0, 3, 1, 2],
+    [0, 0.8, 0, 2, 1.2, 2],
+    [1.8, 0, 0.4, 2.2, 0.9, 1.6],
+    [-0.5, 0.9, 0.9, 1.4, 1, 1.4],
+    [-2.4, 0.4, 0.3, 1.3, 0.8, 1.2]
+  ];
+  for (const [x, y, z, sx, sy, sz] of layout) {
+    voxel(g, x, y, z, sx, sy, sz, jitterColor(0xffffff, 0.05), { cast: false, receive: false });
+  }
+  g.position.set(cx, cy, cz);
+  g.scale.setScalar(scale);
+  scene.add(g);
+  clouds.push({ g, speed: 0.5 + Math.random() * 0.4 });
+}
+makeCloud(-20, 20, -2, 1.6);
+makeCloud(8, 23, 14, 1.2);
+makeCloud(24, 19, -8, 1.3);
+makeCloud(-8, 25, 22, 1.4);
+
+// ---------- seagulls ----------
+const birds = [];
+function makeBird(cx, cy, cz, r, speed, phase) {
+  const g = new THREE.Group();
+  voxel(g, 0, 0, 0, 0.7, 0.28, 1.0, 0x2e3a45, { cast: false, receive: false });
+  const wingL = voxel(g, 0, 0.15, -0.75, 0.5, 0.12, 1.2, 0x2e3a45, { cast: false, receive: false });
+  const wingR = voxel(g, 0, 0.15, 0.75, 0.5, 0.12, 1.2, 0x2e3a45, { cast: false, receive: false });
+  g.userData = { cx, cy, cz, r, speed, phase, wingL, wingR };
+  scene.add(g);
+  birds.push(g);
+}
+makeBird(0, 15, 8, 12, 0.35, 0);
+makeBird(0, 17, 8, 9, 0.45, 2.1);
+makeBird(0, 14, 8, 14, 0.3, 4.2);
+
+// ---------- the sailing ship ----------
+const ship = new THREE.Group();
+
+// hull
+for (let x = -5; x <= 5; x++) {
+  for (let z = -1; z <= 1; z++) voxel(ship, x, 0, z, 1, 1, 1, jitterColor(0x54311b, 0.06));
+}
+for (let x = -6; x <= 6; x++) {
+  for (let z = -2; z <= 1; z++) voxel(ship, x, 1, z, 1, 1, 1, jitterColor(0x6b4228, 0.06));
+}
+for (let x = -7; x <= 7; x++) {
+  const hw = Math.abs(x) <= 6 ? 2 : 1;
+  for (let z = -hw; z <= hw; z++) voxel(ship, x, 2, z, 1, 1, 1, jitterColor(0x7b4a2c, 0.06));
+}
+
+// deck
+for (let x = -6; x <= 6; x++) {
+  for (let z = -2; z <= 1; z++) voxel(ship, x, 3, z, 1, 1, 1, jitterColor(0xc69a5f, 0.05));
+}
+
+// railing
+for (let x = -7; x <= 7; x++) {
+  const hw = Math.abs(x) <= 6 ? 2 : 1;
+  voxel(ship, x, 4, -hw, 1, 1, 1, 0x4a2c17);
+  voxel(ship, x, 4, hw, 1, 1, 1, 0x4a2c17);
+}
+
+// stern post + lantern
+voxel(ship, -7, 3.6, 0, 0.5, 2.2, 0.5, 0x4a2c17);
+voxel(ship, -7, 4.9, 0, 0.55, 0.5, 0.55, 0xffd75e, { basic: true, cast: false, receive: false });
+
+// bowsprit
+voxel(ship, 8, 4.6, 0, 1.3, 0.4, 0.4, 0x7a4a26);
+voxel(ship, 9, 4.85, 0, 1.3, 0.4, 0.4, 0x7a4a26);
+voxel(ship, 10, 5.1, 0, 1.3, 0.4, 0.4, 0x7a4a26);
+voxel(ship, 11, 5.3, 0, 1.1, 0.35, 0.35, 0x7a4a26);
+
+// main mast + yard + sail
+for (let y = 4; y <= 10; y++) voxel(ship, -3, y, 0, 0.6, 1, 0.6, jitterColor(0x7a4a26, 0.05));
+for (let z = -4; z <= 4; z++) voxel(ship, -3, 9.4, z, 0.5, 0.5, 1.15, 0x6b4228);
+for (let y = 5; y <= 8; y++) {
+  const hw = y === 5 ? 2 : 3;
+  for (let z = -hw; z <= hw; z++) voxel(ship, -3, y, z, 0.32, 0.85, 0.85, jitterColor(0xf1e2bf, 0.05));
+}
+
+// fore mast + yard + sail
+for (let y = 4; y <= 9; y++) voxel(ship, 3, y, 0, 0.6, 1, 0.6, jitterColor(0x7a4a26, 0.05));
+for (let z = -3; z <= 3; z++) voxel(ship, 3, 8.4, z, 0.5, 0.5, 1.1, 0x6b4228);
+for (let y = 5; y <= 8; y++) {
+  const hw = y === 5 ? 1 : 2;
+  for (let z = -hw; z <= hw; z++) voxel(ship, 3, y, z, 0.32, 0.85, 0.85, jitterColor(0xf1e2bf, 0.05));
+}
+
+// flag
+const flagGroup = new THREE.Group();
+flagGroup.position.set(-3, 10.6, 0);
+const flagVoxels = [];
+for (let i = 0; i < 4; i++) {
+  flagVoxels.push(voxel(flagGroup, -1.2 - i * 0.95, 0, 0, 0.8, 0.7, 0.35, 0xd14a33, { cast: false }));
+}
+ship.add(flagGroup);
+
+// deck crates
+voxel(ship, 5, 3.9, -0.5, 0.95, 0.9, 0.95, jitterColor(0xa9773f, 0.08));
+voxel(ship, 5.2, 4.75, -0.5, 0.7, 0.7, 0.7, jitterColor(0x8a5a2e, 0.08));
+
+// rigging
+function rig(a, b) {
+  const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
+  ship.add(new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0x3a2a1a })));
+}
+rig(new THREE.Vector3(-3, 10.4, 0), new THREE.Vector3(7, 4.4, 0));
+rig(new THREE.Vector3(-3, 10.4, 0), new THREE.Vector3(-7, 4.6, 0));
+rig(new THREE.Vector3(3, 9.4, 0), new THREE.Vector3(7, 4.4, 0));
+rig(new THREE.Vector3(3, 9.4, 0), new THREE.Vector3(-3, 9.4, 0));
+
+ship.position.set(0, 0.55, 8);
+scene.add(ship);
+
+// ---------- mooring ropes (ship -> dock) ----------
+function makeRope(endX) {
+  const geo = new THREE.BufferGeometry();
+  const attr = new THREE.BufferAttribute(new Float32Array(6), 3);
+  attr.setXYZ(0, endX, 3.0, 5.6);
+  attr.setXYZ(1, endX, 1.35, -1.9);
+  geo.setAttribute('position', attr);
+  const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0x3a2a1a }));
+  line.frustumCulled = false;
+  scene.add(line);
+  return attr;
+}
+const ropeAttrA = makeRope(-6);
+const ropeAttrB = makeRope(6);
+
+// ---------- rowboat + buoy ----------
+const rowboat = new THREE.Group();
+for (let x = -2; x <= 2; x++) {
+  voxel(rowboat, x, 0, -1, 1, 0.8, 1, jitterColor(0x5d3a22, 0.06));
+  voxel(rowboat, x, 0, 0, 1, 0.8, 1, jitterColor(0x5d3a22, 0.06));
+  voxel(rowboat, x, 0.85, -0.5, 1, 0.5, 1.4, jitterColor(0xc69a5f, 0.05));
+}
+voxel(rowboat, 0, 1.1, -0.5, 0.35, 0.4, 1.2, 0x6b4228);
+rowboat.position.set(-13, 0.35, 2);
+scene.add(rowboat);
+
+const buoy = voxel(scene, 9, 0.6, 4, 0.8, 1.0, 0.8, 0xd14a33);
+
+// ---------- animation ----------
+let t = 0;
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  t += dt;
+
+  // water waves
+  for (let i = 0; i < waterTiles.length; i++) {
+    const wt = waterTiles[i];
+    const y = -0.4 + Math.sin(wt.x * 0.28 + t * 1.15) * 0.3 + Math.cos(wt.z * 0.32 + t * 0.9) * 0.26;
+    tmpVec.set(wt.x, y, wt.z);
+    tmpMat.compose(tmpVec, identityQ, oneVec);
+    water.setMatrixAt(i, tmpMat);
+  }
+  water.instanceMatrix.needsUpdate = true;
+
+  // ship bobbing
+  ship.position.y = 0.55 + Math.sin(t * 1.05) * 0.16;
+  ship.rotation.x = Math.sin(t * 0.75) * 0.035;
+  ship.rotation.z = Math.sin(t * 0.9 + 0.6) * 0.045;
+
+  // flag wave
+  for (let i = 0; i < flagVoxels.length; i++) {
+    flagVoxels[i].position.y = Math.sin(t * 6 + i * 1.35) * 0.18;
+  }
+
+  // rowboat + buoy
+  rowboat.position.y = 0.35 + Math.sin(t * 1.35 + 2) * 0.11;
+  rowboat.rotation.z = Math.sin(t * 1.0 + 1) * 0.05;
+  rowboat.rotation.x = Math.sin(t * 0.8 + 0.5) * 0.04;
+  buoy.position.y = 0.55 + Math.sin(t * 1.7 + 0.7) * 0.18;
+  buoy.rotation.z = Math.sin(t * 1.4) * 0.12;
+
+  // mooring ropes follow the ship
+  const anchorY = ship.position.y + 2.6;
+  ropeAttrA.setXYZ(0, -6, anchorY, 5.6);
+  ropeAttrB.setXYZ(0, 6, anchorY, 5.6);
+  ropeAttrA.needsUpdate = true;
+  ropeAttrB.needsUpdate = true;
+
+  // clouds drift
+  for (const c of clouds) {
+    c.g.position.x += c.speed * dt;
+    if (c.g.position.x > 48) c.g.position.x = -48;
+  }
+
+  // birds circle + flap
+  for (const b of birds) {
+    const u = b.userData;
+    const a = u.phase + t * u.speed;
+    b.position.set(u.cx + Math.cos(a) * u.r, u.cy + Math.sin(t * 0.9 + u.phase) * 0.6, u.cz + Math.sin(a) * u.r);
+    b.rotation.y = Math.atan2(-Math.cos(a), -Math.sin(a));
+    const flap = Math.sin(t * 7 + u.phase) * 0.55;
+    u.wingL.rotation.x = flap;
+    u.wingR.rotation.x = -flap;
+  }
+
+  // lighthouse lantern pulse
+  lanternLight.intensity = 26 + Math.sin(t * 2.2) * 7;
+
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+// ---------- resize ----------
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>

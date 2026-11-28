@@ -207,6 +207,12 @@ def stream_chat(body, timeout, raw_path):
                     chunk = json.loads(data)
                 except ValueError:
                     continue
+                if chunk.get('error'):
+                    # an error sent inside the stream (HTTP 200): the engine ended while it read or wrote ("the GPU reported
+                    # a fatal error and the engine ended", 2026-11-28). Without this the request had no error and no numbers,
+                    # and its case was "done" with nothing measured.
+                    e = chunk['error']
+                    out['error'] = 'stream error: ' + str(e.get('message') if isinstance(e, dict) else e)[:500]
                 if chunk.get('usage'):
                     out['usage'] = chunk['usage']
                 if chunk.get('timings'):

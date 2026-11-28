@@ -1,0 +1,415 @@
+Here's a complete voxel-art harbor scene — one HTML file, Three.js loaded from a CDN, renders immediately, and fully orbitable with the mouse (drag to rotate, wheel to zoom, right-drag to pan).
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Harbor — A Sailing Ship Calling at the Harbor</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #8ec5e8; }
+  canvas { display: block; }
+  #info {
+    position: fixed; top: 14px; left: 14px; z-index: 10;
+    background: rgba(22, 34, 44, 0.62);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 14px;
+    padding: 12px 16px;
+    max-width: 380px;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    box-shadow: 0 8px 30px rgba(10,20,30,0.35);
+  }
+  #info h1 { font-size: 15px; margin: 0 0 4px 0; letter-spacing: 0.3px; font-weight: 600; }
+  #info p { font-size: 12px; margin: 0 0 10px 0; opacity: 0.85; }
+  #info .row { display: flex; gap: 8px; }
+  #info button {
+    font-family: inherit; font-size: 12px; color: #fff;
+    background: rgba(255,255,255,0.16);
+    border: 1px solid rgba(255,255,255,0.28);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+    transition: background 0.15s;
+  }
+  #info button:hover { background: rgba(255,255,255,0.28); }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+<div id="info">
+  <h1>⚓ Harbor — A Sailing Ship Calling at the Harbor</h1>
+  <p>Drag to orbit &nbsp;·&nbsp; wheel to zoom &nbsp;·&nbsp; right-drag to pan</p>
+  <div class="row">
+    <button id="pause">⏸ Pause</button>
+    <button id="reset">Reset view</button>
+  </div>
+</div>
+<script>
+(function(){
+  if (typeof THREE === 'undefined') {
+    document.getElementById('info').innerHTML =
+      '<h1>Could not load Three.js</h1><p>Please check your internet connection and reload.</p>';
+    return;
+  }
+
+  // ---------- setup ----------
+  const skyColor = 0x8ec5e8;
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(skyColor);
+  scene.fog = new THREE.Fog(skyColor, 75, 185);
+
+  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 500);
+  const INIT_POS = new THREE.Vector3(34, 26, 46);
+  const INIT_TGT = new THREE.Vector3(0, 3, -3);
+  camera.position.copy(INIT_POS);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  document.body.appendChild(renderer.domElement);
+
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.target.copy(INIT_TGT);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.07;
+  controls.maxPolarAngle = Math.PI * 0.49;
+  controls.minDistance = 14;
+  controls.maxDistance = 130;
+  controls.update();
+
+  // ---------- lights ----------
+  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+  const sunLight = new THREE.DirectionalLight(0xfff3d6, 0.95);
+  sunLight.position.set(28, 42, 22);
+  sunLight.castShadow = true;
+  sunLight.shadow.mapSize.set(2048, 2048);
+  sunLight.shadow.camera.left = -50;
+  sunLight.shadow.camera.right = 50;
+  sunLight.shadow.camera.top = 50;
+  sunLight.shadow.camera.bottom = -50;
+  sunLight.shadow.camera.near = 5;
+  sunLight.shadow.camera.far = 120;
+  sunLight.shadow.bias = -0.0004;
+  scene.add(sunLight);
+
+  // ---------- voxel helpers ----------
+  const geomCache = new Map();
+  const matCache = new Map();
+  const tmpMat = new THREE.Matrix4();
+  const tmpColor = new THREE.Color();
+
+  function geom(sx, sy, sz){
+    const key = sx + '|' + sy + '|' + sz;
+    if (!geomCache.has(key)) geomCache.set(key, new THREE.BoxGeometry(sx, sy, sz));
+    return geomCache.get(key);
+  }
+  function mat(color){
+    if (!matCache.has(color)) matCache.set(color, new THREE.MeshLambertMaterial({ color: color }));
+    return matCache.get(color);
+  }
+  function vox(x, y, z, sx, sy, sz, color, parent){
+    const m = new THREE.Mesh(geom(sx, sy, sz), mat(color));
+    m.position.set(x, y, z);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    (parent || scene).add(m);
+    return m;
+  }
+  function staticInstanced(cells, side, height, centerY, palette, variance){
+    const mesh = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(side, height, side),
+      new THREE.MeshLambertMaterial({ color: 0xffffff }),
+      cells.length
+    );
+    for (let i = 0; i < cells.length; i++){
+      const c = cells[i];
+      tmpMat.makeTranslation(c.x, centerY, c.z);
+      mesh.setMatrixAt(i, tmpMat);
+      tmpColor.setHex(palette[i % palette.length]).offsetHSL(0, 0, (Math.random() - 0.5) * variance);
+      mesh.setColorAt(i, tmpColor);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+    return mesh;
+  }
+
+  // ---------- land & quay ----------
+  const sandCells = [];
+  for (let x = -35; x <= 34; x++) for (let z = -30; z <= -11; z++) sandCells.push({ x: x, z: z });
+  staticInstanced(sandCells, 1, 0.8, 0.0, [0xe3cd8f, 0xdcc78a, 0xead3a2], 0.06);
+
+  const quayCells = [];
+  for (let x = -32; x <= 32; x++) for (let z = -11; z <= -8; z++) quayCells.push({ x: x, z: z });
+  staticInstanced(quayCells, 1, 0.6, 0.2, [0x8f959b, 0x7f858d, 0x9aa0a6], 0.04);
+
+  // ---------- water ----------
+  const waterPalette = [0x1d7e9b, 0x26a0b4, 0x1b6f8c, 0x30a3b5];
+  const waterCells = [];
+  for (let x = -35; x <= 34; x++) for (let z = -10; z <= 38; z++) waterCells.push({ x: x, z: z, phase: Math.random() * Math.PI * 2 });
+  const water = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(1, 1.2, 1),
+    new THREE.MeshLambertMaterial({ color: 0xffffff }),
+    waterCells.length
+  );
+  water.receiveShadow = true;
+  for (let i = 0; i < waterCells.length; i++){
+    const c = waterCells[i];
+    tmpMat.makeTranslation(c.x, -0.6, c.z);
+    water.setMatrixAt(i, tmpMat);
+    tmpColor.setHex(waterPalette[Math.floor(Math.random() * waterPalette.length)]).offsetHSL(0, 0, (Math.random() - 0.5) * 0.06);
+    water.setColorAt(i, tmpColor);
+  }
+  water.instanceMatrix.needsUpdate = true;
+  if (water.instanceColor) water.instanceColor.needsUpdate = true;
+  scene.add(water);
+
+  // ---------- buildings ----------
+  function pyramidRoof(cx, cz, w, d, baseY, color, parent){
+    vox(cx, baseY, cz, w, 1, d, color, parent);
+    vox(cx, baseY + 1, cz, Math.max(w - 2, 2), 1, Math.max(d - 2, 2), color, parent);
+    vox(cx, baseY + 2, cz, 2, 1, 1, color, parent);
+  }
+  function house(cx, cz, w, d, h, wallColor, roofColor){
+    const group = new THREE.Group();
+    for (let x = 0; x < w; x++) for (let z = 0; z < d; z++) for (let y = 0; y < h; y++){
+      vox(cx - w / 2 + 0.5 + x, 0.4 + 0.5 + y, cz - d / 2 + 0.5 + z, 1, 1, 1, wallColor, group);
+    }
+    pyramidRoof(cx, cz, w, d, 0.4 + h + 0.5, roofColor, group);
+    const frontZ = cz + d / 2;
+    vox(cx, 1.3, frontZ + 0.15, 0.8, 1.6, 0.4, 0x4a2f1c, group);
+    vox(cx - w / 4, 2.8, frontZ + 0.15, 0.6, 0.6, 0.4, 0x3a2a1c, group);
+    vox(cx + w / 4, 2.8, frontZ + 0.15, 0.6, 0.6, 0.4, 0x3a2a1c, group);
+    scene.add(group);
+  }
+  house(-18, -21, 6, 4, 4, 0xecd9a8, 0xb5533b);
+  house(10, -24, 4, 3, 3, 0xecd9a8, 0xb5533b);
+
+  // ---------- lighthouse ----------
+  const lighthouse = new THREE.Group();
+  lighthouse.position.set(28, 0, -16);
+  scene.add(lighthouse);
+  vox(0, 0.7, 0, 3.2, 0.7, 3.2, 0x7d6f5f, lighthouse);
+  for (let i = 0; i < 5; i++){
+    vox(0, 1.5 + i, 0, 2, 1, 2, i % 2 === 0 ? 0xd94b4b : 0xf2ead6, lighthouse);
+  }
+  vox(0, 6.25, 0, 2.6, 0.5, 2.6, 0x3a3a3a, lighthouse);
+  const lanternMat = new THREE.MeshLambertMaterial({ color: 0xffd75e, emissive: 0xffc93d, emissiveIntensity: 0.7 });
+  const lantern = new THREE.Mesh(geom(1.3, 1.0, 1.3), lanternMat);
+  lantern.position.set(0, 7.0, 0);
+  lantern.castShadow = true;
+  lighthouse.add(lantern);
+  vox(0, 7.65, 0, 2.0, 0.4, 2.0, 0x3a3a3a, lighthouse);
+  const beamGroup = new THREE.Group();
+  beamGroup.position.set(0, 7.0, 0);
+  lighthouse.add(beamGroup);
+  const beam = new THREE.Mesh(geom(11, 0.35, 0.35),
+    new THREE.MeshBasicMaterial({ color: 0xffe27a, transparent: true, opacity: 0.35 }));
+  beam.position.set(5.9, 0, 0);
+  beamGroup.add(beam);
+
+  // ---------- crane ----------
+  const crane = new THREE.Group();
+  crane.position.set(-6, 0, -9.5);
+  scene.add(crane);
+  vox(0, 0.85, 0, 2.2, 0.7, 2.2, 0x5a6572, crane);
+  for (let i = 0; i < 4; i++) vox(0, 1.9 + i * 1.4, 0, 1.6, 1.6, 1.6, 0x6b7683, crane);
+  for (let i = 0; i < 7; i++) vox(0.8 + i * 1.25, 6.6, 0, 1.25, 1.25, 1.25, 0xd97a2e, crane);
+  vox(8.3, 5.6, 0, 0.3, 0.9, 0.3, 0x3a3a3a, crane);
+  vox(8.3, 4.7, 0, 0.3, 0.7, 0.3, 0x3a3a3a, crane);
+  vox(8.3, 3.95, 0, 1.5, 1.5, 1.5, 0xa06b3a, crane);
+
+  // ---------- crates & barrels ----------
+  vox(-14, 1.15, -9, 1.3, 1.3, 1.3, 0x8a5a2b);
+  vox(-14, 2.3, -9, 1.0, 1.0, 1.0, 0x9b6a3a);
+  vox(14, 1.15, -9.5, 1.4, 1.4, 1.4, 0x8a5a2b);
+  vox(-2, 0.9, -9, 0.9, 0.8, 0.9, 0x6b4423);
+  vox(-2, 1.6, -9, 0.9, 0.5, 0.9, 0x5e3a1e);
+
+  // ---------- rowboat ----------
+  const rowboat = new THREE.Group();
+  rowboat.position.set(8, -0.15, -6.6);
+  scene.add(rowboat);
+  for (let x = -2; x <= 2; x++) vox(x, 0.5, 0, 1, 1, 1, 0x5e3a1e, rowboat);
+  for (let x = -2; x <= 2; x++) for (let z = -1; z <= 1; z++) vox(x, 1.5, z, 1, 1, 1, 0x6e3b1e, rowboat);
+  for (let x = -2; x <= 2; x++) for (let z = -1; z <= 1; z++) vox(x, 2.5, z, 1, 1, 1, 0xc79b5a, rowboat);
+
+  // ---------- ship ----------
+  const ship = new THREE.Group();
+  ship.position.set(0, -0.35, 9);
+  scene.add(ship);
+  for (let x = -4; x <= 4; x++) for (let z = -1; z <= 1; z++) vox(x, 0.5, z, 1, 1, 1, 0x3f2410, ship);
+  for (let x = -5; x <= 5; x++){
+    const half = Math.abs(x) >= 4 ? 1 : 2;
+    for (let z = -half; z <= half; z++) vox(x, 1.5, z, 1, 1, 1, 0x6e3b1e, ship);
+  }
+  for (let x = -4; x <= 4; x++) for (let z = -2; z <= 2; z++) vox(x, 2.5, z, 1, 1, 1, 0xc79b5a, ship);
+  for (let x = -5; x <= -3; x++) for (let z = -1; z <= 1; z++) vox(x, 3.5, z, 1, 1, 1, 0x8a5a2b, ship);
+  for (let x = -5; x <= -3; x++) for (let z = -1; z <= 1; z++) vox(x, 4.5, z, 1, 1, 1, 0x4c2a12, ship);
+  vox(5.5, 1.5, 0, 1, 1, 1, 0x4c2a12, ship);
+  vox(2, 4.35, 0, 0.75, 4.6, 0.75, 0x7a4a21, ship);
+  vox(-2.5, 4.2, 0, 0.7, 4.0, 0.7, 0x7a4a21, ship);
+  vox(2, 5.55, 0, 0.6, 0.6, 8, 0x7a4a21, ship);
+  vox(-2.5, 5.3, 0, 0.55, 0.55, 6.5, 0x7a4a21, ship);
+
+  const flutters = [];
+  const sailPalette = [0xf2ead6, 0xe8ddc2];
+  function sail(mastX, rows, zCount, zStart, zStep, size){
+    for (let r = 0; r < rows; r++){
+      const y = 3.05 + r * 0.6;
+      for (let zi = 0; zi < zCount; zi++){
+        const z = zStart + zi * zStep;
+        const color = sailPalette[(zi + r) % 2];
+        const m = vox(mastX, y, z, size, size, size, color, ship);
+        flutters.push({ mesh: m, mastX: mastX, z: z, phase: Math.random() * Math.PI * 2 });
+      }
+    }
+  }
+  sail(2, 4, 11, -3.1, 0.62, 0.62);
+  sail(-2.5, 3, 9, -2.5, 0.625, 0.55);
+
+  for (let i = 0; i < 3; i++) vox(2.6 + i * 0.55, 6.55, 0, 0.45, 0.45, 0.45, 0xd43a3a, ship);
+  for (let i = 0; i < 2; i++) vox(-2.0 + i * 0.5, 6.05, 0, 0.4, 0.4, 0.4, 0xd43a3a, ship);
+
+  // ---------- buoy ----------
+  const buoy = new THREE.Group();
+  buoy.position.set(18, 0, 20);
+  scene.add(buoy);
+  vox(0, 0.3, 0, 0.8, 0.7, 0.8, 0xd43a3a, buoy);
+  vox(0, 0.75, 0, 0.5, 0.4, 0.5, 0xf7d354, buoy);
+
+  // ---------- gulls ----------
+  const gulls = [];
+  for (let i = 0; i < 3; i++){
+    const g = new THREE.Group();
+    vox(0, 0, 0, 0.55, 0.35, 0.35, 0xe8e8e8, g);
+    vox(0, 0.15, -0.6, 0.5, 0.25, 0.6, 0x9aa5b1, g);
+    vox(0, 0.15, 0.6, 0.5, 0.25, 0.6, 0x9aa5b1, g);
+    scene.add(g);
+    gulls.push({ group: g, radius: 6 + i * 2, speed: 0.45 + i * 0.12, phase: i * 2.2, baseY: 9.2 + i * 0.8, cx: 0, cz: 9 });
+  }
+
+  // ---------- clouds ----------
+  const clouds = [];
+  for (let i = 0; i < 3; i++){
+    const g = new THREE.Group();
+    const white = i % 2 === 0 ? 0xf7f7f3 : 0xeef0ee;
+    let m = vox(0, 0, 0, 3.2, 1.2, 2.2, white, g); m.castShadow = false;
+    m = vox(-1.4, 0.8, 0.4, 2.0, 1.0, 1.6, white, g); m.castShadow = false;
+    m = vox(1.4, 0.7, -0.5, 1.8, 0.9, 1.5, white, g); m.castShadow = false;
+    m = vox(0.2, -0.8, 0, 2.6, 0.7, 1.6, 0xd8dde0, g); m.castShadow = false;
+    g.position.set(-30 + i * 30, 13.5 + i * 1.5, -12 + i * 12);
+    scene.add(g);
+    clouds.push({ group: g, speed: 0.5 + i * 0.25, baseX: g.position.x });
+  }
+
+  // ---------- sun ----------
+  const sunMesh = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.6, 2.6),
+    new THREE.MeshBasicMaterial({ color: 0xf7d354 }));
+  sunMesh.position.set(-40, 21, -36);
+  scene.add(sunMesh);
+
+  // ---------- loop ----------
+  const clock = new THREE.Clock();
+  let t = 0;
+  let paused = false;
+
+  function wrapX(x){
+    const span = 110;
+    return ((x + 55) % span + span) % span - 55;
+  }
+
+  function animate(){
+    requestAnimationFrame(animate);
+    const dt = clock.getDelta();
+    if (!paused){
+      t += dt;
+      // water
+      for (let i = 0; i < waterCells.length; i++){
+        const c = waterCells[i];
+        const y = -0.6 + Math.sin(t * 1.6 + c.x * 0.32 + c.z * 0.42 + c.phase) * 0.18;
+        tmpMat.makeTranslation(c.x, y, c.z);
+        water.setMatrixAt(i, tmpMat);
+      }
+      water.instanceMatrix.needsUpdate = true;
+      // ship
+      ship.position.y = -0.35 + Math.sin(t * 1.1) * 0.15;
+      ship.rotation.x = Math.sin(t * 0.9) * 0.04;
+      ship.rotation.z = Math.sin(t * 0.62 + 0.7) * 0.025;
+      for (let i = 0; i < flutters.length; i++){
+        const s = flutters[i];
+        s.mesh.position.x = s.mastX + Math.sin(s.z * 1.3 + t * 2.4 + s.phase) * 0.22;
+      }
+      // rowboat
+      rowboat.position.y = -0.15 + Math.sin(t * 1.3 + 1) * 0.12;
+      rowboat.rotation.x = Math.sin(t * 0.8 + 2) * 0.05;
+      // buoy
+      buoy.position.y = Math.sin(t * 1.7 + 0.5) * 0.15;
+      buoy.rotation.x = Math.sin(t * 1.2) * 0.06;
+      // gulls
+      for (let i = 0; i < gulls.length; i++){
+        const gl = gulls[i];
+        const th = t * gl.speed + gl.phase;
+        const x = gl.cx + Math.cos(th) * gl.radius;
+        const z = gl.cz + Math.sin(th) * gl.radius * 0.75;
+        const y = gl.baseY + Math.sin(t * 1.9 + gl.phase) * 1.1;
+        const dx = -Math.sin(th) * gl.radius * gl.speed;
+        const dz = Math.cos(th) * gl.radius * 0.75 * gl.speed;
+        gl.group.position.set(x, y, z);
+        gl.group.rotation.y = Math.atan2(-dz, dx);
+      }
+      // clouds
+      for (let i = 0; i < clouds.length; i++){
+        const c = clouds[i];
+        c.group.position.x = wrapX(c.baseX + t * c.speed);
+      }
+      // lighthouse
+      beamGroup.rotation.y = t * 0.9;
+      lanternMat.emissiveIntensity = 0.55 + 0.35 * Math.sin(t * 4);
+    }
+    controls.update();
+    renderer.render(scene, camera);
+  }
+
+  // ---------- buttons ----------
+  const pauseBtn = document.getElementById('pause');
+  pauseBtn.addEventListener('click', function(){
+    paused = !paused;
+    pauseBtn.textContent = paused ? '▶ Play' : '⏸ Pause';
+  });
+  document.getElementById('reset').addEventListener('click', function(){
+    camera.position.copy(INIT_POS);
+    controls.target.copy(INIT_TGT);
+    controls.update();
+  });
+
+  window.addEventListener('resize', function(){
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  animate();
+})();
+</script>
+</body>
+</html>
+```
+
+**What's in the scene:**
+- A voxel sailing ship anchored by the quay — two masts, cream sails that gently flutter, red pennants, tan deck, dark brown hull with a stepped bow
+- Harbor: sand shore, concrete quay, two brick houses with terracotta pyramid roofs, a striped lighthouse with a rotating beam and blinking lantern, a crane holding a crate, wooden crates, barrels, a moored rowboat, a red buoy
+- Animated teal water (every cube bobs), drifting voxel clouds, three flying gulls, a glowing voxel sun, fog, soft shadows
+
+**Notes:**
+- Mouse: drag = orbit, wheel = zoom, right-drag = pan. The HUD panel includes a **Pause** toggle and a **Reset view** button.
+- Everything is self-contained in one HTML file; only the Three.js core and OrbitControls come from jsdelivr (so you need internet to load them the first time). Save it as `harbor.html` and open it in Chrome.
+- To tweak the mood, change `skyColor`/`fog` (top of the file) and the palette hexes in the building/ship sections.

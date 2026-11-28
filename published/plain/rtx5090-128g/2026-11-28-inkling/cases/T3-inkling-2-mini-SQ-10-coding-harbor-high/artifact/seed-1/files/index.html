@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voxel Harbor — A Sailing Ship</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#9fd3ea;font-family:system-ui,sans-serif;}
+  canvas{display:block;}
+  .hud{position:fixed;top:14px;left:16px;pointer-events:none;user-select:none;}
+  .hud h1{margin:0;font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:#0d3b4d;}
+  .hud p{margin:5px 0 0;font-size:11px;color:#2a5a6e;}
+  .chip{position:fixed;bottom:12px;left:16px;font-size:10px;color:#155a6d;background:rgba(255,255,255,.6);padding:5px 10px;border-radius:8px;pointer-events:none;}
+  button{position:fixed;top:14px;right:16px;padding:7px 13px;border-radius:10px;border:1px solid #0f3a4a26;background:rgba(255,255,255,.72);color:#0f3a4a;font-size:11px;letter-spacing:.06em;cursor:pointer;}
+  button:hover{background:rgba(255,255,255,.92);}
+</style>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+<div class="hud"><h1>Harbor · A Sailing Ship</h1><p>drag to orbit · scroll to zoom · right-drag to pan</p></div>
+<div class="chip">voxel scene · three.js</div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const canvas = document.createElement('canvas');
+document.body.appendChild(canvas);
+
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+
+const skyC = document.createElement('canvas'); skyC.width = 8; skyC.height = 256;
+const skyX = skyC.getContext('2d');
+const grad = skyX.createLinearGradient(0,0,0,256);
+grad.addColorStop(0,'#3d8fd0'); grad.addColorStop(0.55,'#8fc6e6'); grad.addColorStop(1,'#e9f3ef');
+skyX.fillStyle = grad; skyX.fillRect(0,0,8,256);
+const skyTex = new THREE.CanvasTexture(skyC);
+skyTex.colorSpace = THREE.SRGBColorSpace;
+scene.background = skyTex;
+scene.fog = new THREE.Fog(0x9fd3ea, 75, 165);
+
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 500);
+camera.position.set(31, 22, 34);
+
+const sun = new THREE.DirectionalLight(0xfff1d6, 1.9);
+sun.position.set(28, 40, 22);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -34; sun.shadow.camera.right = 34;
+sun.shadow.camera.top = 34; sun.shadow.camera.bottom = -34;
+sun.shadow.camera.near = 5; sun.shadow.camera.far = 130;
+sun.shadow.bias = -0.0004;
+scene.add(sun);
+scene.add(new THREE.HemisphereLight(0xcfe8f5, 0x2e4a5a, 0.9));
+
+const matCache = new Map();
+function mat(color){ if(!matCache.has(color)) matCache.set(color, new THREE.MeshLambertMaterial({color})); return matCache.get(color); }
+function glowMat(color){ return new THREE.MeshBasicMaterial({color}); }
+
+function box(parent, x,y,z, w,h,d, color, opts={}){
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), opts.glow ? glowMat(color) : mat(color));
+  if(opts.opacity !== undefined){
+    m.material = m.material.clone();
+    m.material.transparent = true;
+    m.material.opacity = opts.opacity;
+    m.material.depthWrite = false;
+  }
+  m.position.set(x,y,z);
+  m.castShadow = opts.cast !== false;
+  m.receiveShadow = opts.receive !== false;
+  parent.add(m);
+  return m;
+}
+
+function beam(parent, ax,ay,az, bx,by,bz, t, color){
+  const a = new THREE.Vector3(ax,ay,az), b = new THREE.Vector3(bx,by,bz);
+  const dir = b.clone().sub(a); const len = dir.length();
+  const m = new THREE.Mesh(new THREE.BoxGeometry(t,t,len), mat(color));
+  m.position.copy(a).add(b).multiplyScalar(0.5);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), dir.normalize());
+  m.castShadow = true;
+  parent.add(m);
+  return m;
+}
+
+const world = new THREE.Group();
+scene.add(world);
+
+// ---------------- water ----------------
+const water = [];
+const palette = [0x2e6f8e, 0x3a7f9e, 0x4a8fb0];
+for(let i=0;i<25;i++){
+  for(let j=0;j<26;j++){
+    const x = -17 + i + 0.5, z = -13 + j + 0.5;
+    const m = box(world, x, 0, z, 1, 0.6, 1, palette[(i*3+j)%3], {cast:false, receive:true});
+    water.push({m, phase: Math.random()*Math.PI*2, amp: 0.05 + Math.random()*0.06});
+  }
+}
+
+// ---------------- beach & land ----------------
+box(world, 9.0, 0.2, 0, 2.0, 0.7, 26, 0xc9b37e);
+const sandPalette = [0xd9c27e, 0xe0cf8a];
+for(let j=0;j<26;j++){
+  const z = -13 + j + 0.5;
+  box(world, 9.5, 0.68, z, 1.0, 0.35, 1.0, sandPalette[j%2]);
+}
+box(world, 13.75, 0.35, 0, 7.5, 1.0, 26, 0xc9b37e);
+const grassPalette = [0x4f9b47, 0x5aa552, 0x3f8a3d];
+for(let i=0;i<7;i++){
+  for(let j=0;j<26;j++){
+    const x = 10.5 + i, z = -13 + j + 0.5;
+    if(Math.abs(x-15.5) < 2.3 && Math.abs(z+8) < 2.3) continue;
+    if(Math.abs(x-14) < 2.3 && Math.abs(z-5.5) < 2.3) continue;
+    box(world, x, 0.95, z, 1.0, 0.4, 1.0, grassPalette[(i+j)%3]);
+  }
+}
+
+// ---------------- pier ----------------
+const pierWood = [0x7a5738, 0x8a6540];
+for(let i=0;i<9;i++){
+  const x = 1.6 + i;
+  box(world, x, 1.05, 0, 1.0, 0.28, 7.0, pierWood[i%2]);
+}
+for(const [px,pz] of [[1.7,-3.35],[1.7,3.35],[9.3,-3.35],[9.3,3.35]]){
+  box(world, px, 0.75, pz, 0.45, 2.2, 0.45, 0x5a3d26);
+}
+box(world, 5.5, 1.55, -3.35, 7.6, 0.42, 0.24, 0x5a3d26);
+box(world, 5.5, 1.55, 3.35, 7.6, 0.42, 0.24, 0x5a3d26);
+
+// crates & barrels on pier
+box(world, 6.5, 1.84, 2.2, 1.3, 1.3, 1.3, 0xa06a3a);
+box(world, 6.5, 1.84, 2.2, 0.22, 1.34, 1.34, 0x5a3d26);
+box(world, 6.5, 1.84, 2.2, 1.34, 0.22, 1.34, 0x5a3d26);
+box(world, 7.8, 1.85, -2.6, 1.1, 1.3, 1.1, 0x6b4a2f);
+box(world, 7.8, 1.85, -2.6, 1.14, 0.2, 1.14, 0x3a2a1a);
+
+// lamp post
+box(world, 2.5, 1.35, -2.9, 0.55, 0.35, 0.55, 0x2f2f33);
+box(world, 2.5, 2.75, -2.9, 0.28, 2.8, 0.28, 0x2f2f33);
+box(world, 2.5, 4.2, -2.9, 0.55, 0.55, 0.55, 0xffd76a, {glow:true, cast:false});
+box(world, 2.5, 4.62, -2.9, 0.72, 0.2, 0.72, 0x2f2f33);
+
+// pier flag
+box(world, 1.7, 2.85, 3.0, 0.15, 2.9, 0.15, 0x2f2f33);
+const pierFlag = box(world, 2.25, 4.1, 3.0, 1.2, 0.78, 0.13, 0xd94f3d);
+
+// ---------------- hut ----------------
+box(world, 14, 2.15, 5.5, 2.8, 2.2, 2.8, 0x9c7a4e);
+box(world, 14, 3.6, 5.5, 3.4, 0.75, 3.4, 0x8a3a2e);
+box(world, 14, 1.95, 3.95, 0.95, 1.35, 0.2, 0x4e2f1c);
+box(world, 12.55, 2.4, 5.5, 0.16, 0.8, 0.8, 0x3a2a1a);
+
+// ---------------- lighthouse ----------------
+box(world, 15.5, 1.7, -8, 3.4, 1.1, 3.4, 0x8b8f8a);
+for(let i=0;i<8;i++){
+  const y = 2.675 + i*0.85;
+  box(world, 15.5, y, -8, 2.0, 0.85, 2.0, i%2 ? 0xf2ede2 : 0xc0392b);
+}
+box(world, 15.5, 9.2, -8, 2.5, 0.7, 2.5, 0x2f2f33);
+box(world, 15.5, 9.95, -8, 1.6, 0.9, 1.6, 0xffd76a, {glow:true, cast:false});
+box(world, 15.5, 10.55, -8, 1.9, 0.55, 1.9, 0x2f2f33);
+box(world, 15.5, 11.05, -8, 0.45, 0.45, 0.45, 0x2f2f33);
+box(world, 15.5, 11.5, -8, 0.14, 1.3, 0.14, 0x2f2f33);
+const lighthouseFlag = box(world, 16.05, 11.85, -8, 1.25, 0.75, 0.13, 0xd94f3d);
+
+const beamGroup = new THREE.Group();
+beamGroup.position.set(15.5, 9.95, -8);
+world.add(beamGroup);
+box(beamGroup, 3.6, 0, 0, 7.2, 0.32, 0.32, 0xfff3b0, {glow:true, cast:false, opacity:0.5});
+
+// ---------------- barrels on land ----------------
+box(world, 13, 1.55, -5.5, 1.1, 1.3, 1.1, 0x6b4a2f);
+box(world, 13, 1.55, -5.5, 1.14, 0.2, 1.14, 0x3a2a1a);
+
+// ---------------- rowboat ----------------
+const boat = new THREE.Group();
+box(boat, 0, 0.5, 0, 3.6, 0.8, 1.5, 0x6b4a2f);
+box(boat, 0, 1.0, 0, 3.0, 0.3, 1.1, 0x8a6540);
+boat.position.set(3.2, -0.15, 4.8);
+world.add(boat);
+
+// ---------------- ship ----------------
+const ship = new THREE.Group();
+ship.position.set(-7, -0.2, 0);
+world.add(ship);
+
+box(ship, 0, 1.35, 0, 14, 1.6, 5.5, 0x7a4a2b);
+box(ship, 0, 0.55, 0, 14.6, 0.5, 3.0, 0x4e2f1c);
+box(ship, 0, 1.75, 2.62, 13.6, 0.3, 0.16, 0xd94f3d);
+box(ship, 0, 1.75, -2.62, 13.6, 0.3, 0.16, 0xd94f3d);
+box(ship, 5.6, 2.5, 0, 2.4, 1.1, 4.6, 0x7a4a2b);
+box(ship, -5.6, 2.5, 0, 2.4, 1.1, 4.6, 0x7a4a2b);
+box(ship, 0, 2.15, 0, 12.6, 0.35, 4.9, 0xc9a86b);
+box(ship, 0, 2.78, 2.35, 12.6, 0.55, 0.28, 0x5a3d26);
+box(ship, 0, 2.78, -2.35, 12.6, 0.55, 0.28, 0x5a3d26);
+box(ship, -2.2, 6.3, 0, 0.72, 7.6, 0.72, 0x5a3d26);
+box(ship, 2.6, 5.9, 0, 0.72, 6.8, 0.72, 0x5a3d26);
+box(ship, -2.2, 8.9, 0, 0.55, 0.55, 6.8, 0x5a3d26);
+box(ship, 2.6, 8.3, 0, 0.55, 0.55, 6.4, 0x5a3d26);
+const sailA = box(ship, -2.75, 6.7, 0, 0.28, 3.9, 6.2, 0xf3ead7);
+const sailB = box(ship, 2.05, 6.2, 0, 0.28, 3.4, 5.8, 0xefe2c8);
+beam(ship, -2.2, 10.0, 0, 6.4, 2.6, 0, 0.16, 0x3a2a1a);
+beam(ship, -2.2, 10.0, 0, -6.4, 2.6, 0, 0.16, 0x3a2a1a);
+beam(ship, 2.6, 9.2, 0, 6.4, 2.6, 0, 0.16, 0x3a2a1a);
+beam(ship, 2.6, 9.2, 0, -6.4, 2.6, 0, 0.16, 0x3a2a1a);
+const flagA = box(ship, -2.2, 10.7, 0, 1.5, 0.95, 0.26, 0xd94f3d);
+const flagB = box(ship, 2.6, 9.75, 0, 1.3, 0.8, 0.24, 0x3f6f9b);
+box(ship, 6.6, 3.55, 0, 0.6, 0.6, 0.6, 0xffd76a, {glow:true, cast:false});
+box(ship, 6.6, 2.85, 0, 0.3, 0.7, 0.3, 0x5a3d26);
+box(ship, -6.6, 3.55, 0, 0.6, 0.6, 0.6, 0xffd76a, {glow:true, cast:false});
+box(ship, -6.6, 2.85, 0, 0.3, 0.7, 0.3, 0x5a3d26);
+box(ship, 0, 2.5, 0, 2.2, 0.55, 2.4, 0x5a3d26);
+box(ship, -1.0, 2.8, 1.35, 0.55, 1.05, 0.55, 0xd94f3d);
+box(ship, -1.0, 3.55, 1.35, 0.42, 0.42, 0.42, 0xe8c9a0);
+box(ship, 1.8, 2.8, -1.35, 0.55, 1.05, 0.55, 0x3f6f9b);
+box(ship, 1.8, 3.55, -1.35, 0.42, 0.42, 0.42, 0xe8c9a0);
+
+// ---------------- buoy ----------------
+const buoy = new THREE.Group();
+box(buoy, 0, 0, 0, 0.85, 0.85, 0.85, 0xd94f3d);
+box(buoy, 0, 0.85, 0, 0.5, 0.5, 0.5, 0xfff3b0, {glow:true, cast:false});
+buoy.position.set(-10, 0.55, 6);
+world.add(buoy);
+
+// ---------------- gulls ----------------
+const gulls = [];
+function makeGull(cx, cz, r, speed, phase){
+  const g = new THREE.Group();
+  box(g, 0, 0, 0, 0.5, 0.22, 0.9, 0xffffff);
+  const wl = new THREE.Group(); wl.position.set(-0.2, 0, 0);
+  const wr = new THREE.Group(); wr.position.set(0.2, 0, 0);
+  box(wl, -0.45, 0, 0, 0.9, 0.12, 0.5, 0xffffff);
+  box(wr, 0.45, 0, 0, 0.9, 0.12, 0.5, 0xffffff);
+  g.add(wl); g.add(wr);
+  world.add(g);
+  gulls.push({g, wl, wr, cx, cz, r, speed, phase});
+}
+makeGull(-7, 3, 5, 0.55, 0);
+makeGull(-10, -5, 6, 0.7, 2);
+makeGull(4, -3, 7, 0.62, 4);
+
+// ---------------- clouds ----------------
+const clouds = [];
+for(let i=0;i<4;i++){
+  const g = new THREE.Group();
+  const n = 3 + Math.floor(Math.random()*3);
+  for(let j=0;j<n;j++){
+    box(g, j*1.7 - n*0.85, Math.random()*0.7, Math.random()*1.4 - 0.7, 2.3 + Math.random()*1.1, 1.1 + Math.random()*0.6, 1.9 + Math.random()*0.9, 0xffffff, {cast:false, receive:false});
+  }
+  g.position.set(-24 + i*13 + Math.random()*3, 14.5 + Math.random()*3.5, -9 + Math.random()*18);
+  world.add(g);
+  clouds.push({g, speed: 0.5 + Math.random()*0.7});
+}
+
+// ---------------- controls ----------------
+const controls = new OrbitControls(camera, canvas);
+controls.target.set(-3, 3.2, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 10;
+controls.maxDistance = 85;
+controls.maxPolarAngle = Math.PI/2 - 0.05;
+
+const btn = document.createElement('button');
+btn.textContent = 'Reset view';
+btn.addEventListener('click', () => { camera.position.set(31, 22, 34); controls.target.set(-3, 3.2, 0); controls.update(); });
+document.body.appendChild(btn);
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+const clock = new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+  const t = clock.elapsedTime;
+  controls.update();
+
+  for(const w of water){ w.m.position.y = Math.sin(t*1.7 + w.phase) * w.amp; }
+
+  ship.position.y = -0.2 + Math.sin(t*0.85) * 0.12;
+  ship.rotation.z = Math.sin(t*0.62) * 0.028;
+  ship.rotation.x = Math.sin(t*0.5 + 1.2) * 0.022;
+  sailA.rotation.x = Math.sin(t*1.25) * 0.05;
+  sailB.rotation.x = Math.sin(t*1.05 + 2.1) * 0.05;
+  flagA.rotation.y = Math.sin(t*2.3) * 0.35;
+  flagB.rotation.y = Math.sin(t*2.0 + 1.2) * 0.35;
+  beamGroup.rotation.y = t * 0.4;
+  pierFlag.rotation.y = Math.sin(t*2.4) * 0.3;
+  lighthouseFlag.rotation.y = Math.sin(t*2.1 + 0.6) * 0.3;
+
+  boat.position.y = -0.15 + Math.sin(t*1.3 + 2.0) * 0.08;
+  boat.rotation.z = Math.sin(t*1.15 + 0.8) * 0.03;
+
+  buoy.position.y = 0.55 + Math.sin(t*1.9 + 3.0) * 0.1;
+
+  for(const gu of gulls){
+    const a = t * gu.speed + gu.phase;
+    gu.g.position.set(gu.cx + Math.cos(a)*gu.r, 9.2 + Math.sin(t*1.4 + gu.phase)*1.4, gu.cz + Math.sin(a)*gu.r);
+    gu.g.rotation.y = -a;
+    const f = Math.sin(t*7 + gu.phase) * 0.55;
+    gu.wl.rotation.z = f; gu.wr.rotation.z = -f;
+  }
+
+  for(const c of clouds){
+    c.g.position.x += c.speed * dt;
+    if(c.g.position.x > 32) c.g.position.x = -32;
+  }
+
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>

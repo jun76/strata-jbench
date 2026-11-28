@@ -1,0 +1,1 @@
+在 Strata 0.2.23（Inkling 引擎 0.1.70）上以 DFlash 2 测量 Inkling-2-Mini 的 7 个构建（Tier 1、2、3、4a、4b，320 个用例完成 280 个）。SQ-20 为 0.2.23 起的文件（SQ-20-v2），GSQ-RCO 为 IQ3_S、IQ3_XXS、Q2_K_XL、IQ2_S。40 个失败中，36 个是 SQ-10、SQ-15、SQ-20-v2、IQ3_XXS 在读取 128K prefill 时引擎因 GPU 错误终止（RTX 50 fast mode 的 prefill 注意力缺陷，Niko1221/Strata#7368）及同一会话中受牵连的用例，4 个是 256K 长文档超出上下文

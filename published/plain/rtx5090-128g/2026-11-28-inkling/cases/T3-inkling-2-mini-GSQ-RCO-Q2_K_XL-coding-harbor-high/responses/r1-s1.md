@@ -1,0 +1,419 @@
+Here's a complete, self-contained scene — a sailing ship moored alongside a harbor, all built from voxels. Just save it as an `.html` file and open it in Chrome (internet needed once, to load Three.js from the CDN).
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Voxel Harbor — Sailing Ship</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #8fd0ee; }
+  body { font-family: "Segoe UI", system-ui, -apple-system, sans-serif; }
+  #hud {
+    position: fixed; top: 18px; left: 18px; z-index: 10;
+    padding: 14px 18px; background: rgba(18,28,42,0.55);
+    border: 1px solid rgba(255,255,255,0.18); border-radius: 14px;
+    color: #fff; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+  }
+  #hud h1 { margin: 0 0 4px; font-size: 17px; font-weight: 600; letter-spacing: 0.4px; }
+  #hud p  { margin: 0; font-size: 12px; opacity: 0.85; letter-spacing: 0.3px; }
+  #hint {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 10;
+    padding: 8px 16px; font-size: 12px; color: #fff;
+    background: rgba(18,28,42,0.45); border-radius: 999px;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.15); white-space: nowrap;
+  }
+  #vignette {
+    position: fixed; inset: 0; z-index: 5; pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(10,20,35,0.32) 100%);
+  }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="hud">
+  <h1>⚓ Sailing Ship at the Harbor</h1>
+  <p>Voxel-art scene · Three.js</p>
+</div>
+<div id="hint">Drag to orbit · Scroll to zoom · Right-drag to pan</div>
+<div id="vignette"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ---------- renderer / scene / camera ---------- */
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x8fd0ee);
+scene.fog = new THREE.Fog(0x8fd0ee, 48, 95);
+
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 300);
+camera.position.set(19, 15, 23);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.domElement.style.position = 'fixed';
+renderer.domElement.style.inset = '0';
+renderer.domElement.style.display = 'block';
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(1, 3.5, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.maxPolarAngle = Math.PI * 0.485;
+controls.minDistance = 9;
+controls.maxDistance = 55;
+
+/* ---------- lights ---------- */
+scene.add(new THREE.HemisphereLight(0xcfe8ff, 0x40586a, 0.95));
+const sun = new THREE.DirectionalLight(0xfff1d6, 1.55);
+sun.position.set(18, 32, 14);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -34; sun.shadow.camera.right = 34;
+sun.shadow.camera.top = 34;  sun.shadow.camera.bottom = -34;
+sun.shadow.camera.near = 5;  sun.shadow.camera.far = 90;
+sun.shadow.bias = -0.0004;
+scene.add(sun);
+const fill = new THREE.DirectionalLight(0xbcd8ff, 0.35);
+fill.position.set(-15, 12, -18);
+scene.add(fill);
+
+/* ---------- voxel builder ---------- */
+function createVoxelGroup() {
+  const map = new Map();
+  const add = (x, y, z, c) => {
+    if (!map.has(c)) map.set(c, []);
+    map.get(c).push([x, y, z]);
+  };
+  const box = (x0, y0, z0, dx, dy, dz, c) => {
+    for (let x = x0; x < x0 + dx; x++)
+      for (let y = y0; y < y0 + dy; y++)
+        for (let z = z0; z < z0 + dz; z++) add(x, y, z, c);
+  };
+  const build = () => {
+    const group = new THREE.Group();
+    const m = new THREE.Matrix4();
+    for (const [color, list] of map) {
+      const geo = new THREE.BoxGeometry(0.96, 0.96, 0.96);
+      const mat = new THREE.MeshLambertMaterial({ color });
+      const inst = new THREE.InstancedMesh(geo, mat, list.length);
+      for (let i = 0; i < list.length; i++) {
+        m.makeTranslation(list[i][0], list[i][1], list[i][2]);
+        inst.setMatrixAt(i, m);
+      }
+      inst.instanceMatrix.needsUpdate = true;
+      inst.castShadow = true;
+      inst.receiveShadow = true;
+      group.add(inst);
+    }
+    return group;
+  };
+  return { add, box, build };
+}
+
+/* ---------- animated water ---------- */
+const W = 26;
+const waterCells = [];
+for (let x = -W; x <= W; x++) for (let z = -W; z <= W; z++) waterCells.push([x, z]);
+const waterGeo = new THREE.BoxGeometry(1.02, 1.02, 1.02);
+const waterMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+const water = new THREE.InstancedMesh(waterGeo, waterMat, waterCells.length);
+water.receiveShadow = true;
+const wMat = new THREE.Matrix4();
+const wColor = new THREE.Color();
+const waterPalette = ['#2f6f9f', '#357a9d', '#2c6594', '#3d7fae'];
+waterCells.forEach(([x, z], i) => {
+  wMat.makeTranslation(x, -0.55, z);
+  water.setMatrixAt(i, wMat);
+  const n = Math.abs(Math.sin(x * 127.1 + z * 311.7) * 43758.5453) % 1;
+  wColor.set(waterPalette[Math.floor(n * 4) % 4]);
+  water.setColorAt(i, wColor);
+});
+if (water.instanceColor) water.instanceColor.needsUpdate = true;
+scene.add(water);
+
+function updateWater(t) {
+  for (let i = 0; i < waterCells.length; i++) {
+    const [x, z] = waterCells[i];
+    const y = -0.55 + Math.sin(x * 0.32 + t * 1.5) * 0.13 + Math.cos(z * 0.27 + t * 1.1) * 0.10;
+    wMat.makeTranslation(x, y, z);
+    water.setMatrixAt(i, wMat);
+  }
+  water.instanceMatrix.needsUpdate = true;
+}
+
+/* ---------- harbor ---------- */
+const harbor = createVoxelGroup();
+
+// dock planks
+for (let x = 9; x <= 14; x++)
+  for (let z = -12; z <= 12; z++)
+    harbor.add(x, 2, z, (z % 2 === 0) ? '#8a6a3f' : '#7d5f37');
+// posts
+for (let z = -12; z <= 12; z += 2)
+  for (const x of [9, 14])
+    for (let y = -1; y <= 1; y++) harbor.add(x, y, z, '#5a4230');
+
+// warehouses
+function warehouse(x0, z0, dx, dz, wall, roof) {
+  for (let x = x0; x < x0 + dx; x++)
+    for (let z = z0; z < z0 + dz; z++)
+      for (let y = 3; y <= 5; y++) {
+        const door = (x === x0 && z === z0 + 1 && y <= 4);
+        harbor.add(x, y, z, door ? '#3c2f22' : wall);
+      }
+  for (let i = 0; i < 2; i++)
+    for (let x = x0 + i; x < x0 + dx - i; x++)
+      for (let z = z0 + i; z < z0 + dz - i; z++)
+        harbor.add(x, 6 + i, z, roof);
+}
+warehouse(10, -9, 4, 3, '#d9c8a8', '#b5563c');
+warehouse(10,  5, 4, 3, '#cdb98e', '#8a4a3a');
+
+// lighthouse at dock end
+for (let y = 3; y <= 8; y++) {
+  const c = (y % 2 === 1) ? '#f2ede2' : '#c0392b';
+  for (let x = 12; x <= 13; x++)
+    for (let z = -12; z <= -11; z++) harbor.add(x, y, z, c);
+}
+for (let x = 12; x <= 13; x++)
+  for (let z = -12; z <= -11; z++) harbor.add(x, 9, z, '#2e2a26');
+harbor.add(12, 10, -12, '#ffd75e');
+harbor.add(13, 10, -11, '#ffd75e');
+
+// crane
+harbor.box(9, 3, -1, 2, 1, 2, '#c96f2f');
+harbor.box(9, 4, -1, 1, 4, 1, '#c96f2f');
+for (let x = 6; x <= 9; x++) harbor.add(x, 7, -1, '#c96f2f');
+harbor.add(10, 7, -1, '#8a4a2a');
+harbor.add(6, 6, -1, '#3a2f22');
+harbor.add(6, 5, -1, '#3a2f22');
+harbor.add(6, 4, -1, '#3a2f22');
+harbor.box(6, 2, -1, 1, 1, 1, '#b08a4f');
+
+// crates & barrels & lamps
+harbor.box(12, 3, 3, 1, 1, 1, '#b08a4f');
+harbor.box(12, 4, 3, 1, 1, 1, '#c09a5f');
+harbor.box(13, 3, 4, 1, 1, 1, '#c09a5f');
+harbor.box(13, 4, 4, 1, 1, 1, '#b08a4f');
+harbor.box(9, 3, 6, 1, 1, 1, '#6f4a2a');
+harbor.box(9, 4, 6, 1, 1, 1, '#7a5530');
+harbor.box(9, 3, 7, 1, 1, 1, '#6f4a2a');
+function lamp(x, z) {
+  harbor.add(x, 3, z, '#2e2a26');
+  harbor.add(x, 4, z, '#2e2a26');
+  harbor.add(x, 5, z, '#ffd75e');
+}
+lamp(14, -6); lamp(14, 9);
+
+// buoys
+harbor.box(-6, 0, 8, 1, 1, 1, '#e05a2b');
+harbor.box(-6, 1, 8, 1, 1, 1, '#ffd75e');
+harbor.box(-11, 0, -5, 1, 1, 1, '#e05a2b');
+harbor.box(-11, 1, -5, 1, 1, 1, '#f2ede2');
+
+// small rowboat
+for (let x = -9; x <= -7; x++)
+  for (let z = 9; z <= 10; z++) harbor.add(x, 0, z, '#8a6a3f');
+harbor.add(-9, 1, 9, '#6b3f22');
+harbor.add(-7, 1, 10, '#6b3f22');
+
+scene.add(harbor.build());
+
+/* ---------- ship ---------- */
+function hullWidth(x) {
+  const a = Math.abs(x);
+  if (a <= 4) return 5;
+  if (a === 5) return 4;
+  if (a === 6) return 3;
+  return 2;
+}
+function zRange(w) {
+  const start = Math.floor(-(w - 1) / 2);
+  const out = [];
+  for (let i = 0; i < w; i++) out.push(start + i);
+  return out;
+}
+
+const ship = createVoxelGroup();
+for (let x = -7; x <= 7; x++)
+  for (const z of zRange(hullWidth(x))) {
+    ship.add(x, 0, z, '#4e2f1c');
+    ship.add(x, 1, z, '#6e4526');
+  }
+for (let x = -6; x <= 6; x++) {
+  for (const z of zRange(hullWidth(x) - 1)) {
+    if (z === 0 && (x === -1 || x === 4)) continue; // mast columns
+    ship.add(x, 2, z, ((x + z) % 2 === 0) ? '#b5853f' : '#a5713d');
+  }
+}
+// stern cabin + roof trim
+for (let x = -6; x <= -4; x++)
+  for (const z of zRange(3)) {
+    ship.add(x, 3, z, '#7a5230');
+    ship.add(x, 4, z, '#4e2f1c');
+  }
+ship.add(7, 2, 0, '#4e2f1c'); // bow spike
+
+// main mast
+for (let y = 2; y <= 8; y++) ship.add(-1, y, 0, '#4a2f1c');
+for (let z = -3; z <= 3; z++) ship.add(-1, 7, z, '#4a2f1c');
+const mainHeights = [2, 3, 4, 3, 2];
+for (let z = -2; z <= 2; z++) {
+  const h = mainHeights[z + 2];
+  for (let y = 6 - h + 1; y <= 6; y++) {
+    if (z === 0) continue;
+    ship.add(-1, y, z, (z % 2 === 0) ? '#f6efdd' : '#ece2c8');
+  }
+}
+// fore mast
+for (let y = 2; y <= 6; y++) ship.add(4, y, 0, '#4a2f1c');
+for (let z = -2; z <= 2; z++) ship.add(4, 5, z, '#4a2f1c');
+const foreHeights = [1, 2, 3, 2, 1];
+for (let z = -2; z <= 2; z++) {
+  const h = foreHeights[z + 2];
+  for (let y = 4 - h + 1; y <= 4; y++) {
+    if (z === 0) continue;
+    ship.add(4, y, z, (z % 2 === 0) ? '#f6efdd' : '#ece2c8');
+  }
+}
+
+const shipGroup = new THREE.Group();
+shipGroup.add(ship.build());
+const flagGeo = new THREE.BoxGeometry(1.3, 0.5, 0.12);
+flagGeo.translate(0.65, 0, 0);
+const flag = new THREE.Mesh(flagGeo, new THREE.MeshLambertMaterial({ color: 0xd94f3d }));
+flag.position.set(-1, 8.55, 0);
+flag.castShadow = true;
+shipGroup.add(flag);
+shipGroup.position.set(0, 0.35, 2);
+scene.add(shipGroup);
+
+/* ---------- sun, clouds, gulls ---------- */
+const sunGroup = new THREE.Group();
+const sunMat = new THREE.MeshBasicMaterial({ color: 0xffd75e });
+const sunParts = [
+  [0,0,0,2.6,2.6,2.6],[1.6,0,0,1.5,1.5,1.5],[-1.6,0,0,1.5,1.5,1.5],
+  [0,1.6,0,1.5,1.5,1.5],[0,-1.6,0,1.5,1.5,1.5],[0,0,1.6,1.5,1.5,1.5],
+  [0,0,-1.6,1.5,1.5,1.5],[1.1,1.1,0,1.2,1.2,1.2],[-1.1,-1.1,0,1.2,1.2,1.2]
+];
+for (const [dx, dy, dz, w, h, d] of sunParts) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), sunMat);
+  m.position.set(dx, dy, dz);
+  sunGroup.add(m);
+}
+sunGroup.position.set(-22, 22, -16);
+scene.add(sunGroup);
+
+const clouds = [];
+function makeCloud(x, y, z, speed) {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  const parts = [
+    [0,0,0,3.6,1.1,2.2],
+    [-1.7,0.55,0.25,1.7,0.95,1.5],
+    [1.6,0.65,-0.15,2.0,1.0,1.5],
+    [0.3,1.15,0.1,1.5,0.85,1.2]
+  ];
+  for (const [dx, dy, dz, w, h, d] of parts) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    m.position.set(dx, dy, dz);
+    g.add(m);
+  }
+  g.position.set(x, y, z);
+  g.userData.speed = speed;
+  scene.add(g);
+  clouds.push(g);
+}
+makeCloud(-16, 18, -9, 0.55);
+makeCloud(6, 21, -14, 0.35);
+makeCloud(16, 17.5, 9, 0.45);
+makeCloud(-4, 20, 13, 0.40);
+
+const gulls = [];
+function makeGull() {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.28, 0.32), mat);
+  const wingL = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.12, 1.1), mat);
+  wingL.position.set(0, 0.05, -0.62);
+  const wingR = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.12, 1.1), mat);
+  wingR.position.set(0, 0.05, 0.62);
+  g.add(body, wingL, wingR);
+  g.userData.wingL = wingL;
+  g.userData.wingR = wingR;
+  scene.add(g);
+  return g;
+}
+gulls.push(makeGull(), makeGull());
+
+/* ---------- animation ---------- */
+const clock = new THREE.Clock();
+let t = 0;
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  t += dt;
+
+  updateWater(t);
+
+  shipGroup.position.y = 0.35 + Math.sin(t * 1.15) * 0.12;
+  shipGroup.rotation.z = Math.sin(t * 0.8) * 0.028;
+  shipGroup.rotation.x = Math.sin(t * 0.62 + 1.3) * 0.02;
+  flag.scale.x = 0.6 + 0.4 * Math.sin(t * 5.5);
+  flag.rotation.y = 0.25 * Math.sin(t * 5.5);
+
+  for (const c of clouds) {
+    c.position.x += c.userData.speed * dt;
+    if (c.position.x > 42) c.position.x = -42;
+  }
+
+  for (let i = 0; i < gulls.length; i++) {
+    const g = gulls[i];
+    const r = 9 + i * 2.5;
+    const speed = 0.42 + i * 0.13;
+    const a = t * speed + i * 2.2;
+    g.position.set(1 + Math.cos(a) * r, 10.5 + Math.sin(t * 0.9 + i * 1.7) * 0.9, 1 + Math.sin(a) * r);
+    g.rotation.y = Math.atan2(-Math.cos(a), -Math.sin(a));
+    const flap = Math.sin(t * 8 + i * 2) * 0.5;
+    g.userData.wingL.rotation.x = flap;
+    g.userData.wingR.rotation.x = -flap;
+  }
+
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
+```
+
+**What's in the scene**
+- A two-masted sailing ship with a tapered hull, plank deck, stern cabin, two trapezoid sails, a fluttering red pennant, and a gentle bob/roll in the water
+- A harbor with a wooden dock on the right, two warehouses with stepped roofs, a working crane (jib + hanging crate), a striped lighthouse, crates, barrels, lamps, buoys, and a small rowboat
+- Animated voxel water, drifting clouds, a voxel sun, and two gulls circling the masts
+
+**How to view it:** drag to orbit, scroll to zoom, right-drag to pan. Everything is built instantly on load — no external assets besides Three.js from the CDN. If you want, I can tweak the palette, add a second boat, or make the flag/sails more elaborate.

@@ -1,0 +1,1 @@
+Strata 0.2.23（Inkling のエンジン 0.1.70）で Inkling-2-Mini の 7 ビルドを DFlash 2 で測った（Tier 1・2・3・4a・4b、320 ケース中 280 完了）。SQ-20 は 0.2.23 からのファイル（SQ-20-v2）、GSQ-RCO は IQ3_S・IQ3_XXS・Q2_K_XL・IQ2_S。失敗 40 のうち 36 は SQ-10・SQ-15・SQ-20-v2・IQ3_XXS で 128K の prefill 中にエンジンが GPU エラーで終わったもの（RTX 50 fast mode の prefill 注意の不具合、Niko1221/Strata#7368）とその巻き添え、4 は 256K の長文がコンテキストに入らないもの

@@ -1,0 +1,318 @@
+Here's a self-contained voxel harbor scene. It uses zero external libraries — just one `<canvas>`, embedded in a single HTML file, so it renders instantly offline in Chrome. Drag to orbit, scroll to zoom; the ship bobs, flags wave, water shimmers, seagulls circle, and the lighthouse pulses.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Harbor Call — Voxel Scene</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #0d1420; }
+  #scene { display: block; position: fixed; inset: 0; cursor: grab; touch-action: none; }
+  #scene:active { cursor: grabbing; }
+  #vignette { position: fixed; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0) 52%, rgba(8,18,28,.34) 100%); }
+  #hud { position: fixed; left: 18px; bottom: 14px; color: #f2f6f8;
+    font-family: Georgia, "Times New Roman", serif; pointer-events: none;
+    text-shadow: 0 1px 4px rgba(0,0,0,.55); }
+  #hud .title { font-size: 15px; letter-spacing: .09em; text-transform: uppercase; }
+  #hud .hint { font-size: 11.5px; opacity: .72; margin-top: 5px; letter-spacing: .04em; }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div id="vignette"></div>
+<div id="hud">
+  <div class="title">Harbor Call</div>
+  <div class="hint">a sailing ship calling at a harbor &nbsp;·&nbsp; drag to orbit &nbsp;·&nbsp; scroll to zoom &nbsp;·&nbsp; drifts when idle</div>
+</div>
+<script>
+(function () {
+  const canvas = document.getElementById('scene');
+  const ctx = canvas.getContext('2d');
+  const DPR = Math.min(window.devicePixelRatio || 1, 2);
+  let W = 0, H = 0;
+  function resize() {
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  window.addEventListener('resize', resize); resize();
+
+  // ---- palette ----
+  const P = {
+    water:'#2b6f9e', foam:'#e8f2f6',
+    woodDark:'#4a3626', woodMid:'#6b4a32', woodDeck:'#9a7a52',
+    stone:'#7d746a', stoneDark:'#5c564e', rock:'#7b6d5e', rockLight:'#8d7d6c',
+    roof:'#5a3a28', sail:'#f3ecdd', sailShade:'#e3d9c6', mast:'#3f2d1d',
+    rigging:'#2e2418', flag:'#d64533', flagWhite:'#f2ede2',
+    crate:'#7a5a38', barrel:'#5d4632', bollard:'#3a3a3a',
+    warehouseWall:'#b3a284', lighthouseWhite:'#f2efe6', lighthouseRed:'#c0392b',
+    lantern:'#ffd766', crane:'#3f3a36', cloud:'#eef3f8', cloudShade:'#d3dde7',
+    bird:'#2b2b2b', door:'#2a231b', window:'#3b342a'
+  };
+
+  // ---- voxel build (single map, overwrites allowed) ----
+  const voxels = new Map();
+  function setV(x, y, z, c, kind) { voxels.set(x + '|' + y + '|' + z, { x, y, z, c, kind: kind || 'static' }); }
+
+  // bay water (front of dock), cliff region excluded
+  for (let x = -14; x <= 14; x++) for (let z = -5; z <= 10; z++) {
+    if (x <= -9 && z <= -4) continue;
+    setV(x, 0, z, P.water, 'water');
+  }
+  // foam line at dock edge
+  for (let x = -7; x <= 12; x += 2) setV(x, 0, -5, P.foam, 'foam');
+
+  // harbor quay
+  for (let x = -14; x <= 14; x++) for (let z = -9; z <= -6; z++) setV(x, 2, z, P.woodMid, 'static');
+  for (let x = -14; x <= 14; x += 3) for (let z = -9; z <= -6; z++) {
+    setV(x, 0, z, P.stone, 'static'); setV(x, 1, z, P.stoneDark, 'static');
+  }
+  for (const bx of [-12, -6, 0, 6, 12]) setV(bx, 3, -6, P.bollard, 'static');
+  setV(-5, 3, -7, P.crate, 'static'); setV(5, 3, -7, P.crate, 'static');
+  setV(6, 3, -8, P.barrel, 'static'); setV(-9, 3, -7, P.barrel, 'static');
+
+  // warehouse (back-left)
+  for (let x = -6; x <= -2; x++) for (let z = -9; z <= -6; z++)
+    for (let y = 2; y <= 5; y++) setV(x, y, z, P.warehouseWall, 'static');
+  for (let x = -5; x <= -3; x++) for (let z = -9; z <= -6; z++) setV(x, 6, z, P.roof, 'static');
+  for (let z = -9; z <= -6; z++) setV(-4, 7, z, P.roof, 'static');
+  setV(-4, 3, -6, P.door, 'static'); setV(-3, 4, -6, P.window, 'static');
+  setV(-4, 8, -8, P.flag, 'flagStatic');
+
+  // lighthouse (back-right)
+  for (let x = 8; x <= 10; x++) for (let z = -9; z <= -6; z++)
+    for (let y = 2; y <= 7; y++) {
+      const c = (y <= 3) ? P.lighthouseWhite : (y <= 5) ? P.lighthouseRed : P.lighthouseWhite;
+      setV(x, y, z, c, 'static');
+    }
+  setV(8, 8, -9, P.lighthouseWhite, 'static'); setV(8, 8, -6, P.lighthouseWhite, 'static');
+  setV(10, 8, -9, P.lighthouseWhite, 'static'); setV(10, 8, -6, P.lighthouseWhite, 'static');
+  setV(9, 8, -8, P.lantern, 'lantern'); setV(9, 9, -8, P.roof, 'static');
+
+  // crane (center, jib reaching out over the bay)
+  for (let x = 0; x <= 2; x++) for (let z = -9; z <= -7; z++) setV(x, 2, z, P.stone, 'static');
+  setV(1, 3, -8, P.crane, 'static'); setV(1, 4, -8, P.crane, 'static');
+  setV(1, 5, -8, P.crane, 'static'); setV(1, 6, -8, P.crane, 'static');
+  for (let z = -7; z <= -4; z++) setV(1, 7, z, P.crane, 'static');
+  setV(1, 4, -4, P.rigging, 'static'); setV(1, 5, -4, P.rigging, 'static'); setV(1, 6, -4, P.rigging, 'static');
+  setV(1, 3, -4, P.crate, 'static');
+
+  // cliff headland (back-left) with a little lookout hut
+  for (let x = -14; x <= -9; x++) for (let z = -9; z <= -4; z++) {
+    let h = 2 + ((x * 3 + z * 5 + 200) % 4);
+    if (x >= -12 && x <= -11 && z >= -7 && z <= -6) h = 5;
+    for (let y = 0; y < h; y++) setV(x, y, z, (y % 2 === 0) ? P.rock : P.rockLight, 'static');
+  }
+  for (let x = -12; x <= -11; x++) for (let z = -7; z <= -6; z++) {
+    setV(x, 5, z, P.woodMid, 'static'); setV(x, 6, z, P.woodMid, 'static'); setV(x, 7, z, P.roof, 'static');
+  }
+  setV(-11, 8, -6, P.flag, 'flagStatic');
+
+  // the sailing ship (mid-bay), base at x -6..2, z -2..0
+  function shipV(lx, ly, lz, c, kind) { setV(-6 + lx, ly, -1 + lz, c, kind || 'ship'); }
+  for (let lx = 2; lx <= 6; lx++) for (let lz = -1; lz <= 1; lz++) shipV(lx, 1, lz, P.woodDark);
+  for (let lx = 0; lx <= 1; lx++) for (let lz = -1; lz <= 0; lz++) shipV(lx, 1, lz, P.woodDark);
+  for (let lx = 7; lx <= 8; lx++) for (let lz = -1; lz <= 0; lz++) shipV(lx, 1, lz, P.woodDark);
+  for (let lx = 1; lx <= 7; lx++) for (let lz = -1; lz <= 1; lz++) shipV(lx, 2, lz, P.woodDark);
+  for (let lx = 0; lx <= 8; lx++) if (lx === 0 || lx === 8) for (let lz = -1; lz <= 0; lz++) shipV(lx, 2, lz, P.woodDark);
+  for (let lx = 1; lx <= 7; lx++) for (let lz = -1; lz <= 1; lz++) shipV(lx, 3, lz, P.woodDeck);
+  for (let lx = 0; lx <= 8; lx++) if (lx === 0 || lx === 8) for (let lz = -1; lz <= 0; lz++) shipV(lx, 3, lz, P.woodDeck);
+  for (let lx = 7; lx <= 8; lx++) for (let lz = -1; lz <= 1; lz++) shipV(lx, 4, lz, P.woodMid);
+  for (let lx = 0; lx <= 1; lx++) for (let lz = -1; lz <= 0; lz++) shipV(lx, 4, lz, P.woodMid);
+  for (let y = 4; y <= 8; y++) { shipV(3, y, 0, P.mast); shipV(6, y, 0, P.mast); }
+  for (let y = 4; y <= 7; y++) for (let lz = -1; lz <= 1; lz++) shipV(3, y, lz, P.sail, 'sail');
+  for (let y = 5; y <= 7; y++) for (let lz = -1; lz <= 1; lz++) shipV(6, y, lz, P.sailShade, 'sail');
+  shipV(3, 9, 0, P.flag, 'flag'); shipV(6, 9, 0, P.flag, 'flag');
+  shipV(3, 6, -1, P.woodMid); shipV(3, 6, 1, P.woodMid); // crow's nest
+  for (const t of [0.25, 0.5, 0.75]) shipV(Math.round(3 - 3 * t), Math.round(8 - 5 * t), 0, P.rigging);
+  for (const t of [0.3, 0.6]) shipV(Math.round(6 + 2 * t), Math.round(8 - 4 * t), 0, P.rigging);
+  shipV(2, 4, 1, P.crate); shipV(4, 4, -1, P.barrel);
+  for (const lx of [2, 4, 5, 7]) shipV(lx, 2, 1, '#26221c'); // portholes
+
+  // moored rowboat
+  for (let lx = 0; lx <= 3; lx++) { setV(3 + lx, 1, -5, P.woodDark, 'boat'); setV(3 + lx, 2, -5, P.woodMid, 'boat'); }
+
+  // ---- dynamic voxels ----
+  const all = [];
+  for (const v of voxels.values()) all.push(v);
+  const birdBases = [
+    { cx: -2, cz: -1, y: 9.5, i: 0 },
+    { cx: 2,  cz: -1, y: 10.5, i: 1 },
+    { cx: -5, cz: -3, y: 8.5, i: 2 }
+  ];
+  const cloudBases = [
+    { x: -12, y: 12, z: -6, offs: [[0,0,0],[1,0,0],[2,0,0],[1,-1,0],[2,-1,0]] },
+    { x: -4,  y: 13, z: -3, offs: [[0,0,0],[1,0,0],[2,0,0],[2,-1,0],[1,-1,0]] },
+    { x: 4,   y: 11, z: 3,  offs: [[0,0,0],[1,0,0],[2,0,0],[1,-1,0],[2,-1,0]] },
+    { x: 11,  y: 12, z: -7, offs: [[0,0,0],[1,0,0],[2,0,0],[1,-1,0],[0,-1,0]] }
+  ];
+  for (const b of birdBases) all.push({ x: 0, y: b.y, z: 0, c: P.bird, kind: 'bird', cx: b.cx, cz: b.cz, i: b.i });
+  for (const cl of cloudBases) for (const off of cl.offs)
+    all.push({ x: cl.x + off[0], y: cl.y + off[1], z: cl.z + off[2], c: off[1] < 0 ? P.cloudShade : P.cloud, kind: 'cloud' });
+
+  // ---- geometry ----
+  const FACES = [
+    { n: [0, 1, 0],  c: [[-0.5, 0.5, -0.5], [0.5, 0.5, -0.5], [0.5, 0.5, 0.5], [-0.5, 0.5, 0.5]] },
+    { n: [0, 0, 1],  c: [[-0.5, -0.5, 0.5], [0.5, -0.5, 0.5], [0.5, 0.5, 0.5], [-0.5, 0.5, 0.5]] },
+    { n: [1, 0, 0],  c: [[0.5, -0.5, -0.5], [0.5, -0.5, 0.5], [0.5, 0.5, 0.5], [0.5, 0.5, -0.5]] },
+    { n: [-1, 0, 0], c: [[-0.5, -0.5, -0.5], [-0.5, -0.5, 0.5], [-0.5, 0.5, 0.5], [-0.5, 0.5, -0.5]] },
+    { n: [0, 0, -1], c: [[-0.5, -0.5, -0.5], [0.5, -0.5, -0.5], [0.5, 0.5, -0.5], [-0.5, 0.5, -0.5]] }
+  ];
+  const LIGHT = [-0.43, 0.73, 0.53]; // sun from upper-left-front
+
+  // ---- color helpers ----
+  function rgb(hex) { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+  function shade(hex, f) { const c = rgb(hex); return 'rgb(' + Math.min(255, Math.round(c[0] * f)) + ',' + Math.min(255, Math.round(c[1] * f)) + ',' + Math.min(255, Math.round(c[2] * f)) + ')'; }
+  function blend(hex, factor, target) {
+    const c = rgb(hex), t = rgb(target);
+    return 'rgb(' + Math.round(c[0] * (1 - factor) + t[0] * factor) + ',' + Math.round(c[1] * (1 - factor) + t[1] * factor) + ',' + Math.round(c[2] * (1 - factor) + t[2] * factor) + ')';
+  }
+
+  // ---- camera ----
+  let yaw = 0.5, pitch = 0.6, zoom = 1.0;
+  let dragging = false, lastX = 0, lastY = 0, idle = 0;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  canvas.addEventListener('pointerdown', e => { dragging = true; lastX = e.clientX; lastY = e.clientY; idle = 0; e.preventDefault(); });
+  window.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY;
+    yaw += dx * 0.005; pitch = clamp(pitch + dy * 0.004, 0.15, 1.15); idle = 0;
+  });
+  window.addEventListener('pointerup', () => dragging = false);
+  window.addEventListener('pointercancel', () => dragging = false);
+  canvas.addEventListener('wheel', e => { zoom = clamp(zoom * (1 - e.deltaY * 0.0012), 0.6, 2.4); idle = 0; }, { passive: true });
+
+  // ---- render ----
+  function draw(t) {
+    // sky
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#4f9fc8'); g.addColorStop(0.55, '#9ccfd9'); g.addColorStop(1, '#ecdfc0');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    // sun
+    const sunX = W * 0.2, sunY = H * 0.18;
+    const rg = ctx.createRadialGradient(sunX, sunY, 6, sunX, sunY, 130);
+    rg.addColorStop(0, 'rgba(255,244,210,0.95)'); rg.addColorStop(0.4, 'rgba(255,228,170,0.45)'); rg.addColorStop(1, 'rgba(255,228,170,0)');
+    ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(sunX, sunY, 130, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff6d0'; ctx.beginPath(); ctx.arc(sunX, sunY, 24, 0, Math.PI * 2); ctx.fill();
+    // horizon haze
+    const hz = ctx.createLinearGradient(0, H * 0.55, 0, H * 0.78);
+    hz.addColorStop(0, 'rgba(230,235,228,0)'); hz.addColorStop(1, 'rgba(230,235,228,0.5)');
+    ctx.fillStyle = hz; ctx.fillRect(0, H * 0.55, W, H * 0.23);
+
+    const s = 34 * zoom, cx = W * 0.5, cy = H * 0.57;
+    const cyYaw = Math.cos(yaw), syYaw = Math.sin(yaw);
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const faces = [];
+
+    for (const v of all) {
+      let x = v.x, y = v.y, z = v.z, c = v.c, extra = 1;
+      const kind = v.kind;
+      if (kind === 'ship' || kind === 'sail' || kind === 'flag') {
+        y += Math.sin(t * 0.7) * 0.22;
+        const a = Math.sin(t * 0.5) * 0.02;
+        const dx = x + 2, dz = z + 1;
+        x = -2 + dx * Math.cos(a) - dz * Math.sin(a);
+        z = -1 + dx * Math.sin(a) + dz * Math.cos(a);
+      } else if (kind === 'boat') {
+        y += Math.sin(t * 0.9 + 1.3) * 0.25;
+      } else if (kind === 'water') {
+        extra = 0.8 + 0.3 * Math.sin(t * 1.7 + x * 0.5 + z * 0.35);
+      } else if (kind === 'foam') {
+        extra = 0.92 + 0.3 * Math.sin(t * 3 + x * 0.8);
+      } else if (kind === 'lantern') {
+        extra = 0.8 + 0.6 * (0.5 + 0.5 * Math.sin(t * 2.2));
+      } else if (kind === 'sail') {
+        extra = 0.92 + 0.12 * Math.sin(t * 1.5 + x * 1.3);
+      } else if (kind === 'flag' || kind === 'flagStatic') {
+        c = (Math.floor(t * 2.4 + v.x) % 2 === 0) ? P.flag : P.flagWhite;
+        x += Math.sin(t * 3 + v.z * 2) * 0.35;
+      } else if (kind === 'bird') {
+        const ang = t * 0.45 + v.i * 2.1;
+        x = v.cx + Math.cos(ang) * 5.5;
+        z = v.cz + Math.sin(ang) * 3.2;
+        y = v.y + Math.sin(t * 1.6 + v.i * 2) * 0.7;
+      } else if (kind === 'cloud') {
+        x = (((v.x + t * 0.4 + 20) % 40) + 40) % 40 - 20;
+      }
+
+      for (let fi = 0; fi < 5; fi++) {
+        const f = FACES[fi], n = f.n;
+        const nx1 = n[0] * cyYaw - n[2] * syYaw;
+        const nz1 = n[0] * syYaw + n[2] * cyYaw;
+        const nz2 = n[1] * sp + nz1 * cp;
+        if (nz2 <= 0.02) continue;
+        const pts = [];
+        let depth = 0;
+        for (let ci = 0; ci < 4; ci++) {
+          const c0 = f.c[ci];
+          const wx = x + c0[0], wy = y + c0[1], wz = z + c0[2];
+          const x1 = wx * cyYaw - wz * syYaw;
+          const z1 = wx * syYaw + wz * cyYaw;
+          const y2 = wy * cp - z1 * sp;
+          const z2 = wy * sp + z1 * cp;
+          depth += z2;
+          pts.push([cx + x1 * s, cy - y2 * s]);
+        }
+        depth /= 4;
+        const light = 0.5 + 0.5 * Math.max(0, n[0] * LIGHT[0] + n[1] * LIGHT[1] + n[2] * LIGHT[2]);
+        const f2 = light * extra;
+        const fog = Math.max(0, Math.min(0.35, (8 - depth) / 40));
+        const fill = blend(shade(c, f2), fog, '#d7e4ea');
+        const stroke = blend(shade(c, f2 * 0.72), fog, '#d7e4ea');
+        faces.push({ pts, fill, stroke, depth });
+      }
+    }
+
+    faces.sort((a, b) => a.depth - b.depth);
+    for (const f of faces) {
+      ctx.fillStyle = f.fill;
+      ctx.strokeStyle = f.stroke;
+      ctx.lineWidth = Math.max(0.8, s * 0.03);
+      ctx.beginPath();
+      ctx.moveTo(f.pts[0][0], f.pts[0][1]);
+      for (let i = 1; i < 4; i++) ctx.lineTo(f.pts[i][0], f.pts[i][1]);
+      ctx.closePath();
+      ctx.fill(); ctx.stroke();
+    }
+
+    // lighthouse glow
+    const lx1 = 9 * cyYaw - (-8) * syYaw;
+    const lz1 = 9 * syYaw + (-8) * cyYaw;
+    const ly2 = 8 * cp - lz1 * sp;
+    const lpX = cx + lx1 * s, lpY = cy - ly2 * s;
+    const rg2 = ctx.createRadialGradient(lpX, lpY, 4, lpX, lpY, 70 * zoom);
+    rg2.addColorStop(0, 'rgba(255,226,150,' + (0.55 + 0.25 * Math.sin(t * 2.2)) + ')');
+    rg2.addColorStop(1, 'rgba(255,226,150,0)');
+    ctx.fillStyle = rg2; ctx.beginPath(); ctx.arc(lpX, lpY, 70 * zoom, 0, Math.PI * 2); ctx.fill();
+  }
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    const t = now / 1000;
+    idle += dt;
+    if (idle > 2.5) yaw += 0.055 * dt;
+    draw(t);
+    requestAnimationFrame(frame);
+  }
+  draw(0);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
+```
+
+**How it works:**
+- A single `<canvas>` renders everything with plain 2D drawing — voxels are projected through a 3D camera (yaw/pitch/orthographic zoom), with painter's-algorithm sorting, per-face diffuse lighting, edge outlines, depth haze, and a CSS gradient sky with a sun disc behind it.
+- The scene is generated once: bay water with animated wave brightness, foam at the quay edge, a wooden quay with stone piers, bollards, crates and barrels, a warehouse with a gabled roof and a waving flag, a striped lighthouse with a pulsing lantern glow, a crane swinging a crate out over the water, a rocky headland with a lookout hut and flag, a moored rowboat, and the sailing ship with hull tapering, portholes, two masts with cream sails, a crow's nest, rigging, cargo, and two red flags waving.
+- Animated live: the ship bobs and sways, the rowboat rocks, seagulls circle, clouds drift, water shimmers, foam pulses, and the lighthouse glows.
+- Mouse: drag to orbit, scroll to zoom; it slowly drifts when idle. No libraries needed, so it runs immediately and fully offline — just save as `harbor.html` and open in Chrome.
+
+If you want a tweak (e.g. more gulls, a larger ship, or a moored rowboat with a tiny flag), the `voxels` build section is the single place to edit — everything else just renders the voxel map.

@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Sailing Ship Calling at a Harbor — Voxel Art</title>
+<style>
+  html, body { margin:0; height:100%; overflow:hidden; background:#8FC9E8; font-family:Georgia, serif; }
+  #hud { position:fixed; left:14px; top:14px; background:rgba(255,255,255,.88); border-radius:12px;
+         padding:10px 14px; box-shadow:0 4px 14px rgba(0,0,0,.15); max-width:300px; pointer-events:none; }
+  #hud h1 { font-size:16px; margin:0 0 4px; color:#2c3a4d; }
+  #hud p { font-size:12px; margin:0; color:#4a5a6a; line-height:1.4; }
+</style>
+</head>
+<body>
+<div id="hud">
+  <h1>⚓ Sailing Ship Calling at a Harbor</h1>
+  <p>Drag: orbit &nbsp;•&nbsp; Scroll: zoom &nbsp;•&nbsp; Right-drag: pan</p>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ---------- renderer / scene / camera ----------
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x8FC9E8);
+scene.fog = new THREE.Fog(0x8FC9E8, 60, 120);
+
+const camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 250);
+camera.position.set(26, 19, 32);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 1.5, 0.5);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 8;
+controls.maxDistance = 85;
+controls.maxPolarAngle = Math.PI * 0.49;
+
+// ---------- lights ----------
+scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+const sunLight = new THREE.DirectionalLight(0xfff2d0, 1.7);
+sunLight.position.set(26, 34, 20);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.set(2048, 2048);
+sunLight.shadow.camera.left = -32; sunLight.shadow.camera.right = 32;
+sunLight.shadow.camera.top = 32; sunLight.shadow.camera.bottom = -32;
+sunLight.shadow.camera.near = 1; sunLight.shadow.camera.far = 100;
+sunLight.shadow.bias = -0.0006;
+scene.add(sunLight);
+const fill = new THREE.DirectionalLight(0x9db4ff, 0.35);
+fill.position.set(-24, 14, -20);
+scene.add(fill);
+
+// ---------- voxel helpers ----------
+const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+const materialCache = new Map();
+function materialFor(color) {
+  if (!materialCache.has(color)) {
+    materialCache.set(color, new THREE.MeshStandardMaterial({ color, roughness: 0.9, metalness: 0.02 }));
+  }
+  return materialCache.get(color);
+}
+function glowMaterial(color, intensity = 1.4) {
+  return new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: intensity, roughness: 0.6 });
+}
+function voxel(x, y, z, color, parent, opts = {}) {
+  const m = new THREE.Mesh(boxGeo, opts.glow ? glowMaterial(color, opts.intensity) : materialFor(color));
+  m.position.set(x, y, z);
+  m.castShadow = opts.shadow !== false;
+  m.receiveShadow = true;
+  (parent || scene).add(m);
+  return m;
+}
+
+// ---------- palette ----------
+const SAND = 0xE0C98A, cobble = 0x9A9A8C, grass = 0x6FB05A, grassDark = 0x4C7E3F;
+const woodDark = 0x5C3A1E, wood = 0x9A6B3A, deck = 0xC89B5C, cream = 0xF5E9C8;
+const red = 0xC84545, redDark = 0xA83B3B, white = 0xF5F0E6;
+const slate = 0x6E6E78, slateDark = 0x4F4F5C, wallGray = 0xC9C4B5;
+const glass = 0x4A7F9B, barrel = 0xB07A3C, crate = 0xA5713B;
+const waterA = 0x4A90D9, waterB = 0x3F7FD4;
+const trunk = 0x8A5A2B;
+
+// ---------- water ----------
+const waterVoxels = [];
+for (let x = -14; x <= 14; x++) {
+  for (let z = 0; z <= 10; z++) {
+    const color = (x + z) % 2 === 0 ? waterA : waterB;
+    const m = voxel(x, -0.5, z, color);
+    waterVoxels.push({ mesh: m, base: -0.5, phase: x * 0.9 + z * 1.3 });
+  }
+}
+
+// ---------- land ----------
+for (let x = -14; x <= 14; x++) {
+  for (let z = -10; z <= -1; z++) {
+    let color = (x >= -1 && x <= 1) ? cobble : SAND;
+    if (x <= -13 && z >= -10 && z <= -6) color = grass;
+    if (x >= 12 && z >= -10 && z <= -7) color = grass;
+    voxel(x, 0, z, color);
+  }
+}
+function tree(x, z) {
+  voxel(x, 1, z, trunk);
+  voxel(x, 2, z, grass);
+  voxel(x, 3, z, grassDark);
+}
+tree(-13, -7);
+tree(13, -8);
+tree(6, -9);
+
+// ---------- warehouse ----------
+for (let x = -12; x <= -7; x++) for (let z = -9; z <= -5; z++) for (let y = 0; y <= 2; y++) voxel(x, y, z, wallGray);
+for (let x = -12; x <= -7; x++) for (let z = -9; z <= -5; z++) voxel(x, 3, z, slate);
+for (let x = -11; x <= -8; x++) for (let z = -8; z <= -6; z++) voxel(x, 4, z, slateDark);
+voxel(-10, 1, -5, glass); voxel(-8, 1, -5, glass);
+
+// ---------- house 1 ----------
+for (let x = 2; x <= 6; x++) for (let z = -8; z <= -5; z++) for (let y = 0; y <= 1; y++) voxel(x, y, z, cream);
+for (let x = 2; x <= 6; x++) for (let z = -8; z <= -5; z++) voxel(x, 2, z, red);
+for (let x = 3; x <= 5; x++) for (let z = -7; z <= -6; z++) voxel(x, 3, z, redDark);
+voxel(4, 1, -5, glass); voxel(3, 1, -5, glass);
+
+// ---------- house 2 ----------
+for (let x = 8; x <= 11; x++) for (let z = -8; z <= -6; z++) for (let y = 0; y <= 1; y++) voxel(x, y, z, cream);
+for (let x = 8; x <= 11; x++) for (let z = -8; z <= -6; z++) voxel(x, 2, z, waterB);
+for (let x = 9; x <= 10; x++) for (let z = -7; z <= -6; z++) voxel(x, 3, z, 0x2E5A8C);
+voxel(9, 1, -6, glass);
+
+// ---------- lighthouse ----------
+for (let x = 12; x <= 13; x++) for (let z = -2; z <= -1; z++) {
+  for (let y = 0; y <= 5; y++) voxel(x, y, z, y % 2 === 0 ? white : red);
+  voxel(x, 6, z, 0x3A3A44);
+  voxel(x, 7, z, 0xFFE25A, scene, { glow: true, intensity: 1.6, shadow: false });
+  voxel(x, 8, z, 0x3A3A44);
+}
+const lighthouseGlow = new THREE.PointLight(0xFFE25A, 1.6, 14);
+lighthouseGlow.position.set(12.5, 7.5, -1.5);
+scene.add(lighthouseGlow);
+
+// ---------- pier ----------
+for (let x = -4; x <= 4; x++) for (let z = 0; z <= 3; z++) voxel(x, 0, z, wood);
+voxel(-4, 1, 3, woodDark); voxel(4, 1, 3, woodDark);
+voxel(-3, 1, 1, crate); voxel(-3, 2, 1, crate);
+voxel(-2, 1, 2, crate);
+voxel(2, 1, 1, barrel); voxel(2, 1, 2, barrel);
+
+// ---------- ship ----------
+const ship = new THREE.Group();
+ship.position.set(0, 0, 7);
+scene.add(ship);
+
+for (let x = -4; x <= 4; x++) {
+  for (let z = -1; z <= 0; z++) {
+    if (x === 4 && z === -1) continue; // bow taper
+    voxel(x, -0.5, z, woodDark, ship);
+  }
+}
+for (let x = -3; x <= 3; x++) for (let z = -1; z <= 0; z++) voxel(x, 0, z, deck, ship);
+voxel(-3, 1, -1, cream, ship); voxel(-3, 1, 0, cream, ship); // cabin
+voxel(-3, 2, -1, red, ship); voxel(-3, 2, 0, red, ship); // cabin roof
+for (let y = 1; y <= 6; y++) voxel(0, y, -1, woodDark, ship); // mast
+for (const sx of [-2, 2]) { // two sails
+  for (let y = 2; y <= 5; y++) for (let z = -2; z <= 1; z++) voxel(sx, y, z, cream, ship);
+}
+const flag = voxel(0, 7, -1, red, ship); // flag
+
+// ---------- small rowboat ----------
+const boat = new THREE.Group();
+boat.position.set(9, 0, 4);
+scene.add(boat);
+for (let x = -1; x <= 1; x++) voxel(x, -0.5, 0, woodDark, boat);
+voxel(0, 0, 0, woodDark, boat);
+voxel(0, 1, 0, cream, boat);
+
+// ---------- buoy ----------
+const buoy = new THREE.Group();
+buoy.position.set(-6, 0, 4);
+scene.add(buoy);
+voxel(0, -0.5, 0, red, buoy);
+voxel(0, 0, 0, white, buoy);
+
+// ---------- clouds / sun / gulls ----------
+const clouds = [];
+function cloud(x, y, z) {
+  const g = new THREE.Group();
+  g.position.set(x, y, z);
+  voxel(-1, 0, 0, white, g, { shadow: false });
+  voxel(0, 0, 0, white, g, { shadow: false });
+  voxel(1, 0, 0, white, g, { shadow: false });
+  voxel(0, 1, 0, white, g, { shadow: false });
+  g.userData.baseX = x;
+  scene.add(g);
+  clouds.push(g);
+}
+cloud(-6, 13, -6); cloud(4, 14, -3); cloud(9, 13, -8);
+
+voxel(-10, 15, -9, 0xFFD94A, scene, { glow: true, intensity: 1.5, shadow: false }); // sun
+
+const gulls = [];
+function gull(x, y, z) {
+  const g = new THREE.Group();
+  g.position.set(x, y, z);
+  voxel(0, 0, 0, white, g, { shadow: false });
+  voxel(-0.9, 0, 0, white, g, { shadow: false });
+  voxel(0.9, 0, 0, white, g, { shadow: false });
+  g.userData.baseX = x; g.userData.baseY = y; g.userData.baseZ = z;
+  scene.add(g);
+  gulls.push(g);
+}
+gull(-2, 9, 6); gull(3, 10, 7); gull(-6, 9.5, 4);
+
+// ---------- animation ----------
+const clock = new THREE.Clock();
+function animate() {
+  const t = clock.getElapsedTime();
+
+  for (const w of waterVoxels) w.mesh.position.y = w.base + Math.sin(t * 1.5 + w.phase) * 0.08;
+  ship.position.y = Math.sin(t * 0.9) * 0.12;
+  ship.rotation.z = Math.sin(t * 0.9 + 0.6) * 0.05;
+  ship.rotation.x = Math.sin(t * 0.65) * 0.02;
+  flag.position.x = Math.sin(t * 5.2) * 0.2;
+  flag.rotation.y = Math.sin(t * 5.2) * 0.35;
+  boat.position.y = Math.sin(t * 1.3 + 1.2) * 0.1;
+  boat.rotation.z = Math.sin(t * 1.3 + 1.2) * 0.06;
+  buoy.position.y = Math.sin(t * 1.6 + 2) * 0.1;
+  for (let i = 0; i < clouds.length; i++)
+    clouds[i].position.x = clouds[i].userData.baseX + Math.sin(t * 0.25 + i * 2.1) * 1.8;
+  for (let i = 0; i < gulls.length; i++) {
+    const g = gulls[i];
+    g.position.x = g.userData.baseX + Math.sin(t * 0.55 + i * 2.4) * 3.5;
+    g.position.y = g.userData.baseY + Math.sin(t * 1.15 + i * 1.3) * 1.1;
+    g.position.z = g.userData.baseZ + Math.cos(t * 0.4 + i * 2.0) * 2.0;
+  }
+
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+}
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
